@@ -24,14 +24,17 @@ export default function Home() {
   const [editMode, setEditMode] = useState(false);
   const [showScalingInfo, setShowScalingInfo] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [lastSessionData, setLastSessionData] = useState<MarksData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const markInputRef = useRef<HTMLInputElement>(null);
 
-  // Load data from localStorage on mount
+  // Check for existing session on mount
   useEffect(() => {
     const stored = loadFromLocalStorage();
-    if (stored) {
-      setData(stored);
+    if (stored && (stored.students.length > 0 || stored.exams.length > 0)) {
+      setLastSessionData(stored);
+      setShowSessionModal(true);
     }
   }, []);
 
@@ -41,6 +44,19 @@ export default function Home() {
       saveToLocalStorage(data);
     }
   }, [data]);
+
+  const handleResumeSession = () => {
+    if (lastSessionData) {
+      setData(lastSessionData);
+    }
+    setShowSessionModal(false);
+  };
+
+  const handleStartNewSession = () => {
+    localStorage.removeItem('marksData');
+    setData({ students: [], exams: [] });
+    setShowSessionModal(false);
+  };
 
   const handleImportCSV = () => {
     try {
@@ -242,6 +258,78 @@ export default function Home() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-blue-50 to-gray-50'}`}>
+      {/* Session Recovery Modal */}
+      {showSessionModal && lastSessionData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className={`rounded-2xl shadow-2xl max-w-lg w-full border transition-colors ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            {/* Header */}
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${darkMode ? 'bg-blue-900/30' : 'bg-blue-100'}`}>
+                  <span className="text-2xl">💾</span>
+                </div>
+                <div>
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Last Session Found</h2>
+                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Would you like to continue where you left off?</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Session Details */}
+            <div className="p-6 space-y-4">
+              <div className={`rounded-lg p-4 border ${darkMode ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                <h3 className={`text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Session Details:</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Students:</span>
+                    <span className={`text-sm font-semibold ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                      {lastSessionData.students.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Exams:</span>
+                    <span className={`text-sm font-semibold ${darkMode ? 'text-emerald-300' : 'text-emerald-600'}`}>
+                      {lastSessionData.exams.length}
+                    </span>
+                  </div>
+                  {lastSessionData.exams.length > 0 && (
+                    <div className="pt-2 border-t border-gray-700">
+                      <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Exams: </span>
+                      <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {lastSessionData.exams.map(e => e.name).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Warning for new session */}
+              <div className={`rounded-lg p-3 border-l-4 ${darkMode ? 'bg-yellow-900/20 border-yellow-600' : 'bg-yellow-50 border-yellow-500'}`}>
+                <p className={`text-xs ${darkMode ? 'text-yellow-300' : 'text-yellow-800'}`}>
+                  ⚠️ Starting a new session will permanently delete all existing data
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-6 border-t border-gray-700 flex gap-3">
+              <button
+                onClick={handleResumeSession}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
+              >
+                📂 Resume Session
+              </button>
+              <button
+                onClick={handleStartNewSession}
+                className={`flex-1 px-4 py-3 rounded-lg transition-all font-medium ${darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                🗑️ Start New Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navbar */}
       <nav className={`sticky top-0 z-50 backdrop-blur-md border-b transition-colors ${darkMode ? 'bg-gray-900/80 border-gray-700' : 'bg-white/80 border-gray-200'}`}>
         <div className="max-w-7xl mx-auto px-4 py-4">
