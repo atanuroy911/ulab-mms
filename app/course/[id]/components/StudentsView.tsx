@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Plus, Upload, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Student {
   _id: string;
@@ -85,6 +86,7 @@ interface StudentsViewProps {
   onShowGradeBreakdown: (student: Student) => void;
   onDeleteStudent: (student: Student) => void;
   onDeleteAllStudents: () => Promise<void> | void;
+  onBulkDeleteStudents?: (studentIds: string[]) => Promise<void> | void;
   onToggleWithdrawStudent: (student: Student) => void;
 }
 
@@ -111,6 +113,7 @@ export default function StudentsView({
   onShowGradeBreakdown,
   onDeleteStudent,
   onDeleteAllStudents,
+  onBulkDeleteStudents,
   onToggleWithdrawStudent,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -118,6 +121,47 @@ export default function StudentsView({
   const [deleteAllConfirmationStep, setDeleteAllConfirmationStep] = useState(0);
   const [deleteAllConfirmationText, setDeleteAllConfirmationText] = useState('');
   const [deletingAllStudents, setDeletingAllStudents] = useState(false);
+
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirmationStep, setBulkDeleteConfirmationStep] = useState(0);
+  const [deletingBulkStudents, setDeletingBulkStudents] = useState(false);
+
+  const toggleStudentSelection = (studentId: string) => {
+    const newSelected = new Set(selectedStudentIds);
+    if (newSelected.has(studentId)) {
+      newSelected.delete(studentId);
+    } else {
+      newSelected.add(studentId);
+    }
+    setSelectedStudentIds(newSelected);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedStudentIds.size === students.length) {
+      setSelectedStudentIds(new Set());
+    } else {
+      setSelectedStudentIds(new Set(students.map(s => s._id)));
+    }
+  };
+
+  const resetBulkDeleteModal = () => {
+    setShowBulkDeleteModal(false);
+    setBulkDeleteConfirmationStep(0);
+    setDeletingBulkStudents(false);
+  };
+
+  const handleBulkDeleteStudents = async () => {
+    if (!onBulkDeleteStudents) return;
+    setDeletingBulkStudents(true);
+    try {
+      await onBulkDeleteStudents(Array.from(selectedStudentIds));
+      resetBulkDeleteModal();
+      setSelectedStudentIds(new Set());
+    } finally {
+      setDeletingBulkStudents(false);
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -160,6 +204,16 @@ export default function StudentsView({
           </p>
         </div>
         <div className="flex gap-2">
+          {selectedStudentIds.size > 0 && (
+            <Button
+              onClick={() => setShowBulkDeleteModal(true)}
+              variant="destructive"
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected ({selectedStudentIds.size})
+            </Button>
+          )}
           <Button
             onClick={onShowAddStudentModal}
             variant="outline"
@@ -191,8 +245,15 @@ export default function StudentsView({
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted sticky top-0 z-20">
               <tr>
-                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r w-[50px]">#</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px]">Student</th>
+                <th className="px-3 py-3 text-center sticky left-0 z-30 bg-muted border-r w-[40px]">
+                  <Checkbox 
+                    checked={students.length > 0 && selectedStudentIds.size === students.length}
+                    onCheckedChange={toggleAllSelection}
+                    aria-label="Select all"
+                  />
+                </th>
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-[40px] z-30 bg-muted border-r w-[50px]">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[90px] z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px]">Student</th>
                 {exams.map(exam => (
                   <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap">
                     <div>{exam.displayName}</div>
@@ -254,9 +315,16 @@ export default function StudentsView({
             </thead>
             <tbody className="divide-y divide-border/50">
               {students.map((student, idx) => (
-                <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
-                  <td className={`px-3 py-3 text-sm font-medium text-center sticky left-0 z-10 border-r w-[50px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{idx + 1}</td>
-                  <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r min-w-[200px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>
+                <tr key={student._id} className={`transition-colors hover:bg-muted/50 bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5 hover:bg-primary/10' : ''}`}>
+                  <td className={`px-3 py-3 text-center sticky left-0 z-10 border-r w-[40px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
+                    <Checkbox 
+                      checked={selectedStudentIds.has(student._id)}
+                      onCheckedChange={() => toggleStudentSelection(student._id)}
+                      aria-label={`Select ${student.name}`}
+                    />
+                  </td>
+                  <td className={`px-3 py-3 text-sm font-medium text-center sticky left-[40px] z-10 border-r w-[50px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>{idx + 1}</td>
+                  <td className={`px-4 py-3 text-sm font-medium sticky left-[90px] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r min-w-[200px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
                     <div className="flex flex-col">
                       <span className="text-primary font-semibold">{student.studentId}</span>
                       <button
@@ -458,6 +526,17 @@ export default function StudentsView({
       {/* Floating Action Buttons */}
       {showFloatingButtons && (
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+          {selectedStudentIds.size > 0 && (
+            <Button
+              onClick={() => setShowBulkDeleteModal(true)}
+              variant="destructive"
+              className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+              size="lg"
+            >
+              <Trash2 className="w-5 h-5" />
+              Delete Selected ({selectedStudentIds.size})
+            </Button>
+          )}
           <Button
             onClick={onShowAddStudentModal}
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
@@ -564,6 +643,69 @@ export default function StudentsView({
                 disabled={deletingAllStudents || deleteAllConfirmationText !== 'DELETE'}
               >
                 {deletingAllStudents ? 'Deleting...' : 'Delete All Students'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkDeleteModal} onOpenChange={(open) => {
+        if (!open) resetBulkDeleteModal();
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" />
+              Delete Selected Students
+            </DialogTitle>
+            <DialogDescription>
+              {bulkDeleteConfirmationStep === 0
+                ? `Are you sure you want to delete ${selectedStudentIds.size} selected student(s)?`
+                : 'FINAL CONFIRMATION: This will permanently remove the selected students and their marks.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {bulkDeleteConfirmationStep === 0 && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-semibold">You are about to delete {selectedStudentIds.size} student(s).</p>
+                  <p>This will also delete all marks associated with these students.</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter className="flex gap-2">
+            {bulkDeleteConfirmationStep > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setBulkDeleteConfirmationStep(0)}
+              >
+                Back
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={resetBulkDeleteModal}
+              disabled={deletingBulkStudents}
+            >
+              Cancel
+            </Button>
+            {bulkDeleteConfirmationStep === 0 ? (
+              <Button
+                variant="destructive"
+                onClick={() => setBulkDeleteConfirmationStep(1)}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={handleBulkDeleteStudents}
+                disabled={deletingBulkStudents}
+              >
+                {deletingBulkStudents ? 'Deleting...' : 'Delete Selected'}
               </Button>
             )}
           </DialogFooter>

@@ -5,7 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { parseCSV } from '@/app/utils/csv';
+import { ImportStudentsModal } from './components/ImportStudentsModal';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
@@ -124,7 +124,7 @@ export default function CoursePage() {
   const [loading, setLoading] = useState(true);
 
   // Modal states
-  const [showImportModal, setShowImportModal] = useState(false);
+  const [showImportStudentsModal, setShowImportStudentsModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
   const [showMarkModal, setShowMarkModal] = useState(false);
   const [showExamSettings, setShowExamSettings] = useState<string | null>(null);
@@ -155,7 +155,6 @@ export default function CoursePage() {
   const [selectedExamsForAction, setSelectedExamsForAction] = useState<string[]>([]);
   const [confirmationStep, setConfirmationStep] = useState(0);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showBulkAddStudentModal, setShowBulkAddStudentModal] = useState(false);
   const [showEditStudentModal, setShowEditStudentModal] = useState(false);
   const [studentToEdit, setStudentToEdit] = useState<Student | null>(null);
   const [editStudentData, setEditStudentData] = useState({ studentId: '', name: '' });
@@ -257,41 +256,7 @@ export default function CoursePage() {
     }
   };
 
-  const handleImportStudents = async () => {
-    try {
-      const parsedStudents = parseCSV(csvInput);
-      
-      if (parsedStudents.length === 0) {
-        setError('No valid student data found');
-        return;
-      }
 
-      const response = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId,
-          students: parsedStudents.map(s => ({
-            studentId: s.id,
-            name: s.name,
-          })),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStudents([...students, ...data.students]);
-        setShowImportModal(false);
-        setCsvInput('');
-        setError('');
-      } else {
-        setError(data.error);
-      }
-    } catch (err) {
-      setError('Error importing students');
-    }
-  };
 
   const handleAddIndividualStudent = async () => {
     try {
@@ -363,42 +328,7 @@ export default function CoursePage() {
     }
   };
 
-  const handleBulkImportStudents = async () => {
-    try {
-      const parsedStudents = parseCSV(csvInput);
-      
-      if (parsedStudents.length === 0) {
-        notify.validation.noData('student');
-        return;
-      }
 
-      const response = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId,
-          students: parsedStudents.map(s => ({
-            studentId: s.id,
-            name: s.name,
-          })),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        await fetchCourseData();
-        setShowBulkAddStudentModal(false);
-        setCsvInput('');
-        notify.student.bulkImported(parsedStudents.length);
-      } else {
-        notify.student.bulkImportError(data.error);
-      }
-    } catch (err) {
-      console.error('Error importing students:', err);
-      notify.student.bulkImportError();
-    }
-  };
 
   const handleDeleteStudent = async () => {
     if (!studentToDelete) return;
@@ -440,6 +370,30 @@ export default function CoursePage() {
       }
     } catch (err) {
       console.error('Error deleting all students:', err);
+      notify.student.bulkDeleteError();
+    }
+  };
+
+  const handleBulkDeleteStudents = async (studentIds: string[]) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/students`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ studentIds }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        await fetchCourseData();
+        notify.student.bulkDeleted(data.deletedStudents || 0);
+      } else {
+        notify.student.bulkDeleteError(data.error);
+      }
+    } catch (err) {
+      console.error('Error deleting selected students:', err);
       notify.student.bulkDeleteError();
     }
   };
@@ -1600,7 +1554,7 @@ export default function CoursePage() {
                 students={students}
                 exams={exams}
                 marks={marks}
-                onImportStudents={() => setShowImportModal(true)}
+                onImportStudents={() => setShowImportStudentsModal(true)}
                 onAddExam={() => setShowExamModal(true)}
                 onImportCourse={() => setShowImportCourseModal(true)}
                 onExportCSV={handleExportCSV}
@@ -1644,7 +1598,7 @@ export default function CoursePage() {
                 getGradeColor={getGradeColor}
                 getGradeBgColor={getGradeBgColor}
                 onShowAddStudentModal={() => setShowAddStudentModal(true)}
-                onShowBulkAddStudentModal={() => setShowBulkAddStudentModal(true)}
+                onShowBulkAddStudentModal={() => setShowImportStudentsModal(true)}
                 onEditStudent={(student) => {
                   setStudentToEdit(student);
                   setEditStudentData({ studentId: student.studentId, name: student.name });
@@ -1664,6 +1618,7 @@ export default function CoursePage() {
                   setShowDeleteStudentModal(true);
                 }}
                 onDeleteAllStudents={handleDeleteAllStudents}
+                onBulkDeleteStudents={handleBulkDeleteStudents}
                 onToggleWithdrawStudent={handleToggleWithdrawStudent}
               />
             )}
@@ -1736,7 +1691,7 @@ export default function CoursePage() {
                   <CardDescription className="mb-6">
                     Import students using CSV to get started
                   </CardDescription>
-                  <Button onClick={() => setShowImportModal(true)}>
+                  <Button onClick={() => setShowImportStudentsModal(true)}>
                     <Upload className="w-4 h-4 mr-2" />
                     Import Students
                   </Button>
@@ -1750,48 +1705,13 @@ export default function CoursePage() {
 
     {/* Modals - Rendered as siblings for proper z-index */}
     <div>
-      {/* Import Students Modal */}
-      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import Students</DialogTitle>
-          </DialogHeader>
-          
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <Label>Paste CSV (Format: StudentID, StudentName)</Label>
-              <textarea
-                value={csvInput}
-                onChange={(e) => setCsvInput(e.target.value)}
-                className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2"
-                placeholder="e.g.&#10;S001, John Doe&#10;S002, Jane Smith"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowImportModal(false);
-                setError('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleImportStudents}>
-              <Upload className="w-4 h-4 mr-2" />
-              Import
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImportStudentsModal 
+        isOpen={showImportStudentsModal} 
+        onClose={() => setShowImportStudentsModal(false)} 
+        students={students} 
+        courseId={courseId} 
+        onImportComplete={fetchCourseData} 
+      />
 
       {/* Add Exam Modal */}
       <Dialog open={showExamModal} onOpenChange={setShowExamModal}>
@@ -3569,53 +3489,7 @@ export default function CoursePage() {
       </DialogContent>
     </Dialog>
 
-    {/* Bulk Import Students Modal */}
-    <Dialog open={showBulkAddStudentModal} onOpenChange={setShowBulkAddStudentModal}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            Bulk Import Students (CSV)
-          </DialogTitle>
-          <DialogDescription>
-            Import multiple students using CSV format
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <Label>CSV Data (Format: StudentID, StudentName)</Label>
-            <textarea
-              value={csvInput}
-              onChange={(e) => setCsvInput(e.target.value)}
-              className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2"
-              placeholder="e.g.&#10;S001, John Doe&#10;S002, Jane Smith&#10;S003, Bob Johnson"
-            />
-          </div>
-          <Alert>
-            <AlertDescription className="text-xs">
-              Each line should contain: Student ID, Student Name (comma-separated)
-            </AlertDescription>
-          </Alert>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowBulkAddStudentModal(false);
-              setCsvInput('');
-            }}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleBulkImportStudents}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import Students
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     {/* Delete Student Modal with Double Confirmation */}
     <Dialog open={showDeleteStudentModal} onOpenChange={(open) => {

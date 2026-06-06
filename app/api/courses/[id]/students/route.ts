@@ -32,20 +32,35 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const courseObjectId = new mongoose.Types.ObjectId(courseId);
-    const students = await Student.find({ courseId: courseObjectId, userId: session.user.id }).select('_id');
-    const studentIds = students.map((student) => student._id);
+    const body = await _request.json().catch(() => null);
+    const specificStudentIds = body?.studentIds as string[] | undefined;
 
-    if (studentIds.length === 0) {
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+    let studentIdsToDelete: mongoose.Types.ObjectId[] = [];
+
+    if (specificStudentIds && specificStudentIds.length > 0) {
+      const students = await Student.find({
+        _id: { $in: specificStudentIds },
+        courseId: courseObjectId,
+        userId: session.user.id
+      }).select('_id');
+      studentIdsToDelete = students.map((student) => student._id);
+    } else {
+      const students = await Student.find({ courseId: courseObjectId, userId: session.user.id }).select('_id');
+      studentIdsToDelete = students.map((student) => student._id);
+    }
+
+    if (studentIdsToDelete.length === 0) {
       return NextResponse.json({ message: 'No students found to delete', deletedStudents: 0, deletedMarks: 0 }, { status: 200 });
     }
 
     const [marksResult, studentsResult] = await Promise.all([
       Mark.deleteMany({
-        studentId: { $in: studentIds },
+        studentId: { $in: studentIdsToDelete },
         userId: session.user.id,
       }),
       Student.deleteMany({
+        _id: { $in: studentIdsToDelete },
         courseId: courseObjectId,
         userId: session.user.id,
       }),

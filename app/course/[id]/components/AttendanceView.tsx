@@ -6,7 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 interface AttendanceRecord {
   studentId: string;
@@ -642,13 +646,35 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               <label htmlFor="attendance-date" className="text-sm font-medium">
                 Session date
               </label>
-              <input
-                id="attendance-date"
-                type="date"
-                value={sessionDate}
-                onChange={(e) => setSessionDate(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="attendance-date"
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !sessionDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {sessionDate ? format(new Date(sessionDate), "dd/MM/yyyy") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={sessionDate ? new Date(sessionDate) : undefined}
+                    onSelect={(d) => {
+                       if (d) {
+                         const year = d.getFullYear();
+                         const month = String(d.getMonth() + 1).padStart(2, '0');
+                         const day = String(d.getDate()).padStart(2, '0');
+                         setSessionDate(`${year}-${month}-${day}`);
+                       }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
             <p className="text-sm text-muted-foreground">
