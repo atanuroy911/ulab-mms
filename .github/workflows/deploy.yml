@@ -28,6 +28,15 @@ jobs:
       - name: Install Netlify CLI
         run: npm install -g netlify-cli
 
+      # Run a dry-run of semantic-release to determine what the next version WILL be
+      - name: Semantic Release (Dry Run)
+        id: semantic_dry
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # This runs the Next.js build natively on the GitHub Actions runner,
       # completely bypassing Netlify's build servers, and pushes the compiled
       # application (including serverless functions) directly to Netlify production.
@@ -35,6 +44,7 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.semantic_dry.outputs.new_release_version }}
           # Add any other environment variables your Next.js build requires:
           # MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: netlify deploy --build --prod
