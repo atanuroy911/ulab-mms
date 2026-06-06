@@ -1,0 +1,50 @@
+name: Deploy to Netlify and Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-deploy-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
+
+      # This runs the Next.js build natively on the GitHub Actions runner,
+      # completely bypassing Netlify's build servers, and pushes the compiled
+      # application (including serverless functions) directly to Netlify production.
+      - name: Build and Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          # Add any other environment variables your Next.js build requires:
+          # MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: netlify deploy --build --prod
+
+      # As requested, automatically create a GitHub release
+      - name: Create Release Tag
+        id: create_tag
+        run: echo "TAG_NAME=v$(date +'%Y.%m.%d-%H%M%S')" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
+          generate_release_notes: true
