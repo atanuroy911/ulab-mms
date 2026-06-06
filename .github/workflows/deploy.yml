@@ -9,6 +9,7 @@ on:
 jobs:
   build-deploy-release:
     runs-on: ubuntu-latest
+    environment: deploy
     
     steps:
       - name: Checkout code
@@ -32,7 +33,7 @@ jobs:
       - name: Build and Deploy to Netlify
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
           # Add any other environment variables your Next.js build requires:
           # MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: netlify deploy --build --prod
