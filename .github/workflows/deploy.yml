@@ -38,14 +38,9 @@ jobs:
           # MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: netlify deploy --build --prod
 
-      # As requested, automatically create a GitHub release
-      - name: Create Release Tag
-        id: create_tag
-        run: echo "TAG_NAME=v$(date +'%Y.%m.%d-%H%M%S')" >> $GITHUB_ENV
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: Release ${{ env.TAG_NAME }}
-          generate_release_notes: true
+      # Use semantic-release to automatically determine the version,
+      # create a git tag, and generate a GitHub release based on commit messages.
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
