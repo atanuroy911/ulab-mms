@@ -55,7 +55,8 @@ import {
   BookOpen,
   FlaskConical,
   Edit,
-  Menu
+  Menu,
+  Tag
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -66,6 +67,7 @@ interface Student {
   studentId: string;
   name: string;
   withdrawn?: boolean;
+  useAlias?: boolean;
 }
 
 interface Exam {
@@ -109,6 +111,8 @@ interface Course {
     maxMarks: Record<string, number[]>;
     mapping: boolean[][];
   };
+  aliasEnabled?: boolean;
+  alternateCode?: string;
 }
 
 export default function CoursePage() {
@@ -142,7 +146,7 @@ export default function CoursePage() {
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
-  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
+  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
   const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
@@ -163,6 +167,9 @@ export default function CoursePage() {
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
+  const [aliasCandidates, setAliasCandidates] = useState<Array<{ _id: string; studentId: string; name: string }>>([]);
+  const [showAliasCategorizeModal, setShowAliasCategorizeModal] = useState(false);
+  const [aliasCategorizing, setAliasCategorizing] = useState(false);
   const [isAutoCalculatingAttendance, setIsAutoCalculatingAttendance] = useState(false);
   // CO marks warning session state: tracks exam IDs the user has dismissed for this session
   const [ignoredCoWarnings, setIgnoredCoWarnings] = useState<Set<string>>(new Set());
@@ -204,6 +211,8 @@ export default function CoursePage() {
     assignmentWeightage: '',
     projectWeightage: '',
     gradingScale: DEFAULT_GRADING_SCALE,
+    aliasEnabled: false,
+    alternateCode: '',
   });
   const [error, setError] = useState('');
 
@@ -284,12 +293,69 @@ export default function CoursePage() {
         setShowAddStudentModal(false);
         notify.student.added(newStudentData.name);
         setNewStudentData({ studentId: '', name: '' });
+        await checkAliasCandidates(true);
       } else {
         notify.student.addError(data.error);
       }
     } catch (err) {
       console.error('Error adding student:', err);
       notify.student.addError();
+    }
+  };
+
+  const checkAliasCandidates = async (silentIfNone = false) => {
+    if (!course?.aliasEnabled) return;
+    try {
+      const res = await fetch(`/api/courses/${courseId}/students/alias-categorize`);
+      const data = await res.json();
+      if (res.ok && data.candidates?.length > 0) {
+        setAliasCandidates(data.candidates);
+        setShowAliasCategorizeModal(true);
+      } else if (!silentIfNone) {
+        notify.info('No students match the alias batch rule right now.');
+      }
+    } catch (err) {
+      console.error('Error checking alias candidates:', err);
+    }
+  };
+
+  const applyAliasCategorize = async () => {
+    setAliasCategorizing(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/students/alias-categorize`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        notify.success(`${data.updated} student(s) moved to the alias course code`);
+        setShowAliasCategorizeModal(false);
+        setAliasCandidates([]);
+        await fetchCourseData();
+      } else {
+        notify.error(data.error || 'Failed to auto-categorize students');
+      }
+    } catch (err) {
+      console.error('Error applying alias categorize:', err);
+      notify.error('Failed to auto-categorize students');
+    } finally {
+      setAliasCategorizing(false);
+    }
+  };
+
+  const handleToggleAlias = async (student: Student) => {
+    try {
+      const res = await fetch(`/api/students/${student._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useAlias: !student.useAlias }),
+      });
+      if (res.ok) {
+        await fetchCourseData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.error || 'Failed to update alias status');
+      }
+    } catch (err) {
+      console.error('Error toggling alias:', err);
+      notify.error('Failed to update alias status');
     }
   };
 
@@ -711,10 +777,17 @@ export default function CoursePage() {
         return;
       }
 
+      if (courseSettingsData.aliasEnabled && !courseSettingsData.alternateCode.trim()) {
+        setError('Please provide an alternate course code');
+        return;
+      }
+
       const updateData: any = {
         quizAggregation: courseSettingsData.quizAggregation,
         assignmentAggregation: courseSettingsData.assignmentAggregation,
         gradingScale: encodeGradingScale(courseSettingsData.gradingScale),
+        aliasEnabled: courseSettingsData.aliasEnabled,
+        alternateCode: courseSettingsData.alternateCode,
       };
 
       if (courseSettingsData.quizWeightage) {
@@ -803,33 +876,44 @@ export default function CoursePage() {
     }
   };
 
+  const downloadCourseFile = async (group: 'main' | 'alias', codeForFilename: string) => {
+    const response = await fetch(`/api/courses/${courseId}/export-file`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Export failed');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const suffix = course?.aliasEnabled ? (group === 'alias' ? '_alias' : '_main') : '';
+    a.download = `${codeForFilename}_${course?.name}_course_file${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
   const handleExportCourseFile = async () => {
     setExportingCourseFile(true);
     try {
-      const response = await fetch(`/api/courses/${courseId}/export-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${course?.code}_${course?.name}_course_file_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
+      if (course?.aliasEnabled && course.alternateCode) {
+        await downloadCourseFile('main', course.code);
+        await downloadCourseFile('alias', course.alternateCode);
+        notify.exportImport.exportSuccess('Excel', `${course.code} + ${course.alternateCode}`);
       } else {
-        const data = await response.json().catch(() => ({}));
-        notify.exportImport.exportError(data.error);
+        await downloadCourseFile('main', course?.code || '');
+        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
       }
     } catch (err) {
       console.error('Export error:', err);
-      notify.exportImport.exportError();
+      notify.exportImport.exportError(err instanceof Error ? err.message : undefined);
     } finally {
       setExportingCourseFile(false);
     }
@@ -1442,9 +1526,11 @@ export default function CoursePage() {
                   quizWeightage: course?.quizWeightage?.toString() || '',
                   assignmentWeightage: course?.assignmentWeightage?.toString() || '',
                   projectWeightage: course?.projectWeightage?.toString() || '',
-                  gradingScale: course?.gradingScale 
-                    ? decodeGradingScale(course.gradingScale) 
+                  gradingScale: course?.gradingScale
+                    ? decodeGradingScale(course.gradingScale)
                     : DEFAULT_GRADING_SCALE,
+                  aliasEnabled: Boolean(course?.aliasEnabled),
+                  alternateCode: course?.alternateCode || '',
                 });
                 setShowCourseSettings(true);
               }}
@@ -1620,6 +1706,8 @@ export default function CoursePage() {
                 onDeleteAllStudents={handleDeleteAllStudents}
                 onBulkDeleteStudents={handleBulkDeleteStudents}
                 onToggleWithdrawStudent={handleToggleWithdrawStudent}
+                onToggleAlias={handleToggleAlias}
+                onAutoCategorizeAlias={() => checkAliasCandidates(false)}
               />
             )}
 
@@ -1705,13 +1793,51 @@ export default function CoursePage() {
 
     {/* Modals - Rendered as siblings for proper z-index */}
     <div>
-      <ImportStudentsModal 
-        isOpen={showImportStudentsModal} 
-        onClose={() => setShowImportStudentsModal(false)} 
-        students={students} 
-        courseId={courseId} 
-        onImportComplete={fetchCourseData} 
+      <ImportStudentsModal
+        isOpen={showImportStudentsModal}
+        onClose={() => setShowImportStudentsModal(false)}
+        students={students}
+        courseId={courseId}
+        onImportComplete={async () => {
+          await fetchCourseData();
+          await checkAliasCandidates(true);
+        }}
       />
+
+      {/* Alias auto-categorize confirmation */}
+      <Dialog open={showAliasCategorizeModal} onOpenChange={(open) => !open && setShowAliasCategorizeModal(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5" />
+              Alias New Batch Students?
+            </DialogTitle>
+            <DialogDescription>
+              {aliasCandidates.length} student{aliasCandidates.length !== 1 ? 's' : ''} (batch 25 or later) will be
+              grouped under the alternate course code &quot;{course?.alternateCode}&quot; instead of &quot;{course?.code}&quot;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-56 overflow-y-auto rounded-md border">
+            {aliasCandidates.map((s) => (
+              <div key={s._id} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
+                <span className="font-medium">{s.name}</span>
+                <span className="text-muted-foreground">{s.studentId}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            You can add or remove individual students from the alias group anytime from the student list.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAliasCategorizeModal(false)} disabled={aliasCategorizing}>
+              Not Now
+            </Button>
+            <Button onClick={applyAliasCategorize} disabled={aliasCategorizing}>
+              {aliasCategorizing ? 'Applying...' : 'Confirm Add'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Exam Modal */}
       <Dialog open={showExamModal} onOpenChange={setShowExamModal}>
@@ -2091,6 +2217,14 @@ export default function CoursePage() {
                 >
                   📄 Excel Export
                 </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'alias' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('alias')}
+                >
+                  🏷️ Alternate Course Code
+                </Button>
               </aside>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-32">
@@ -2118,6 +2252,14 @@ export default function CoursePage() {
                     onClick={() => setCourseSettingsTab('excelExport')}
                   >
                     📄 Excel Export
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'alias' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('alias')}
+                  >
+                    🏷️ Alternate Course Code
                   </Button>
                 </div>
 
@@ -2385,6 +2527,52 @@ export default function CoursePage() {
 
                 {courseSettingsTab === 'excelExport' && (
                   <ExcelExportMappingInfo />
+                )}
+
+                {courseSettingsTab === 'alias' && (
+                  <div className="max-w-2xl space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">Alternate Course Code</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Turn this on if some students in this course (e.g. a newer admission batch) are officially
+                        registered under a different course code. You&apos;ll be able to choose which students use it
+                        from the Students &amp; Marks tab, including an auto-categorize option.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Does this course have a new/alternate course code for some students?</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={!courseSettingsData.aliasEnabled ? 'default' : 'outline'}
+                          onClick={() => setCourseSettingsData({ ...courseSettingsData, aliasEnabled: false, alternateCode: '' })}
+                        >
+                          No
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={courseSettingsData.aliasEnabled ? 'default' : 'outline'}
+                          onClick={() => setCourseSettingsData({ ...courseSettingsData, aliasEnabled: true })}
+                        >
+                          Yes
+                        </Button>
+                      </div>
+                    </div>
+
+                    {courseSettingsData.aliasEnabled && (
+                      <div className="space-y-2">
+                        <Label htmlFor="course-settings-alternate-code">Alternate Course Code</Label>
+                        <Input
+                          id="course-settings-alternate-code"
+                          value={courseSettingsData.alternateCode}
+                          onChange={(e) => setCourseSettingsData({ ...courseSettingsData, alternateCode: e.target.value })}
+                          placeholder="e.g., CSE470B"
+                          className="max-w-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Action Buttons */}

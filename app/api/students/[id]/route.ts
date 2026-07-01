@@ -20,9 +20,15 @@ export async function PUT(
     const { id } = await context.params;
     const studentId = id;
     const body = await request.json();
-    const { studentId: newStudentId, name, probation, withdrawn } = body;
+    const { studentId: newStudentId, name, probation, withdrawn, useAlias } = body;
 
-    if (newStudentId === undefined && name === undefined && probation === undefined && withdrawn === undefined) {
+    if (
+      newStudentId === undefined &&
+      name === undefined &&
+      probation === undefined &&
+      withdrawn === undefined &&
+      useAlias === undefined
+    ) {
       return NextResponse.json(
         { error: 'No student fields provided' },
         { status: 400 }
@@ -63,6 +69,7 @@ export async function PUT(
     if (name !== undefined) student.name = name;
     if (probation !== undefined) student.probation = Boolean(probation);
     if (withdrawn !== undefined) student.withdrawn = Boolean(withdrawn);
+    if (useAlias !== undefined) student.useAlias = Boolean(useAlias);
     await student.save();
 
     return NextResponse.json(

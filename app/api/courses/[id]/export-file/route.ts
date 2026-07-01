@@ -260,11 +260,24 @@ export async function POST(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const students = await Student.find({ courseId })
+    const body = await request.json().catch(() => ({}));
+    const group = body?.group === 'alias' ? 'alias' : 'main';
+    const useSplit = Boolean(course.aliasEnabled && course.alternateCode);
+
+    const allStudents = await Student.find({ courseId })
       .sort({ studentId: 1, _id: 1 })
       .collation({ locale: 'en', numericOrdering: true });
+    const students = useSplit
+      ? allStudents.filter((s) => (group === 'alias' ? s.useAlias : !s.useAlias))
+      : allStudents;
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
+
+    // When exporting the alias group, resolveFieldValue('course.code', ...) should
+    // reflect the alternate code, not the course's primary code.
+    const courseForExport = useSplit && group === 'alias'
+      ? { ...course.toObject(), code: course.alternateCode }
+      : course;
 
     // Use the strict default mapping for the beta export template
     const mapping = DEFAULT_EXCEL_EXPORT_MAPPING;
@@ -285,7 +298,7 @@ export async function POST(
       const sheet = workbook.sheet(targetSheetName);
       if (!sheet) continue;
       
-      const value = resolveFieldValue(singleCell.field, course, null, instructorName, exams, marks);
+      const value = resolveFieldValue(singleCell.field, courseForExport, null, instructorName, exams, marks);
       sheet.cell(singleCell.cell).value(value === undefined || value === null ? '' : value);
     }
 
@@ -306,7 +319,7 @@ export async function POST(
 
       targetStudents.forEach((student, index) => {
         const row = fromCell.row + index;
-        const value = resolveFieldValue(rangeMapping.field, course, student, instructorName, exams, marks);
+        const value = resolveFieldValue(rangeMapping.field, courseForExport, student, instructorName, exams, marks);
         sheet.cell(`${fromCell.column}${row}`).value(value === undefined || value === null ? '' : value);
       });
     }
@@ -370,11 +383,12 @@ export async function POST(
 
     const outBuf = await workbook.outputAsync();
 
+    const filenameSuffix = useSplit ? (group === 'alias' ? '_alias' : '_main') : '';
     return new NextResponse(outBuf, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${course.code}_${course.name}_course_file_${new Date().toISOString().split('T')[0]}.xlsx"`,
+        'Content-Disposition': `attachment; filename="${courseForExport.code}_${course.name}_course_file${filenameSuffix}_${new Date().toISOString().split('T')[0]}.xlsx"`,
       },
     });
   } catch (error) {

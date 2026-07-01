@@ -5,6 +5,7 @@ export interface IStudent extends Document {
   name: string;
   probation: boolean;
   withdrawn?: boolean;
+  useAlias?: boolean; // Whether this student is grouped under the course's alternate code
   courseId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -28,6 +29,10 @@ const StudentSchema: Schema = new Schema(
       default: false,
     },
     withdrawn: {
+      type: Boolean,
+      default: false,
+    },
+    useAlias: {
       type: Boolean,
       default: false,
     },

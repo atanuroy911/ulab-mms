@@ -17,6 +17,7 @@ type StudentRow = {
   studentId: string;
   name: string;
   probation?: boolean;
+  useAlias?: boolean;
 };
 
 type SessionRecord = {
@@ -47,6 +48,8 @@ type CourseRow = {
   classRoom?: string;
   numberOfStudents?: number;
   classRepresentativeId?: unknown;
+  aliasEnabled?: boolean;
+  alternateCode?: string;
 };
 
 function safeId(value: unknown): string {
@@ -114,7 +117,7 @@ function buildHeaderDates(sessionsInScope: AttendanceSessionListItem[]) {
   return headerDates;
 }
 
-function buildAttendanceHtml(
+function buildPagesHtml(
   course: CourseRow,
   students: StudentRow[],
   attendanceSession: AttendanceSessionRow,
@@ -122,7 +125,7 @@ function buildAttendanceHtml(
   logoDataUri: string,
   instructorName: string,
   settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string }
-) {
+): string {
   const { formatted: sessionDateLabel } = getSessionDateInfo(attendanceSession);
   const headerDates = buildHeaderDates(sessionsInScope);
   const days = headerDates.map((d) => d.day);
@@ -241,6 +244,26 @@ function buildAttendanceHtml(
       </div>
     `;
   }
+
+  return pagesHtml;
+}
+
+function buildAttendanceHtml(
+  course: CourseRow,
+  students: StudentRow[],
+  attendanceSession: AttendanceSessionRow,
+  sessionsInScope: AttendanceSessionListItem[],
+  logoDataUri: string,
+  instructorName: string,
+  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string }
+) {
+  // When an alias code is enabled, produce two separate sets of pages - one per
+  // course code - each only listing the students assigned to that code, using
+  // the same attendance sessions/dates for both.
+  const pagesHtml = course.aliasEnabled && course.alternateCode
+    ? buildPagesHtml(course, students.filter((s) => !s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings) +
+      buildPagesHtml({ ...course, code: course.alternateCode }, students.filter((s) => s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings)
+    : buildPagesHtml(course, students, attendanceSession, sessionsInScope, logoDataUri, instructorName, settings);
 
   return `
   <!doctype html>

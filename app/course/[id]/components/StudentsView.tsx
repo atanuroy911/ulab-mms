@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Plus, Upload, Trash2 } from 'lucide-react';
+import { Plus, Upload, Trash2, Tag } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Student {
@@ -15,6 +15,7 @@ interface Student {
   studentId: string;
   name: string;
   withdrawn?: boolean;
+  useAlias?: boolean;
 }
 
 interface Exam {
@@ -44,6 +45,8 @@ interface Course {
   projectWeightage?: number;
   gradingScale?: string;
   courseType?: string;
+  aliasEnabled?: boolean;
+  alternateCode?: string;
 }
 
 interface GradeData {
@@ -88,6 +91,8 @@ interface StudentsViewProps {
   onDeleteAllStudents: () => Promise<void> | void;
   onBulkDeleteStudents?: (studentIds: string[]) => Promise<void> | void;
   onToggleWithdrawStudent: (student: Student) => void;
+  onToggleAlias: (student: Student) => void;
+  onAutoCategorizeAlias: () => void;
 }
 
 export default function StudentsView({
@@ -115,6 +120,8 @@ export default function StudentsView({
   onDeleteAllStudents,
   onBulkDeleteStudents,
   onToggleWithdrawStudent,
+  onToggleAlias,
+  onAutoCategorizeAlias,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
@@ -230,6 +237,16 @@ export default function StudentsView({
             <Upload className="w-4 h-4" />
             Bulk Import (CSV)
           </Button>
+          {course?.aliasEnabled && (
+            <Button
+              onClick={onAutoCategorizeAlias}
+              variant="outline"
+              className="gap-2"
+            >
+              <Tag className="w-4 h-4" />
+              Auto-categorize to Alias
+            </Button>
+          )}
           <Button
             onClick={() => setShowDeleteAllModal(true)}
             variant="destructive"
@@ -333,6 +350,12 @@ export default function StudentsView({
                       >
                         {student.name} {student.withdrawn && <span className="font-bold ml-1">(W)</span>}
                       </button>
+                      {course?.aliasEnabled && student.useAlias && (
+                        <Badge variant="secondary" className="mt-1 w-fit gap-1 text-[10px]">
+                          <Tag className="h-2.5 w-2.5" />
+                          Alias: {course.alternateCode}
+                        </Badge>
+                      )}
                     </div>
                   </td>
                   {exams.map(exam => {
@@ -500,6 +523,19 @@ export default function StudentsView({
                       >
                         W
                       </button>
+                      {course?.aliasEnabled && (
+                        <button
+                          onClick={() => onToggleAlias(student)}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition-all font-bold ${
+                            student.useAlias
+                              ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                              : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border'
+                          }`}
+                          title={student.useAlias ? `Remove from alias code (${course.alternateCode})` : `Add to alias code (${course.alternateCode})`}
+                        >
+                          <Tag className="w-3 h-3" />
+                        </button>
+                      )}
                       <button
                         onClick={() => onEditStudent(student)}
                         className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded-lg transition-all"

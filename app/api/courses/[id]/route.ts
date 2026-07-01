@@ -89,6 +89,8 @@ export async function PUT(
       classRoom,
       numberOfStudents,
       classRepresentativeId,
+      aliasEnabled,
+      alternateCode,
     } = body;
 
     await dbConnect();
@@ -165,6 +167,19 @@ export async function PUT(
 
     if (classRepresentativeId !== undefined) {
       updateData.classRepresentativeId = classRepresentativeId;
+    }
+
+    if (aliasEnabled !== undefined) {
+      if (aliasEnabled && !String(alternateCode || '').trim()) {
+        return NextResponse.json(
+          { error: 'Please provide an alternate course code' },
+          { status: 400 }
+        );
+      }
+      updateData.aliasEnabled = Boolean(aliasEnabled);
+      updateData.alternateCode = aliasEnabled ? String(alternateCode).trim() : '';
+    } else if (alternateCode !== undefined) {
+      updateData.alternateCode = String(alternateCode).trim();
     }
 
     const course = await Course.findOneAndUpdate(

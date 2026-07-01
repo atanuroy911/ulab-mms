@@ -26,6 +26,8 @@ export interface ICourse extends Document {
   };
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived
+  aliasEnabled?: boolean; // Whether some students are grouped under an alternate course code
+  alternateCode?: string; // The alternate/alias course code, when aliasEnabled is true
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -138,6 +140,15 @@ const CourseSchema: Schema = new Schema(
     },
     archivedAt: {
       type: Date,
+    },
+    aliasEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    alternateCode: {
+      type: String,
+      trim: true,
+      default: '',
     },
     userId: {
       type: Schema.Types.ObjectId,

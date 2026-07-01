@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, code, semester, year, section, courseType } = await request.json();
+    const { name, code, semester, year, section, courseType, aliasEnabled, alternateCode } = await request.json();
 
     // Validation
     if (!name || !code || !semester || !year || !section || !courseType) {
@@ -115,6 +115,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (aliasEnabled && !String(alternateCode || '').trim()) {
+      return NextResponse.json(
+        { error: 'Please provide an alternate course code' },
+        { status: 400 }
+      );
+    }
+
     await dbConnect();
 
     const course = await Course.create({
@@ -124,6 +131,8 @@ export async function POST(request: NextRequest) {
       year,
       section,
       courseType,
+      aliasEnabled: Boolean(aliasEnabled),
+      alternateCode: aliasEnabled ? String(alternateCode).trim() : '',
       projectWeightage: courseType === 'Lab' ? 40 : 25,
       userId: new mongoose.Types.ObjectId(userObjectId),
     });
