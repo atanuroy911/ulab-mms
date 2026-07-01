@@ -6,6 +6,7 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import { cascadeDeleteCourseData } from '@/lib/courseCascadeDelete';
 
 // GET a specific course
 export async function GET(
@@ -211,12 +212,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Delete all related data
-    await Promise.all([
-      Student.deleteMany({ courseId: id }),
-      Exam.deleteMany({ courseId: id }),
-      Mark.deleteMany({ courseId: id }),
-    ]);
+    // Delete all related data (students, exams, marks, attendance, project & capstone data)
+    await cascadeDeleteCourseData(id);
 
     return NextResponse.json(
       { message: 'Course and all related data deleted successfully' },

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar } from 'lucide-react';
+import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar, SidebarItem } from '@/app/components/AdminSidebar';
@@ -14,12 +14,18 @@ import CourseManagement from './components/CourseManagement';
 import ResourcesManager from './components/ResourcesManager';
 import CapstoneManagement from './components/CapstoneManagement';
 import SemesterManagement from './components/SemesterManagement';
+import AccountManagement from './components/AccountManagement';
 
 const sidebarItems: SidebarItem[] = [
   {
     title: 'Overview',
     href: '/admin/dashboard?tab=overview',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Account Manager',
+    href: '/admin/dashboard?tab=accounts',
+    icon: Users,
   },
   {
     title: 'Course Management',
@@ -140,6 +146,7 @@ function AdminDashboardContent() {
         {/* Content Area */}
         <main className="flex-1 p-6 overflow-auto">
           {activeTab === 'overview' && <OverviewSection />}
+          {activeTab === 'accounts' && <AccountManagement />}
           {activeTab === 'courses' && <CourseManagement />}
           {activeTab === 'resources' && <ResourcesManager />}
           {activeTab === 'semesters' && <SemesterManagement />}

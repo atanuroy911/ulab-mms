@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import { CourseCombobox } from '@/app/components/CourseCombobox';
@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [duplicating, setDuplicating] = useState(false);
   const [archiving, setArchiving] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [deletingCourseLoading, setDeletingCourseLoading] = useState(false);
   const [duplicatingCourse, setDuplicatingCourse] = useState<Course | null>(null);
   const [duplicateMode, setDuplicateMode] = useState<'copy' | 'duplicate'>('duplicate');
   const [formData, setFormData] = useState({
@@ -222,26 +224,27 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm('Are you sure you want to delete this course? All students, exams, and marks will be deleted.')) {
-      return;
-    }
+  const confirmDeleteCourse = async () => {
+    if (!deletingCourse) return;
+    setDeletingCourseLoading(true);
 
     try {
-      const response = await fetch(`/api/courses/${courseId}`, {
+      const response = await fetch(`/api/courses/${deletingCourse._id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        const deletedCourse = courses.find(c => c._id === courseId);
-        notify.course.deleted(deletedCourse?.name);
-        setCourses(courses.filter((c) => c._id !== courseId));
+        notify.course.deleted(deletingCourse.name);
+        setCourses(courses.filter((c) => c._id !== deletingCourse._id));
+        setDeletingCourse(null);
       } else {
         notify.course.deleteError();
       }
     } catch (err) {
       console.error('Error deleting course:', err);
       notify.course.deleteError();
+    } finally {
+      setDeletingCourseLoading(false);
     }
   };
 
@@ -586,8 +589,8 @@ export default function Dashboard() {
                           <Archive className="h-4 w-4 mr-2" />
                           {archiving === course._id ? 'Archiving...' : 'Archive'}
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteCourse(course._id)}
+                        <DropdownMenuItem
+                          onClick={() => setDeletingCourse(course)}
                           className="text-destructive"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
@@ -1161,6 +1164,40 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={deletingCourse !== null} onOpenChange={(open) => !open && setDeletingCourse(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Delete Course</DialogTitle>
+            </div>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertDescription>
+              <p>
+                This will permanently delete <strong>{deletingCourse?.name}</strong> ({deletingCourse?.code}) and everything in it,
+                including:
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>All students enrolled in this course</li>
+                <li>All exams and marks</li>
+                <li>All attendance sessions and records</li>
+                <li>All project group and marks data</li>
+                <li>All capstone data tied to this course, if any</li>
+              </ul>
+              <p className="mt-2 font-medium">This cannot be undone.</p>
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingCourse(null)} disabled={deletingCourseLoading}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteCourse} disabled={deletingCourseLoading}>
+              {deletingCourseLoading ? 'Deleting...' : 'Delete Course'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

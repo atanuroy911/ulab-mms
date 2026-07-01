@@ -122,7 +122,7 @@ export default function AdminSignIn() {
         {/* Logo and Title */}
         <div className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="relative">
+            <div className="relative inline-block">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
@@ -131,7 +131,7 @@ export default function AdminSignIn() {
                 className="drop-shadow-lg"
                 priority
               />
-              <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full p-2">
+              <div className="absolute bottom-0 right-0 z-10 translate-x-1/3 translate-y-1/3 rounded-full bg-primary p-2 text-primary-foreground ring-4 ring-background">
                 <Shield className="h-6 w-6" />
               </div>
             </div>
