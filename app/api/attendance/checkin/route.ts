@@ -62,16 +62,28 @@ export async function POST(req: NextRequest) {
       student = await Student.findOne({ studentId: confirmedStudentId, courseId: courseObjectId });
       studentIdString = confirmedStudentId;
     } else {
+      // Never write attendance on the first pass. Always surface a match as a
+      // "Is this you?" confirmation so the student can verify their own record
+      // before it's recorded, whether the match came from a parsed ID or a name lookup.
       const displayName = (session.user.name || '').trim();
       const match = displayName.match(/\(([^)]+)\)/);
       const parsedId = match ? match[1].trim() : null;
 
       if (parsedId) {
-        student = await Student.findOne({ studentId: parsedId, courseId: courseObjectId });
-        studentIdString = parsedId;
+        const candidate = await Student.findOne({ studentId: parsedId, courseId: courseObjectId });
+        if (candidate) {
+          return NextResponse.json({
+            needsConfirmation: true,
+            message: 'Is this you? Please confirm your name and student ID.',
+            candidate: {
+              studentId: candidate.studentId,
+              name: candidate.name,
+            },
+          });
+        }
       }
 
-      if (!student && displayName) {
+      if (displayName) {
         const students = await Student.find({ courseId: courseObjectId }).lean();
         const normalizedName = displayName.toLowerCase();
 
@@ -102,6 +114,8 @@ export async function POST(req: NextRequest) {
           );
         }
       }
+
+      return NextResponse.json({ error: 'Student not registered for this course' }, { status: 404 });
     }
 
     if (!student) {
