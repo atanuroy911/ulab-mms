@@ -1,14 +1,14 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, MoreVertical, Check, X, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, MoreVertical, Check, X, Search, Wrench, Download, Upload, Shuffle, RotateCcw, UserX, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -161,6 +161,8 @@ interface Student {
 }
 
 interface CourseInfo {
+  name?: string;
+  code?: string;
   classTime?: string;
   classRoom?: string;
   numberOfStudents?: number;
@@ -257,6 +259,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [sessionDate, setSessionDate] = useState(getLocalDateInputValue());
   const [sessionDialogError, setSessionDialogError] = useState('');
   const [showExportWarningModal, setShowExportWarningModal] = useState(false);
+  const [bulkActionPending, setBulkActionPending] = useState<'randomize' | 'reset' | null>(null);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [pendingImport, setPendingImport] = useState<{ parsed: any; sourceCourseName: string } | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -392,6 +399,106 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     updateStudentStatus(activeSession._id, student._id, next);
   };
 
+  const exportAttendanceJson = () => {
+    const idToRoll = new Map(students.map((s) => [String(s._id), s.studentId]));
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      courseId,
+      courseName: course?.name ? `${course.code ? `${course.code} - ` : ''}${course.name}` : undefined,
+      sessions: sessions.map((s) => ({
+        date: s.date,
+        records: (s.records || [])
+          .map((r) => ({ studentId: idToRoll.get(String(r.studentId)), status: r.status }))
+          .filter((r): r is { studentId: string; status: 'present' | 'absent' } => Boolean(r.studentId)),
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${course?.code || courseId}-attendance-${getLocalDateInputValue()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    notify.success('Attendance exported');
+  };
+
+  const runBulkAction = async (action: 'fillAbsent' | 'randomize' | 'reset') => {
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/attendance/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const messages: Record<typeof action, string> = {
+          fillAbsent: 'Unmarked students set to absent',
+          randomize: 'Attendance randomized for all sessions',
+          reset: 'All attendance has been reset',
+        };
+        notify.success(messages[action]);
+        setBulkActionPending(null);
+        await fetchAll();
+      } else {
+        notify.error(data.error || 'Failed to update attendance');
+      }
+    } catch (err) {
+      console.error('Error running bulk attendance action', err);
+      notify.error('Failed to update attendance');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const runImport = async (parsed: any, force = false) => {
+    setImportLoading(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/attendance/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...parsed, force }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        notify.success(
+          `Imported: ${data.sessionsCreated} new date(s), ${data.sessionsUpdated} updated, ${data.recordsMatched} records matched` +
+            (data.recordsSkipped ? `, ${data.recordsSkipped} skipped` : '')
+        );
+        setPendingImport(null);
+        await fetchAll();
+      } else if (data.mismatchedCourse) {
+        setPendingImport({ parsed, sourceCourseName: data.sourceCourseName || parsed?.courseName || 'a different course' });
+      } else {
+        notify.error(data.error || 'Failed to import attendance');
+      }
+    } catch (err) {
+      console.error('Error importing attendance', err);
+      notify.error('Failed to import attendance');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleImportFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      await runImport(parsed);
+    } catch (err) {
+      console.error('Error reading attendance file', err);
+      notify.error('Invalid attendance file');
+    }
+  };
+
   const deleteSession = async (sessionId: string) => {
     try {
       const res = await fetch(`/api/courses/${courseId}/attendance/${sessionId}`, { method: 'DELETE' });
@@ -517,6 +624,54 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           <Button type="button" variant="outline" onClick={() => setShowManageModal(true)}>
             Manage class session
           </Button>
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={handleImportFileSelected}
+          />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" disabled={bulkActionLoading || importLoading}>
+                <Wrench className="mr-2 h-4 w-4" />
+                Attendance Tools
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportAttendanceJson} disabled={sessions.length === 0}>
+                <Download />
+                Export Attendance (JSON)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => importInputRef.current?.click()} disabled={importLoading}>
+                <Upload />
+                Import Attendance (JSON)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => runBulkAction('fillAbsent')} disabled={sessions.length === 0 || bulkActionLoading}>
+                <UserX />
+                Mark Empty as Absent
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setBulkActionPending('randomize')}
+                disabled={sessions.length === 0 || bulkActionLoading}
+              >
+                <Shuffle />
+                Randomize Attendance
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setBulkActionPending('reset')}
+                disabled={sessions.length === 0 || bulkActionLoading}
+              >
+                <RotateCcw />
+                Reset All Attendance
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -914,6 +1069,76 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               }}
             >
               Set Settings
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkActionPending !== null} onOpenChange={(open) => !open && setBulkActionPending(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>
+                {bulkActionPending === 'randomize' ? 'Randomize Attendance?' : 'Reset All Attendance?'}
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 py-2 text-sm text-muted-foreground">
+            <p>
+              {bulkActionPending === 'randomize'
+                ? 'This will replace the existing attendance for every student on every class date with a random present/absent value. This cannot be undone.'
+                : 'This will clear the existing attendance for every student on every class date. This cannot be undone.'}
+            </p>
+            <p>Consider exporting the current attendance first so you can restore it later if needed.</p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={exportAttendanceJson} disabled={sessions.length === 0}>
+              <Download className="mr-2 h-4 w-4" />
+              Export current attendance first
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setBulkActionPending(null)} disabled={bulkActionLoading}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => bulkActionPending && runBulkAction(bulkActionPending)}
+              disabled={bulkActionLoading}
+            >
+              {bulkActionLoading ? 'Working...' : bulkActionPending === 'randomize' ? 'Randomize' : 'Reset'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingImport !== null} onOpenChange={(open) => !open && setPendingImport(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Different Course Detected</DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>
+              This file was exported from <span className="font-medium text-foreground">{pendingImport?.sourceCourseName}</span>, not this course.
+            </p>
+            <p>
+              If the same students are enrolled in both courses, importing here could attribute another course&apos;s attendance to this one. Only continue if you&apos;re sure this file belongs here.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setPendingImport(null)} disabled={importLoading}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => pendingImport && runImport(pendingImport.parsed, true)}
+              disabled={importLoading}
+            >
+              {importLoading ? 'Importing...' : 'Import Anyway'}
             </Button>
           </div>
         </DialogContent>

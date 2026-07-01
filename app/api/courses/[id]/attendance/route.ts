@@ -6,6 +6,7 @@ import Student from '@/models/Student';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
+import { buildAbsentFillRecords } from '@/lib/attendanceHelpers';
 
 async function resolveParams(params: any) {
   const resolved = await params;
@@ -58,20 +59,8 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
     if (activeSession) {
       // Closing a session: anyone not already marked present/absent is now absent.
       const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
-      const recordedIds = new Set(activeSession.records.map((record) => String(record.studentId)));
-      const now = new Date();
-
-      for (const student of allStudents) {
-        if (!recordedIds.has(String(student._id))) {
-          activeSession.records.push({
-            studentId: student._id,
-            status: 'absent',
-            recordedAt: now,
-            markedBy: 'auto',
-            studentIdString: student.studentId,
-          } as any);
-        }
-      }
+      const fillRecords = buildAbsentFillRecords(activeSession.records, allStudents);
+      activeSession.records.push(...(fillRecords as any));
 
       activeSession.open = false;
       await activeSession.save();
