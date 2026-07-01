@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Loader2, LogOut, ArrowLeft, Shield } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LogOut, ArrowLeft, Shield, KeyRound, AlertTriangle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { notify } from '@/app/utils/notifications';
 
 export default function AdminSettings() {
@@ -28,6 +30,10 @@ export default function AdminSettings() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [credentialsLoginEnabled, setCredentialsLoginEnabled] = useState(true);
+  const [credentialsLoading, setCredentialsLoading] = useState(true);
+  const [credentialsSaving, setCredentialsSaving] = useState(false);
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -69,6 +75,61 @@ export default function AdminSettings() {
 
     loadVersion();
   }, []);
+
+  useEffect(() => {
+    const loadCredentialsSetting = async () => {
+      try {
+        const response = await fetch('/api/admin/settings');
+        const data = await response.json();
+        if (response.ok) {
+          setCredentialsLoginEnabled(data.credentialsLoginEnabled);
+        }
+      } catch (err) {
+        console.error('Error loading sign-in settings:', err);
+      } finally {
+        setCredentialsLoading(false);
+      }
+    };
+
+    loadCredentialsSetting();
+  }, []);
+
+  const applyCredentialsLoginSetting = async (nextEnabled: boolean) => {
+    setCredentialsSaving(true);
+    try {
+      const response = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credentialsLoginEnabled: nextEnabled }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setCredentialsLoginEnabled(data.credentialsLoginEnabled);
+        notify.success(
+          data.credentialsLoginEnabled
+            ? 'Email/password sign-in is now enabled for teachers'
+            : 'Email/password sign-in is now disabled for teachers'
+        );
+      } else {
+        notify.error(data.error || 'Failed to update sign-in settings');
+      }
+    } catch (err) {
+      console.error('Error updating sign-in settings:', err);
+      notify.error('Failed to update sign-in settings');
+    } finally {
+      setCredentialsSaving(false);
+      setShowDisableConfirm(false);
+    }
+  };
+
+  const handleToggleCredentialsLogin = () => {
+    if (credentialsLoginEnabled) {
+      // Turning it off is the risky direction - confirm first.
+      setShowDisableConfirm(true);
+    } else {
+      applyCredentialsLoginSetting(true);
+    }
+  };
 
   const handleSignOut = async () => {
     try {
@@ -328,6 +389,49 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
+        {/* Teacher Sign-in Methods */}
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-6 w-6 text-purple-600" />
+              <div>
+                <CardTitle>Teacher Sign-in Methods</CardTitle>
+                <CardDescription className="mt-1">
+                  Control whether teachers can sign in / sign up with an email and password
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Email/Password Sign-in</span>
+                  {credentialsLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Badge variant={credentialsLoginEnabled ? 'default' : 'secondary'}>
+                      {credentialsLoginEnabled ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {credentialsLoginEnabled
+                    ? 'Teachers can sign in and sign up with email and password, or with Google.'
+                    : 'Teachers can only sign in with Google. Existing passwords are kept but cannot be used to sign in.'}
+                </p>
+              </div>
+              <Button
+                variant={credentialsLoginEnabled ? 'destructive' : 'default'}
+                onClick={handleToggleCredentialsLogin}
+                disabled={credentialsLoading || credentialsSaving}
+              >
+                {credentialsSaving ? 'Saving...' : credentialsLoginEnabled ? 'Turn Off' : 'Turn On'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Security Info */}
         <Card className="mt-6 border-blue-200 dark:border-blue-800">
           <CardContent className="pt-6">
@@ -365,6 +469,36 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={showDisableConfirm} onOpenChange={setShowDisableConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Turn Off Email/Password Sign-in?</DialogTitle>
+            </div>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertDescription>
+              <p>Once this is off:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Teachers will no longer be able to sign in with email and password, even if they already have one set.</li>
+                <li>New accounts can only be created by signing up with a @ulab.edu.bd Google account.</li>
+                <li>Anyone who has not linked a Google account to their existing account will be locked out until you turn this back on or they link Google.</li>
+              </ul>
+              <p className="mt-2 font-medium">You can turn this back on at any time.</p>
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisableConfirm(false)} disabled={credentialsSaving}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => applyCredentialsLoginSetting(false)} disabled={credentialsSaving}>
+              {credentialsSaving ? 'Turning off...' : 'Turn Off'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

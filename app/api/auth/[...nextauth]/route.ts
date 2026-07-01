@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { isUlabEmail, looksLikeStudentName } from '@/lib/googleAccount';
+import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -20,6 +21,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         await dbConnect();
+
+        if (!(await isCredentialsLoginEnabled())) {
+          throw new Error('Email/password sign-in is currently disabled. Please use "Continue with Google" instead.');
+        }
 
         const user = await User.findOne({ email: credentials.email });
 
