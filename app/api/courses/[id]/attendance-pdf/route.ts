@@ -485,14 +485,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       attendanceSession = await AttendanceSession.findOne({ courseId }).sort({ date: -1 }).lean<AttendanceSessionRow>();
     }
 
-    const anchorDate = attendanceSession?.date ? new Date(attendanceSession.date) : new Date();
-    const monthStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
-    const monthEnd = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1);
-
-    const sessionsInScope = await AttendanceSession.find({
-      courseId,
-      date: { $gte: monthStart, $lt: monthEnd },
-    })
+    // Show every session for the course on one continuous sheet (capped at 30
+    // date-columns below), rather than only the calendar month of one session.
+    const sessionsInScope = await AttendanceSession.find({ courseId })
       .sort({ date: 1 })
       .lean<AttendanceSessionListItem[]>();
 
