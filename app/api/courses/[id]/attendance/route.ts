@@ -56,6 +56,23 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
     const activeSession = await AttendanceSession.findOne({ courseId: new mongoose.Types.ObjectId(courseId), open: true });
 
     if (activeSession) {
+      // Closing a session: anyone not already marked present/absent is now absent.
+      const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
+      const recordedIds = new Set(activeSession.records.map((record) => String(record.studentId)));
+      const now = new Date();
+
+      for (const student of allStudents) {
+        if (!recordedIds.has(String(student._id))) {
+          activeSession.records.push({
+            studentId: student._id,
+            status: 'absent',
+            recordedAt: now,
+            markedBy: 'auto',
+            studentIdString: student.studentId,
+          } as any);
+        }
+      }
+
       activeSession.open = false;
       await activeSession.save();
       return NextResponse.json({ session: activeSession, action: 'closed' });
@@ -119,14 +136,19 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
     }
 
     const body = await req.json();
-    const { sessionId, studentId, status } = body as {
+    const { sessionId, studentId, status, applyToAll } = body as {
       sessionId?: string;
       studentId?: string;
       status?: 'present' | 'absent';
+      applyToAll?: boolean;
     };
 
-    if (!sessionId || !studentId || !status) {
-      return NextResponse.json({ error: 'sessionId, studentId and status are required' }, { status: 400 });
+    if (!sessionId || !status || !['present', 'absent'].includes(status)) {
+      return NextResponse.json({ error: 'sessionId and a valid status (present/absent) are required' }, { status: 400 });
+    }
+
+    if (!applyToAll && !studentId) {
+      return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
     }
 
     const targetSession = await AttendanceSession.findOne({
@@ -136,6 +158,21 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
 
     if (!targetSession) {
       return NextResponse.json({ error: 'Attendance session not found' }, { status: 404 });
+    }
+
+    if (applyToAll) {
+      const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
+      const now = new Date();
+      targetSession.records = allStudents.map((student) => ({
+        studentId: student._id,
+        status,
+        recordedAt: now,
+        markedBy: 'manual',
+        studentIdString: student.studentId,
+      })) as any;
+
+      await targetSession.save();
+      return NextResponse.json({ session: targetSession });
     }
 
     const student = await Student.findOne({ _id: studentId, courseId: new mongoose.Types.ObjectId(courseId) });

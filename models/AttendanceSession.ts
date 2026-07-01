@@ -11,7 +11,7 @@ export interface IAttendanceSession extends Document {
     studentId: mongoose.Types.ObjectId;
     status: 'present' | 'absent';
     recordedAt: Date;
-    markedBy?: 'qr' | 'manual';
+    markedBy?: 'qr' | 'manual' | 'auto';
     studentIdString?: string;
   }>;
   createdAt: Date;
@@ -52,7 +52,7 @@ const AttendanceSessionSchema: Schema = new Schema(
         studentId: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
         status: { type: String, enum: ['present', 'absent'], required: true },
         recordedAt: { type: Date, default: Date.now },
-        markedBy: { type: String, enum: ['qr', 'manual'], default: 'manual' },
+        markedBy: { type: String, enum: ['qr', 'manual', 'auto'], default: 'manual' },
         studentIdString: { type: String },
       },
     ],

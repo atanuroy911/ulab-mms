@@ -6,17 +6,20 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, MoreVertical, Check, X, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { notify } from '@/app/utils/notifications';
 
 interface AttendanceRecord {
   studentId: string;
   status: 'present' | 'absent';
   recordedAt: string;
-  markedBy?: 'qr' | 'manual';
+  markedBy?: 'qr' | 'manual' | 'auto';
   studentIdString?: string;
 }
 
@@ -179,6 +182,65 @@ function getLocalDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function QuickAttendanceSearch({
+  students,
+  activeSession,
+  getStatus,
+  onToggle,
+}: {
+  students: Student[];
+  activeSession: Session | null;
+  getStatus: (session: Session, student: Student) => SessionStatus;
+  onToggle: (student: Student) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const disabled = !activeSession;
+
+  return (
+    <div className="rounded-lg border bg-muted/10 p-3">
+      <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+        <Search className="h-4 w-4" />
+        Quick attendance search
+        {disabled && <span className="text-xs font-normal text-muted-foreground">(open a session to use this)</span>}
+      </div>
+      <Command shouldFilter className="overflow-visible rounded-md border bg-background">
+        <CommandInput
+          value={query}
+          onValueChange={setQuery}
+          disabled={disabled}
+          placeholder={disabled ? 'Open a session first...' : 'Type a name or student ID, then press Enter to toggle present/absent'}
+        />
+        {!disabled && query.trim() && (
+          <CommandList>
+            <CommandEmpty>No matching student.</CommandEmpty>
+            {students.map((student) => {
+              const status = activeSession ? getStatus(activeSession, student) : 'none';
+              return (
+                <CommandItem
+                  key={student._id}
+                  value={`${student.name} ${student.studentId}`}
+                  onSelect={() => {
+                    onToggle(student);
+                    setQuery('');
+                  }}
+                  className="justify-between"
+                >
+                  <span>
+                    {student.name} <span className="text-muted-foreground">({student.studentId})</span>
+                  </span>
+                  {status === 'present' && <Badge className="bg-green-600 hover:bg-green-600">Present</Badge>}
+                  {status === 'absent' && <Badge variant="destructive">Absent</Badge>}
+                  {status === 'none' && <span className="text-xs text-muted-foreground">Not marked</span>}
+                </CommandItem>
+              );
+            })}
+          </CommandList>
+        )}
+      </Command>
+    </div>
+  );
+}
+
 export default function AttendanceView({ courseId }: { courseId: string }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -231,7 +293,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const sessionLabels = useMemo(
     () => sessions.map((session) => ({
       ...session,
-      label: new Date(session.date).toLocaleDateString(),
+      label: format(new Date(session.date), 'dd/MM/yy'),
     })),
     [sessions]
   );
@@ -299,6 +361,35 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     } catch (err) {
       console.error('Error updating attendance', err);
     }
+  };
+
+  const bulkSetSession = async (sessionId: string, status: 'present' | 'absent') => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/attendance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, status, applyToAll: true }),
+      });
+
+      if (res.ok) {
+        notify.success(`Marked everyone ${status} for that date`);
+        await fetchAll();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.error || 'Failed to bulk-update attendance');
+      }
+    } catch (err) {
+      console.error('Error bulk-updating attendance', err);
+      notify.error('Failed to bulk-update attendance');
+    }
+  };
+
+  const toggleActiveSessionStatus = (student: Student) => {
+    if (!activeSession) return;
+    const current = getStatus(activeSession, student);
+    const next: 'present' | 'absent' = current === 'present' ? 'absent' : 'present';
+    notify.success(`${student.name} marked ${next}`);
+    updateStudentStatus(activeSession._id, student._id, next);
   };
 
   const deleteSession = async (sessionId: string) => {
@@ -483,6 +574,15 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
         )
       )}
 
+      {!loading && (
+        <QuickAttendanceSearch
+          students={students}
+          activeSession={activeSession}
+          getStatus={getStatus}
+          onToggle={toggleActiveSessionStatus}
+        />
+      )}
+
       {loading ? (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -494,10 +594,33 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[260px]">Student</TableHead>
-                <TableHead className="min-w-40">Present / Absent</TableHead>
+                <TableHead className="min-w-32">Present / Absent</TableHead>
                 {sessionLabels.map((session) => (
-                  <TableHead key={session._id} className="text-center min-w-40">
-                    {session.label}
+                  <TableHead key={session._id} className="w-[84px] min-w-[84px] px-2 text-center">
+                    <div className="group flex items-center justify-center gap-1">
+                      <span className="text-xs font-medium">{session.label}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={`Bulk actions for ${session.label}`}
+                            className="rounded p-0.5 opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="center">
+                          <DropdownMenuItem onClick={() => bulkSetSession(session._id, 'present')}>
+                            <Check className="text-green-600" />
+                            Mark all present
+                          </DropdownMenuItem>
+                          <DropdownMenuItem variant="destructive" onClick={() => bulkSetSession(session._id, 'absent')}>
+                            <X />
+                            Mark all absent
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableHead>
                 ))}
               </TableRow>
@@ -534,14 +657,39 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                       {sessionLabels.map((session) => {
                         const status = getStatus(session, student);
                         return (
-                          <TableCell key={session._id} className="text-center">
-                            {status === 'present' ? (
-                              <Badge className="bg-green-600 hover:bg-green-600">Present</Badge>
-                            ) : status === 'absent' ? (
-                              <Badge variant="destructive">Absent</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+                          <TableCell key={session._id} className="p-1 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => updateStudentStatus(session._id, student._id, 'present')}
+                                aria-label={`Mark ${student.name} present for ${session.label}`}
+                                aria-pressed={status === 'present'}
+                                title="Present"
+                                className={cn(
+                                  'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',
+                                  status === 'present'
+                                    ? 'border-green-600 bg-green-600 text-white'
+                                    : 'border-muted-foreground/30 text-muted-foreground/40 hover:border-green-600 hover:text-green-600'
+                                )}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateStudentStatus(session._id, student._id, 'absent')}
+                                aria-label={`Mark ${student.name} absent for ${session.label}`}
+                                aria-pressed={status === 'absent'}
+                                title="Absent"
+                                className={cn(
+                                  'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',
+                                  status === 'absent'
+                                    ? 'border-red-600 bg-red-600 text-white'
+                                    : 'border-muted-foreground/30 text-muted-foreground/40 hover:border-red-600 hover:text-red-600'
+                                )}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </TableCell>
                         );
                       })}
@@ -550,54 +698,16 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                     {isExpanded && (
                       <TableRow key={`${student._id}-expanded`}>
                         <TableCell colSpan={2 + sessionLabels.length} className="bg-muted/30">
-                          <div className="space-y-3">
-                            <div className="text-sm font-medium">Attendance by date</div>
-                            <div className="space-y-2">
-                              {sessionLabels.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">No sessions yet.</div>
-                              ) : (
-                                sessionLabels.map((session) => {
-                                  const status = getStatus(session, student);
-                                  return (
-                                    <div key={session._id} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
-                                      <div className="min-w-0">
-                                        <div className="font-medium">{session.label}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {status === 'present' ? 'Marked present' : status === 'absent' ? 'Marked absent' : 'Not marked yet'}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          size="sm"
-                                          variant={status === 'present' ? 'default' : 'outline'}
-                                          onClick={() => updateStudentStatus(session._id, student._id, 'present')}
-                                        >
-                                          Present
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant={status === 'absent' ? 'destructive' : 'outline'}
-                                          onClick={() => updateStudentStatus(session._id, student._id, 'absent')}
-                                        >
-                                          Absent
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              )}
-                              <div className="rounded-md border bg-background px-3 py-2">
-                                <div className="flex items-start gap-3">
-                                  <Checkbox
-                                    checked={Boolean(student.probation)}
-                                    onCheckedChange={(checked) => toggleProbation(student._id, checked === true)}
-                                  />
-                                  <div className="space-y-1">
-                                    <div className="font-medium">In probation</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      Students in probation are shown bold in the PDF export.
-                                    </div>
-                                  </div>
+                          <div className="rounded-md border bg-background px-3 py-2">
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={Boolean(student.probation)}
+                                onCheckedChange={(checked) => toggleProbation(student._id, checked === true)}
+                              />
+                              <div className="space-y-1">
+                                <div className="font-medium">In probation</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Students in probation are shown bold in the PDF export.
                                 </div>
                               </div>
                             </div>
