@@ -4,6 +4,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
+import { isUlabEmail, looksLikeStudentName } from '@/lib/googleAccount';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -24,6 +25,10 @@ export const authOptions: NextAuthOptions = {
 
         if (!user) {
           throw new Error('No user found with this email');
+        }
+
+        if (!user.password) {
+          throw new Error('This account signs in with Google. Use "Continue with Google" instead.');
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -53,6 +58,9 @@ export const authOptions: NextAuthOptions = {
             authorization: {
               params: {
                 prompt: 'select_account consent',
+                // Hints Google's account chooser toward the ULAB workspace; the real
+                // enforcement happens in the signIn callback below.
+                hd: 'ulab.edu.bd',
               },
             },
           }),
@@ -60,6 +68,44 @@ export const authOptions: NextAuthOptions = {
       : []),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider !== 'google') {
+        return true;
+      }
+
+      const email = (user.email || '').toLowerCase();
+
+      if (!isUlabEmail(email)) {
+        return '/auth/error?reason=domain';
+      }
+
+      // Google accounts used for student attendance check-in are set up with the
+      // student ID in the display name, e.g. "John Doe (2021-1-60-123)". Anyone
+      // signing in/up as a teacher must NOT match that pattern, otherwise a
+      // student could accidentally register a teacher account.
+      if (looksLikeStudentName(user.name)) {
+        return '/auth/error?reason=student';
+      }
+
+      await dbConnect();
+      const existing = await User.findOne({ email });
+
+      if (!existing) {
+        // First time this Google account has been seen with checks passing -> sign up.
+        await User.create({
+          name: user.name || email,
+          email,
+          googleId: account.providerAccountId,
+          role: 'user',
+        });
+      } else if (!existing.googleId) {
+        // A teacher with an existing (e.g. email/password) account is linking Google.
+        existing.googleId = account.providerAccountId;
+        await existing.save();
+      }
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         const email = user.email?.toLowerCase();
@@ -71,12 +117,16 @@ export const authOptions: NextAuthOptions = {
           if (appUser) {
             token.id = (appUser._id as any).toString();
             token.role = (appUser as any).role || (user as any).role || 'user';
+            token.googleLinked = !!appUser.googleId;
+            token.hasPassword = !!appUser.password;
             return token;
           }
         }
 
         token.id = user.id;
         token.role = (user as any).role || 'user';
+        token.googleLinked = false;
+        token.hasPassword = false;
       }
       return token;
     },
@@ -84,12 +134,15 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role as string;
+        (session.user as any).googleLinked = !!token.googleLinked;
+        (session.user as any).hasPassword = !!token.hasPassword;
       }
       return session;
     },
   },
   pages: {
     signIn: '/auth/signin',
+    error: '/auth/error',
   },
   session: {
     strategy: 'jwt',

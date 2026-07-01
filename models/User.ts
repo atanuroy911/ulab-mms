@@ -3,7 +3,8 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IUser extends Document {
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  googleId?: string | null;
   role?: 'user' | 'admin';
   passwordResetToken?: string | null;
   passwordResetTokenExpiry?: Date | null;
@@ -31,8 +32,15 @@ const UserSchema: Schema = new Schema(
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
+      // Accounts created/linked via Google sign-in have no password.
+      required: [function (this: IUser) { return !this.googleId; }, 'Please provide a password'],
       minlength: [6, 'Password should be at least 6 characters'],
+    },
+    googleId: {
+      type: String,
+      default: null,
+      unique: true,
+      sparse: true,
     },
     passwordResetToken: {
       type: String,

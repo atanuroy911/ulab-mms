@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession, signOut, signIn } from 'next-auth/react';
 import { notify } from '@/app/utils/notifications';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -11,24 +11,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, LogOut, Save, User, Mail } from 'lucide-react';
+import { ArrowLeft, LogOut, Save, User, Mail, Link2, CheckCircle2 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleLinkGoogle = () => {
+    setGoogleLoading(true);
+    signIn('google', { callbackUrl: '/settings' });
+  };
+
   const [defaultMidWeightage, setDefaultMidWeightage] = useState('25');
   const [defaultFinalWeightage, setDefaultFinalWeightage] = useState('40');
   
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  // Overrides session.user.hasPassword right after a first-time password set,
+  // since the JWT session only refreshes this on next login.
+  const [justSetPassword, setJustSetPassword] = useState(false);
+  const hasPassword = justSetPassword || !!session?.user?.hasPassword;
 
   useEffect(() => {
     // Load default weightages from localStorage
@@ -68,6 +78,11 @@ export default function SettingsPage() {
     setPasswordError('');
     setPasswordSuccess('');
 
+    if (hasPassword && !currentPassword) {
+      setPasswordError('Please enter your current password');
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       setPasswordError('New passwords do not match');
       return;
@@ -85,7 +100,7 @@ export default function SettingsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          currentPassword,
+          currentPassword: hasPassword ? currentPassword : undefined,
           newPassword,
         }),
       });
@@ -94,7 +109,8 @@ export default function SettingsPage() {
 
       if (response.ok) {
         notify.auth.passwordChanged();
-        setPasswordSuccess('Password changed successfully!');
+        setPasswordSuccess(hasPassword ? 'Password changed successfully!' : 'Password set successfully!');
+        setJustSetPassword(true);
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -240,12 +256,14 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Password Change */}
+        {/* Password Change / Set */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Change Password</CardTitle>
+            <CardTitle>{hasPassword ? 'Change Password' : 'Set Password'}</CardTitle>
             <CardDescription>
-              Update your account password
+              {hasPassword
+                ? 'Update your account password'
+                : 'Your account currently only signs in with Google. Set a password to also sign in with email.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -264,20 +282,22 @@ export default function SettingsPage() {
             )}
 
             <form onSubmit={handleChangePassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
-                />
-              </div>
+              {hasPassword && (
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Current Password</Label>
+                  <Input
+                    id="current-password"
+                    type="password"
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
+                <Label htmlFor="new-password">{hasPassword ? 'New Password' : 'Password'}</Label>
                 <Input
                   id="new-password"
                   type="password"
@@ -289,21 +309,60 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Label htmlFor="confirm-password">{hasPassword ? 'Confirm New Password' : 'Confirm Password'}</Label>
                 <Input
                   id="confirm-password"
                   type="password"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
+                  placeholder="Confirm password"
                 />
               </div>
 
               <Button type="submit" disabled={loading}>
-                {loading ? 'Changing...' : 'Change Password'}
+                {loading ? 'Saving...' : hasPassword ? 'Change Password' : 'Set Password'}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        {/* Linked Accounts */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Linked Accounts</CardTitle>
+            <CardDescription>
+              Link your ULAB Google account to sign in with Google
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <Link2 className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Google</p>
+                  <p className="text-sm text-muted-foreground">
+                    {session?.user?.googleLinked
+                      ? 'Your ULAB Google account is linked'
+                      : 'Not linked yet'}
+                  </p>
+                </div>
+              </div>
+
+              {session?.user?.googleLinked ? (
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Linked
+                </div>
+              ) : (
+                <Button variant="outline" onClick={handleLinkGoogle} disabled={googleLoading}>
+                  {googleLoading ? 'Redirecting to Google...' : 'Link Google Account'}
+                </Button>
+              )}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Only @ulab.edu.bd Google accounts can be linked, and student accounts are not accepted.
+            </p>
           </CardContent>
         </Card>
 
