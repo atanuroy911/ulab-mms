@@ -55,7 +55,14 @@ const StudentSchema: Schema = new Schema(
 // Ensure a student can't be added twice to the same course
 StudentSchema.index({ studentId: 1, courseId: 1 }, { unique: true });
 
-const Student: Model<IStudent> =
-  mongoose.models.Student || mongoose.model<IStudent>('Student', StudentSchema);
+// Force re-registration with the latest schema on every load. Without this,
+// a long-running dev server can keep using a stale cached model from before a
+// schema field was added, which causes Mongoose to silently strip that field
+// from writes (strict mode) instead of erroring - a hard bug to spot.
+if (mongoose.models.Student) {
+  delete mongoose.models.Student;
+}
+
+const Student: Model<IStudent> = mongoose.model<IStudent>('Student', StudentSchema);
 
 export default Student;

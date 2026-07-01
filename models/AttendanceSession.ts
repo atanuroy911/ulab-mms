@@ -60,7 +60,13 @@ const AttendanceSessionSchema: Schema = new Schema(
   { timestamps: true }
 );
 
-const AttendanceSession: Model<IAttendanceSession> =
-  mongoose.models.AttendanceSession || mongoose.model<IAttendanceSession>('AttendanceSession', AttendanceSessionSchema);
+// Force re-registration with the latest schema on every load, so a long-running
+// dev server can't keep using a stale cached model that silently strips newer
+// fields/enum values (e.g. markedBy: 'auto') from writes instead of erroring.
+if (mongoose.models.AttendanceSession) {
+  delete mongoose.models.AttendanceSession;
+}
+
+const AttendanceSession: Model<IAttendanceSession> = mongoose.model<IAttendanceSession>('AttendanceSession', AttendanceSessionSchema);
 
 export default AttendanceSession;

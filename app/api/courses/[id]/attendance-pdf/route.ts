@@ -124,7 +124,8 @@ function buildPagesHtml(
   sessionsInScope: AttendanceSessionListItem[],
   logoDataUri: string,
   instructorName: string,
-  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string }
+  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string },
+  minPages = 0
 ): string {
   const { formatted: sessionDateLabel } = getSessionDateInfo(attendanceSession);
   const headerDates = buildHeaderDates(sessionsInScope);
@@ -139,12 +140,14 @@ function buildPagesHtml(
   });
 
   // Sort sessions by date to match headerDates order
-  const sortedSessions = [...sessionsInScope].sort((a, b) => 
+  const sortedSessions = [...sessionsInScope].sort((a, b) =>
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
   const ROWS_PER_PAGE = 18;
-  const totalPages = Math.ceil(students.length / ROWS_PER_PAGE);
+  // minPages ensures a group still prints its own (blank) sheet instead of
+  // silently vanishing when no students are assigned to it yet.
+  const totalPages = Math.max(minPages, Math.ceil(students.length / ROWS_PER_PAGE));
 
   let pagesHtml = '';
 
@@ -255,15 +258,22 @@ function buildAttendanceHtml(
   sessionsInScope: AttendanceSessionListItem[],
   logoDataUri: string,
   instructorName: string,
-  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string }
+  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string },
+  group?: 'main' | 'alias' | null
 ) {
-  // When an alias code is enabled, produce two separate sets of pages - one per
-  // course code - each only listing the students assigned to that code, using
-  // the same attendance sessions/dates for both.
-  const pagesHtml = course.aliasEnabled && course.alternateCode
-    ? buildPagesHtml(course, students.filter((s) => !s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings) +
-      buildPagesHtml({ ...course, code: course.alternateCode }, students.filter((s) => s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings)
-    : buildPagesHtml(course, students, attendanceSession, sessionsInScope, logoDataUri, instructorName, settings);
+  const useSplit = Boolean(course.aliasEnabled && course.alternateCode?.trim());
+
+  let pagesHtml: string;
+  if (useSplit && group === 'alias') {
+    // Only the alias-code document.
+    pagesHtml = buildPagesHtml({ ...course, code: course.alternateCode }, students.filter((s) => s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings, 1);
+  } else if (useSplit) {
+    // Only the original-code document (also the default when a split course's
+    // print is requested with no explicit group, e.g. a direct URL hit).
+    pagesHtml = buildPagesHtml(course, students.filter((s) => !s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings, 1);
+  } else {
+    pagesHtml = buildPagesHtml(course, students, attendanceSession, sessionsInScope, logoDataUri, instructorName, settings);
+  }
 
   return `
   <!doctype html>
@@ -493,6 +503,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id: courseId } = await params;
     const url = new URL(request.url);
     const sessionId = url.searchParams.get('sessionId');
+    const groupParam = url.searchParams.get('group');
+    const group = groupParam === 'alias' ? 'alias' : groupParam === 'main' ? 'main' : null;
 
     await dbConnect();
 
@@ -543,7 +555,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         classRoom,
         numberOfStudents,
         classRepresentativeName,
-      }
+      },
+      group
     );
 
     return new NextResponse(html, {

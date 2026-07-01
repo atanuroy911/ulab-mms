@@ -61,6 +61,13 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+// Force re-registration with the latest schema on every load, so a long-running
+// dev server can't keep using a stale cached model that silently strips newer
+// fields (e.g. googleId) from writes instead of erroring.
+if (mongoose.models.User) {
+  delete mongoose.models.User;
+}
+
+const User: Model<IUser> = mongoose.model<IUser>('User', UserSchema);
 
 export default User;

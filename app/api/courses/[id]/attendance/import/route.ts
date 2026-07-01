@@ -26,6 +26,11 @@ interface ImportSession {
   records?: ImportRecord[];
 }
 
+interface ImportStudentAlias {
+  studentId?: string;
+  useAlias?: boolean;
+}
+
 export async function POST(req: NextRequest, { params }: { params: any }) {
   await dbConnect();
 
@@ -45,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
 
     const body = await req.json().catch(() => null);
     const incomingSessions: ImportSession[] = Array.isArray(body?.sessions) ? body.sessions : [];
+    const incomingStudents: ImportStudentAlias[] = Array.isArray(body?.students) ? body.students : [];
     const sourceCourseId = typeof body?.courseId === 'string' ? body.courseId : null;
     const force = body?.force === true;
 
@@ -69,6 +75,28 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
 
     const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
     const studentByRoll = new Map(allStudents.map((student) => [student.studentId, student]));
+
+    // Restore alias-group membership captured at export time, so re-importing a
+    // backup brings back who was assigned to the course's alternate code.
+    let aliasUpdated = 0;
+    if (incomingStudents.length > 0) {
+      const bulkOps = [];
+      for (const entry of incomingStudents) {
+        if (!entry?.studentId || typeof entry.useAlias !== 'boolean') continue;
+        const student = studentByRoll.get(String(entry.studentId).trim());
+        if (!student || Boolean(student.useAlias) === entry.useAlias) continue;
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: student._id },
+            update: { useAlias: entry.useAlias },
+          },
+        });
+      }
+      if (bulkOps.length > 0) {
+        await Student.bulkWrite(bulkOps);
+        aliasUpdated = bulkOps.length;
+      }
+    }
 
     let sessionsCreated = 0;
     let sessionsUpdated = 0;
@@ -126,7 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
       }
     }
 
-    return NextResponse.json({ sessionsCreated, sessionsUpdated, sessionsSkipped, recordsMatched, recordsSkipped });
+    return NextResponse.json({ sessionsCreated, sessionsUpdated, sessionsSkipped, recordsMatched, recordsSkipped, aliasUpdated });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Error importing attendance' }, { status: 500 });

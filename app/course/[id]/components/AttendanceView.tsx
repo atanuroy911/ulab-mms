@@ -158,6 +158,7 @@ interface Student {
   studentId: string;
   name: string;
   probation?: boolean;
+  useAlias?: boolean;
 }
 
 interface CourseInfo {
@@ -167,6 +168,8 @@ interface CourseInfo {
   classRoom?: string;
   numberOfStudents?: number;
   classRepresentativeId?: string | null;
+  aliasEnabled?: boolean;
+  alternateCode?: string;
 }
 
 type SessionStatus = 'present' | 'absent' | 'none';
@@ -259,6 +262,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [sessionDate, setSessionDate] = useState(getLocalDateInputValue());
   const [sessionDialogError, setSessionDialogError] = useState('');
   const [showExportWarningModal, setShowExportWarningModal] = useState(false);
+  const [showPrintChoiceModal, setShowPrintChoiceModal] = useState(false);
   const [bulkActionPending, setBulkActionPending] = useState<'randomize' | 'reset' | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -405,6 +409,9 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       exportedAt: new Date().toISOString(),
       courseId,
       courseName: course?.name ? `${course.code ? `${course.code} - ` : ''}${course.name}` : undefined,
+      // Per-student alias grouping, so re-importing this file restores who was
+      // assigned to the course's alternate code, not just attendance marks.
+      students: students.map((s) => ({ studentId: s.studentId, useAlias: Boolean(s.useAlias) })),
       sessions: sessions.map((s) => ({
         date: s.date,
         records: (s.records || [])
@@ -467,7 +474,8 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       if (res.ok) {
         notify.success(
           `Imported: ${data.sessionsCreated} new date(s), ${data.sessionsUpdated} updated, ${data.recordsMatched} records matched` +
-            (data.recordsSkipped ? `, ${data.recordsSkipped} skipped` : '')
+            (data.recordsSkipped ? `, ${data.recordsSkipped} skipped` : '') +
+            (data.aliasUpdated ? `, ${data.aliasUpdated} alias assignment(s) restored` : '')
         );
         setPendingImport(null);
         await fetchAll();
@@ -531,7 +539,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
-  const exportAttendance = async () => {
+  const exportAttendance = async (group?: 'main' | 'alias') => {
     try {
       setExportLoading(true);
       const sessionParam = activeSession ? `sessionId=${encodeURIComponent(activeSession._id)}` : '';
@@ -542,6 +550,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       if (course?.numberOfStudents != null) settingsParams.set('numberOfStudents', String(course.numberOfStudents));
       if (course?.classRepresentativeId) settingsParams.set('classRepresentativeId', String(course.classRepresentativeId));
       if (sessionParam) settingsParams.set('sessionId', activeSession?._id || '');
+      if (group) settingsParams.set('group', group);
 
       const qs = settingsParams.toString();
       const url = `/api/courses/${courseId}/attendance-pdf${qs ? `?${qs}` : ''}`;
@@ -556,6 +565,8 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const handleExportClick = () => {
     if (settingsMissing) {
       setShowExportWarningModal(true);
+    } else if (course?.aliasEnabled && course.alternateCode) {
+      setShowPrintChoiceModal(true);
     } else {
       exportAttendance();
     }
@@ -1056,7 +1067,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               variant="outline"
               onClick={() => {
                 setShowExportWarningModal(false);
-                exportAttendance();
+                if (course?.aliasEnabled && course.alternateCode) {
+                  setShowPrintChoiceModal(true);
+                } else {
+                  exportAttendance();
+                }
               }}
               disabled={exportLoading}
             >
@@ -1070,6 +1085,46 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             >
               Set Settings
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPrintChoiceModal} onOpenChange={setShowPrintChoiceModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Which sheet do you want to print?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              This course has an alternate course code. Each is printed as its own sheet, with only the students
+              assigned to that code.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  setShowPrintChoiceModal(false);
+                  exportAttendance('main');
+                }}
+                disabled={exportLoading}
+              >
+                Print {course?.code}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  setShowPrintChoiceModal(false);
+                  exportAttendance('alias');
+                }}
+                disabled={exportLoading}
+              >
+                Print {course?.alternateCode}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

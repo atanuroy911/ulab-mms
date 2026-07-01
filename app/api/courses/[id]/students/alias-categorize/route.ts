@@ -64,11 +64,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const students = await Student.find({ courseId, useAlias: { $ne: true } }).select('_id studentId');
     const idsToFlag = students.filter((s) => isAliasBatchCandidate(s.studentId)).map((s) => s._id);
 
+    let updated = 0;
     if (idsToFlag.length > 0) {
-      await Student.updateMany({ _id: { $in: idsToFlag } }, { useAlias: true });
+      const result = await Student.updateMany({ _id: { $in: idsToFlag } }, { $set: { useAlias: true } });
+      updated = result.modifiedCount ?? 0;
     }
 
-    return NextResponse.json({ updated: idsToFlag.length });
+    return NextResponse.json({ updated });
   } catch (error) {
     console.error('Alias-categorize apply error:', error);
     return NextResponse.json({ error: 'Failed to auto-categorize students' }, { status: 500 });

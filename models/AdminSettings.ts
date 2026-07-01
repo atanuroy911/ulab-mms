@@ -29,7 +29,13 @@ const AdminSettingsSchema: Schema = new Schema(
   }
 );
 
-const AdminSettings: Model<IAdminSettings> =
-  mongoose.models.AdminSettings || mongoose.model<IAdminSettings>('AdminSettings', AdminSettingsSchema);
+// Force re-registration with the latest schema on every load, so a long-running
+// dev server can't keep using a stale cached model that silently strips newer
+// fields (e.g. credentialsLoginEnabled) from writes instead of erroring.
+if (mongoose.models.AdminSettings) {
+  delete mongoose.models.AdminSettings;
+}
+
+const AdminSettings: Model<IAdminSettings> = mongoose.model<IAdminSettings>('AdminSettings', AdminSettingsSchema);
 
 export default AdminSettings;
