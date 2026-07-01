@@ -475,7 +475,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
         notify.success(
           `Imported: ${data.sessionsCreated} new date(s), ${data.sessionsUpdated} updated, ${data.recordsMatched} records matched` +
             (data.recordsSkipped ? `, ${data.recordsSkipped} skipped` : '') +
-            (data.aliasUpdated ? `, ${data.aliasUpdated} alias assignment(s) restored` : '')
+            (data.aliasUpdated ? `, ${data.aliasUpdated} New Code assignment(s) restored` : '')
         );
         setPendingImport(null);
         await fetchAll();
@@ -1096,7 +1096,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              This course has an alternate course code. Each is printed as its own sheet, with only the students
+              This course has a New Code. Each is printed as its own sheet, with only the students
               assigned to that code.
             </p>
             <div className="flex flex-col gap-2">
@@ -1110,7 +1110,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 }}
                 disabled={exportLoading}
               >
-                Print {course?.code}
+                Print Old Code ({course?.code})
               </Button>
               <Button
                 type="button"
@@ -1122,7 +1122,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 }}
                 disabled={exportLoading}
               >
-                Print {course?.alternateCode}
+                Print New Code ({course?.alternateCode})
               </Button>
             </div>
           </div>

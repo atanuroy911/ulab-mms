@@ -169,7 +169,7 @@ export default function Dashboard() {
     }
   }, [formData.code, formData.semester, formData.year, formData.section, showAddModal]);
 
-  const ADD_WIZARD_STEPS = ['Course Identity', 'Details', 'Alternate Course Code', 'Review'];
+  const ADD_WIZARD_STEPS = ['Course Identity', 'Details', 'New Code', 'Review'];
 
   const isAddStepValid = (step: number) => {
     if (step === 0) return Boolean(formData.name.trim() && formData.code.trim());
@@ -867,7 +867,7 @@ export default function Dashboard() {
             {addWizardStep === 2 && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Does this course have a new/alternate course code for some students?</Label>
+                  <Label>Does this course have a New Code for some students?</Label>
                   <p className="text-xs text-muted-foreground">
                     Use this if some students (e.g. a newer admission batch) are officially registered under a different
                     course code for the same class. You&apos;ll be able to choose which students use it afterward.
@@ -892,7 +892,7 @@ export default function Dashboard() {
 
                 {formData.aliasEnabled && (
                   <div className="space-y-2">
-                    <Label htmlFor="alternate-code">Alternate Course Code</Label>
+                    <Label htmlFor="alternate-code">New Code</Label>
                     <Input
                       id="alternate-code"
                       value={formData.alternateCode}
@@ -922,7 +922,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center justify-between p-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">Alternate Course Code</div>
+                    <div className="text-xs text-muted-foreground">New Code</div>
                     <div className="font-medium">{formData.aliasEnabled ? formData.alternateCode : 'Not used'}</div>
                   </div>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setAddWizardStep(2)}>Edit</Button>
@@ -1083,7 +1083,7 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-2">
-              <Label>Does this course have a new/alternate course code for some students?</Label>
+              <Label>Does this course have a New Code for some students?</Label>
               <div className="flex gap-2">
                 <Button
                   type="button"

@@ -244,7 +244,7 @@ export default function StudentsView({
               className="gap-2"
             >
               <Tag className="w-4 h-4" />
-              Auto-categorize to Alias
+              Auto-categorize to New Code
             </Button>
           )}
           <Button
@@ -353,7 +353,7 @@ export default function StudentsView({
                       {course?.aliasEnabled && student.useAlias && (
                         <Badge variant="secondary" className="mt-1 w-fit gap-1 text-[10px]">
                           <Tag className="h-2.5 w-2.5" />
-                          Alias: {course.alternateCode}
+                          New Code: {course.alternateCode}
                         </Badge>
                       )}
                     </div>
@@ -531,7 +531,7 @@ export default function StudentsView({
                               ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                               : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border'
                           }`}
-                          title={student.useAlias ? `Remove from alias code (${course.alternateCode})` : `Add to alias code (${course.alternateCode})`}
+                          title={student.useAlias ? `Remove from New Code (${course.alternateCode})` : `Add to New Code (${course.alternateCode})`}
                         >
                           <Tag className="w-3 h-3" />
                         </button>

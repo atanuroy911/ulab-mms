@@ -383,7 +383,7 @@ export async function POST(
 
     const outBuf = await workbook.outputAsync();
 
-    const filenameSuffix = useSplit ? (group === 'alias' ? '_alias' : '_main') : '';
+    const filenameSuffix = useSplit ? (group === 'alias' ? '_newcode' : '_oldcode') : '';
     return new NextResponse(outBuf, {
       status: 200,
       headers: {

@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     if (aliasEnabled && !String(alternateCode || '').trim()) {
       return NextResponse.json(
-        { error: 'Please provide an alternate course code' },
+        { error: 'Please provide a New Code' },
         { status: 400 }
       );
     }

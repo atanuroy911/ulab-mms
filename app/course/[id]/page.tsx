@@ -312,7 +312,7 @@ export default function CoursePage() {
         setAliasCandidates(data.candidates);
         setShowAliasCategorizeModal(true);
       } else if (!silentIfNone) {
-        notify.info('No students match the alias batch rule right now.');
+        notify.info('No students match the New Code batch rule right now.');
       }
     } catch (err) {
       console.error('Error checking alias candidates:', err);
@@ -325,7 +325,7 @@ export default function CoursePage() {
       const res = await fetch(`/api/courses/${courseId}/students/alias-categorize`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        notify.success(`${data.updated} student(s) moved to the alias course code`);
+        notify.success(`${data.updated} student(s) moved to the New Code`);
         setShowAliasCategorizeModal(false);
         setAliasCandidates([]);
         await fetchCourseData();
@@ -351,11 +351,11 @@ export default function CoursePage() {
         await fetchCourseData();
       } else {
         const data = await res.json().catch(() => ({}));
-        notify.error(data.error || 'Failed to update alias status');
+        notify.error(data.error || 'Failed to update New Code status');
       }
     } catch (err) {
       console.error('Error toggling alias:', err);
-      notify.error('Failed to update alias status');
+      notify.error('Failed to update New Code status');
     }
   };
 
@@ -778,7 +778,7 @@ export default function CoursePage() {
       }
 
       if (courseSettingsData.aliasEnabled && !courseSettingsData.alternateCode.trim()) {
-        setError('Please provide an alternate course code');
+        setError('Please provide a New Code');
         return;
       }
 
@@ -892,7 +892,7 @@ export default function CoursePage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const suffix = course?.aliasEnabled ? (group === 'alias' ? '_alias' : '_main') : '';
+    const suffix = course?.aliasEnabled ? (group === 'alias' ? '_newcode' : '_oldcode') : '';
     a.download = `${codeForFilename}_${course?.name}_course_file${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
     document.body.appendChild(a);
     a.click();
@@ -1810,11 +1810,11 @@ export default function CoursePage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Tag className="h-5 w-5" />
-              Alias New Batch Students?
+              Move New Batch Students to New Code?
             </DialogTitle>
             <DialogDescription>
               {aliasCandidates.length} student{aliasCandidates.length !== 1 ? 's' : ''} (batch 25 or later) will be
-              grouped under the alternate course code &quot;{course?.alternateCode}&quot; instead of &quot;{course?.code}&quot;.
+              grouped under the New Code &quot;{course?.alternateCode}&quot; instead of &quot;{course?.code}&quot;.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-56 overflow-y-auto rounded-md border">
@@ -1826,7 +1826,7 @@ export default function CoursePage() {
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            You can add or remove individual students from the alias group anytime from the student list.
+            You can add or remove individual students from the New Code group anytime from the student list.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAliasCategorizeModal(false)} disabled={aliasCategorizing}>
@@ -2223,7 +2223,7 @@ export default function CoursePage() {
                   className="justify-start"
                   onClick={() => setCourseSettingsTab('alias')}
                 >
-                  🏷️ Alternate Course Code
+                  🏷️ New Code
                 </Button>
               </aside>
 
@@ -2259,7 +2259,7 @@ export default function CoursePage() {
                     className="justify-start"
                     onClick={() => setCourseSettingsTab('alias')}
                   >
-                    🏷️ Alternate Course Code
+                    🏷️ New Code
                   </Button>
                 </div>
 
@@ -2532,7 +2532,7 @@ export default function CoursePage() {
                 {courseSettingsTab === 'alias' && (
                   <div className="max-w-2xl space-y-4">
                     <div>
-                      <h3 className="text-lg font-semibold">Alternate Course Code</h3>
+                      <h3 className="text-lg font-semibold">New Code</h3>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Turn this on if some students in this course (e.g. a newer admission batch) are officially
                         registered under a different course code. You&apos;ll be able to choose which students use it
@@ -2541,7 +2541,7 @@ export default function CoursePage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Does this course have a new/alternate course code for some students?</Label>
+                      <Label>Does this course have a New Code for some students?</Label>
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -2562,7 +2562,7 @@ export default function CoursePage() {
 
                     {courseSettingsData.aliasEnabled && (
                       <div className="space-y-2">
-                        <Label htmlFor="course-settings-alternate-code">Alternate Course Code</Label>
+                        <Label htmlFor="course-settings-alternate-code">New Code</Label>
                         <Input
                           id="course-settings-alternate-code"
                           value={courseSettingsData.alternateCode}
