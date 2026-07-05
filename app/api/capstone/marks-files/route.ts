@@ -1,10 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import { ResourceFolder } from '@/models/ResourceFolder';
 import { StoredFile } from '@/models/StoredFile';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await dbConnect();
     const folder = await ResourceFolder.findOne({ name: 'Capstone - Weekly Journal' });
     if (!folder) return NextResponse.json({ files: [] });

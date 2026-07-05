@@ -4,12 +4,18 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Student from '@/models/Student';
 import Course from '@/models/Course';
+import { verifyAdminToken } from '@/lib/adminAuth';
 
 const studentIdCollation = { locale: 'en', numericOrdering: true } as const;
 
 // GET all students (with optional filtering)
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id && !(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await dbConnect();
 
     const { searchParams } = new URL(request.url);
