@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import AdminCourse from '@/models/AdminCourse';
+import { verifyAdminToken } from '@/lib/adminAuth';
 
 interface CourseImport {
   courseCode: string;
@@ -23,6 +24,10 @@ interface ImportResult {
 // POST bulk import courses
 export async function POST(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const { courses, mode } = await request.json();
 
     if (!courses || !Array.isArray(courses)) {
@@ -135,6 +140,10 @@ export async function POST(request: NextRequest) {
 // GET export all courses as JSON
 export async function GET(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     await dbConnect();
 
     const courses = await AdminCourse.find({}).sort({ courseCode: 1 }).lean();

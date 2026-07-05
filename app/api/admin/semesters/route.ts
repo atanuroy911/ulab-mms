@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Semester from '@/models/Semester';
+import { verifyAdminToken } from '@/lib/adminAuth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     await dbConnect();
 
     const semesters = await Semester.find()
@@ -21,6 +26,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     await dbConnect();
 
     const body = await request.json();

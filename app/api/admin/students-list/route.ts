@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Student from '@/models/Student';
+import { verifyAdminToken } from '@/lib/adminAuth';
 
-// GET all students (public endpoint for admin panel use)
+// GET all students (admin panel use)
 export async function GET(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     await dbConnect();
 
     // Fetch all students with basic info
