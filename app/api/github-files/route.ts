@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGitHubStorage } from '@/lib/github-storage';
+import { verifyAdminToken } from '@/lib/adminAuth';
 
 /**
  * GET - List files in GitHub repository
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ success: false, error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const path = searchParams.get('path') || '';
 
@@ -34,16 +39,27 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ success: false, error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const path = formData.get('path') as string || '';
 
     if (!file) {
       return NextResponse.json(
-        { 
+        {
           success: false,
-          error: 'No file provided' 
+          error: 'No file provided'
         },
+        { status: 400 }
+      );
+    }
+
+    if (path.includes('..') || file.name.includes('..') || file.name.includes('/')) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid path or filename' },
         { status: 400 }
       );
     }

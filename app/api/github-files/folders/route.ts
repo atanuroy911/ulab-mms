@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGitHubStorage } from '@/lib/github-storage';
+import { verifyAdminToken } from '@/lib/adminAuth';
 
 /**
  * POST - Create a new folder in GitHub repository
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ success: false, error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { folderName, path } = body;
 

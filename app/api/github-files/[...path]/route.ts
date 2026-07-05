@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGitHubStorage } from '@/lib/github-storage';
+import { verifyAdminToken } from '@/lib/adminAuth';
+
+function isPathTraversal(segments: string[]): boolean {
+  return segments.some((segment) => segment === '..' || segment === '' || segment.includes('/'));
+}
 
 /**
  * GET - Download a file from GitHub repository
@@ -9,9 +14,16 @@ export async function GET(
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ success: false, error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const resolvedParams = await params;
+    if (isPathTraversal(resolvedParams.path)) {
+      return NextResponse.json({ success: false, error: 'Invalid path' }, { status: 400 });
+    }
     const filePath = resolvedParams.path.join('/');
-    
+
     const storage = getGitHubStorage();
     
     // Get file details first
@@ -54,9 +66,16 @@ export async function DELETE(
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ success: false, error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const resolvedParams = await params;
+    if (isPathTraversal(resolvedParams.path)) {
+      return NextResponse.json({ success: false, error: 'Invalid path' }, { status: 400 });
+    }
     const filePath = resolvedParams.path.join('/');
-    
+
     const storage = getGitHubStorage();
     await storage.deleteFile(filePath, `Delete ${filePath}`);
 
