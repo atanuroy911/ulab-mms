@@ -19,7 +19,6 @@ interface CourseInfo {
   dateLabel: string;
   dateISO?: string;
   activeSessionDateISO?: string | null;
-  latestSessionDateISO?: string | null;
   hasActiveSession: boolean;
 }
 
@@ -34,7 +33,6 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   const courseId = resolvedParams.sessionCode;
   const searchParams = useSearchParams();
   const shouldAutoCheckIn = searchParams.get('attendance') === '1';
-  const requestedSessionDateISO = searchParams.get('sessionDate') || searchParams.get('date') || '';
   const [course, setCourse] = useState<CourseInfo | null>(null);
   const [message, setMessage] = useState('Preparing check-in...');
   const [signingIn, setSigningIn] = useState(false);
@@ -43,15 +41,10 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   const [pendingCandidate, setPendingCandidate] = useState<ConfirmationCandidate | null>(null);
   const [confirmingAttendance, setConfirmingAttendance] = useState(false);
 
-  const requestedSessionDate = requestedSessionDateISO ? new Date(requestedSessionDateISO) : null;
-  const requestedSessionDateKey = requestedSessionDate && !Number.isNaN(requestedSessionDate.getTime()) ? requestedSessionDate.toISOString() : '';
   const activeSessionDateKey = course?.activeSessionDateISO ? new Date(course.activeSessionDateISO).toISOString() : '';
-  const latestSessionDateKey = course?.latestSessionDateISO ? new Date(course.latestSessionDateISO).toISOString() : '';
-  const isStaleOrClosedQr = Boolean(requestedSessionDateKey) && (!course?.hasActiveSession || requestedSessionDateKey !== activeSessionDateKey);
 
   const buildCallbackUrl = () => {
-    const sessionDateQuery = activeSessionDateKey ? `&sessionDate=${encodeURIComponent(activeSessionDateKey)}` : '';
-    return `${window.location.origin}/attendance/checkin/${courseId}?attendance=1${sessionDateQuery}`;
+    return `${window.location.origin}/attendance/checkin/${courseId}?attendance=1`;
   };
 
   const fetchCourseInfo = async () => {
@@ -60,20 +53,8 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
       const data = await res.json();
       if (res.ok) {
         setCourse(data.course);
-        if (requestedSessionDateKey && data.course?.activeSessionDateISO) {
-          const serverSessionDateKey = new Date(data.course.activeSessionDateISO).toISOString();
-          if (requestedSessionDateKey !== serverSessionDateKey) {
-            setMessage('This QR code is not for the active attendance session. Please scan the current QR code from the instructor.');
-            return;
-          }
-        }
-
         if (!data.course?.hasActiveSession) {
-          if (requestedSessionDateKey && latestSessionDateKey) {
-            setMessage('This attendance link belongs to a closed session and cannot be used anymore.');
-          } else {
-            setMessage('Attendance is currently closed. Please wait for the instructor to turn it on.');
-          }
+          setMessage('Attendance is currently closed. Please wait for the instructor to open the session.');
         }
       } else {
         setMessage(data.error || 'Unable to load course info');
@@ -93,7 +74,6 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
       !session?.user?.email ||
       !course?.hasActiveSession ||
       !shouldAutoCheckIn ||
-      isStaleOrClosedQr ||
       attendanceSubmitted ||
       pendingCandidate
     ) {
@@ -128,12 +108,12 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
     };
 
     markAttendance();
-  }, [status, session, course?.hasActiveSession, courseId, shouldAutoCheckIn, attendanceSubmitted, isStaleOrClosedQr, activeSessionDateKey]);
+  }, [status, session, course?.hasActiveSession, courseId, shouldAutoCheckIn, attendanceSubmitted, activeSessionDateKey]);
 
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
     const callbackUrl = buildCallbackUrl();
-    await signIn('google', { callbackUrl });
+    await signIn('google-checkin', { callbackUrl });
   };
 
   const confirmAttendance = async () => {
@@ -213,17 +193,15 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
                     <Button
                       type="button"
                       onClick={handleGoogleSignIn}
-                      disabled={signingIn || !course?.hasActiveSession || isStaleOrClosedQr}
+                      disabled={signingIn || !course?.hasActiveSession}
                       className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
                     >
                       {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
                     </Button>
                     <div className="text-xs text-muted-foreground">
-                      {isStaleOrClosedQr
-                        ? 'This QR link is stale or the session is closed.'
-                        : course?.hasActiveSession
-                          ? 'Attendance is open now.'
-                          : 'Attendance is closed right now.'}
+                      {course?.hasActiveSession
+                        ? 'Attendance is open now.'
+                        : 'Attendance is closed right now.'}
                     </div>
                   </div>
                 </div>
@@ -267,7 +245,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
                 </div>
               )}
 
-              <div className={`rounded-2xl border border-dashed p-4 ${isStaleOrClosedQr ? 'border-destructive/40 bg-destructive/5' : 'bg-muted/20'}`}>
+              <div className={`rounded-2xl border border-dashed p-4 ${!course?.hasActiveSession ? 'border-destructive/40 bg-destructive/5' : 'bg-muted/20'}`}>
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</div>
                 <div className="mt-2 text-sm leading-6">{message}</div>
                 {shouldAutoCheckIn && session?.user?.email && (

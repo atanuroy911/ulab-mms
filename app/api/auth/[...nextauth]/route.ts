@@ -7,6 +7,14 @@ import User from '@/models/User';
 import { isUlabEmail, looksLikeStudentName } from '@/lib/googleAccount';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 
+// The student attendance QR check-in page also signs people in with Google, but that is a
+// separate, purpose-built entry point (see app/attendance/checkin/[sessionCode]/page.tsx,
+// which calls signIn('google-checkin', ...)) - not the teacher dashboard sign-in. Students'
+// Google accounts are set up with their ID in the display name, e.g. "John Doe
+// (2021-1-60-123)", which the teacher-account guard below rejects, so the guard is scoped to
+// the 'google' provider (dashboard) only and does not run for 'google-checkin'.
+const CHECKIN_GOOGLE_PROVIDER_ID = 'google-checkin';
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -53,7 +61,7 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
-    // Add Google provider when configured in environment. This keeps Google auth modular and
+    // Add Google provider(s) when configured in environment. This keeps Google auth modular and
     // only enabled when the admin sets GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? [
@@ -69,12 +77,27 @@ export const authOptions: NextAuthOptions = {
               },
             },
           }),
+          // Same Google app, registered a second time under a distinct provider id so the
+          // attendance check-in page can sign in without tripping the teacher-account guard.
+          GoogleProvider({
+            id: CHECKIN_GOOGLE_PROVIDER_ID,
+            name: 'Google (Attendance Check-in)',
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                prompt: 'select_account consent',
+                hd: 'ulab.edu.bd',
+              },
+            },
+          }),
         ]
       : []),
   ],
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider !== 'google') {
+      const isGoogle = account?.provider === 'google' || account?.provider === CHECKIN_GOOGLE_PROVIDER_ID;
+      if (!isGoogle) {
         return true;
       }
 
@@ -87,8 +110,9 @@ export const authOptions: NextAuthOptions = {
       // Google accounts used for student attendance check-in are set up with the
       // student ID in the display name, e.g. "John Doe (2021-1-60-123)". Anyone
       // signing in/up as a teacher must NOT match that pattern, otherwise a
-      // student could accidentally register a teacher account.
-      if (looksLikeStudentName(user.name)) {
+      // student could accidentally register a teacher account. This guard only
+      // applies to the teacher dashboard's Google provider, not the check-in one.
+      if (account?.provider === 'google' && looksLikeStudentName(user.name)) {
         return '/auth/error?reason=student';
       }
 

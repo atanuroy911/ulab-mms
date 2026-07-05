@@ -174,10 +174,12 @@ interface CourseInfo {
 
 type SessionStatus = 'present' | 'absent' | 'none';
 
-function buildQrUrl(courseId: string, sessionDateISO?: string) {
-  const sessionDateQuery = sessionDateISO ? `?attendance=1&sessionDate=${encodeURIComponent(sessionDateISO)}` : '?attendance=1';
-  if (typeof window === 'undefined') return `/attendance/checkin/${courseId}${sessionDateQuery}`;
-  return `${window.location.origin}/attendance/checkin/${courseId}${sessionDateQuery}`;
+function buildQrUrl(courseId: string) {
+  // This URL is intentionally stable across sessions - the QR code is printed/reused every
+  // class, and whether a scan can actually check in depends on the course having an open
+  // session at scan time (enforced by the check-in page/API), not on anything in the URL.
+  if (typeof window === 'undefined') return `/attendance/checkin/${courseId}?attendance=1`;
+  return `${window.location.origin}/attendance/checkin/${courseId}?attendance=1`;
 }
 
 function getLocalDateInputValue(date = new Date()) {
@@ -358,6 +360,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
+  const applySessionUpdate = (updatedSession: Session) => {
+    setSessions((prev) => prev.map((s) => (s._id === updatedSession._id ? updatedSession : s)));
+    setActiveSession((prev) => (prev && prev._id === updatedSession._id ? updatedSession : prev));
+  };
+
   const updateStudentStatus = async (sessionId: string, studentId: string, status: 'present' | 'absent') => {
     try {
       const res = await fetch(`/api/courses/${courseId}/attendance`, {
@@ -367,7 +374,8 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       });
 
       if (res.ok) {
-        await fetchAll();
+        const data = await res.json();
+        if (data.session) applySessionUpdate(data.session);
       }
     } catch (err) {
       console.error('Error updating attendance', err);
@@ -383,8 +391,9 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        if (data.session) applySessionUpdate(data.session);
         notify.success(`Marked everyone ${status} for that date`);
-        await fetchAll();
       } else {
         const data = await res.json().catch(() => ({}));
         notify.error(data.error || 'Failed to bulk-update attendance');
@@ -627,7 +636,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             {exportLoading ? 'Opening...' : 'Print Attendance'}
           </Button>
 
-          <Button type="button" variant="outline" onClick={() => setShowQrModal(true)} disabled={!isActive}>
+          <Button type="button" variant="outline" onClick={() => setShowQrModal(true)}>
             <QrCode className="mr-2 h-4 w-4" />
             QR Code
           </Button>
@@ -896,11 +905,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-4">
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(buildQrUrl(courseId, activeSession?.date))}`}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(buildQrUrl(courseId))}`}
               alt="Attendance QR"
               className="rounded-xl border bg-white p-3"
             />
-            <div className="break-all text-xs text-muted-foreground">{buildQrUrl(courseId, activeSession?.date)}</div>
+            <div className="break-all text-xs text-muted-foreground">{buildQrUrl(courseId)}</div>
           </div>
         </DialogContent>
       </Dialog>
