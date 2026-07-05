@@ -7,7 +7,7 @@ import User from '@/models/User';
 import Course from '@/models/Course';
 import mongoose from 'mongoose';
 
-const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
 
 // Verify admin token
 async function verifyAdminToken(request: NextRequest): Promise<boolean> {

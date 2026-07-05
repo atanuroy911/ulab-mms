@@ -4,7 +4,7 @@ import AdminSettings from '@/models/AdminSettings';
 import bcrypt from 'bcryptjs';
 import { jwtVerify } from 'jose';
 
-const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
 
 export async function POST(request: NextRequest) {
   try {

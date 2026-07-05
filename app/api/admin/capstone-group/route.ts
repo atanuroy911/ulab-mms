@@ -10,7 +10,7 @@ import AdminCourse from '@/models/AdminCourse';
 import AdminSettings from '@/models/AdminSettings';
 import { migrateIndexes } from '@/lib/migrations';
 
-const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
 
 // Verify admin token
 async function verifyAdminToken(request: NextRequest): Promise<boolean> {

@@ -1,7 +1,12 @@
 import { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error('NEXTAUTH_SECRET must be set - admin auth cannot fall back to a hardcoded secret');
+}
+
+export const ADMIN_JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+const SECRET = ADMIN_JWT_SECRET;
 
 /**
  * Verifies if the request has a valid admin token
