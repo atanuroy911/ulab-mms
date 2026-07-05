@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { StoredFile } from '@/models/StoredFile';
 import mongoose from 'mongoose';
-import { getResourceAccess } from '@/lib/resourceAuth';
+import { getResourceAccess, getResourceWriteAccess } from '@/lib/resourceAuth';
 
 export async function GET(
   req: NextRequest,
@@ -57,10 +57,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const access = await getResourceAccess(req);
+    const access = await getResourceWriteAccess(req);
     if (!access.authorized) {
       return NextResponse.json(
-        { error: 'Unauthorized - please sign in' },
+        { error: 'Unauthorized - Admin access required' },
         { status: 401 }
       );
     }

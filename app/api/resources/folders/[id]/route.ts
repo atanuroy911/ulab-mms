@@ -3,17 +3,17 @@ import dbConnect from '@/lib/mongodb';
 import { ResourceFolder } from '@/models/ResourceFolder';
 import { StoredFile } from '@/models/StoredFile';
 import mongoose from 'mongoose';
-import { getResourceAccess } from '@/lib/resourceAuth';
+import { getResourceWriteAccess } from '@/lib/resourceAuth';
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const access = await getResourceAccess(req);
+    const access = await getResourceWriteAccess(req);
     if (!access.authorized) {
       return NextResponse.json(
-        { error: 'Unauthorized - please sign in' },
+        { error: 'Unauthorized - Admin access required' },
         { status: 401 }
       );
     }
@@ -71,10 +71,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const access = await getResourceAccess(req);
+    const access = await getResourceWriteAccess(req);
     if (!access.authorized) {
       return NextResponse.json(
-        { error: 'Unauthorized - please sign in' },
+        { error: 'Unauthorized - Admin access required' },
         { status: 401 }
       );
     }

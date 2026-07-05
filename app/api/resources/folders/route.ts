@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { ResourceFolder } from '@/models/ResourceFolder';
-import { getResourceAccess } from '@/lib/resourceAuth';
+import { getResourceAccess, getResourceWriteAccess } from '@/lib/resourceAuth';
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,10 +46,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const access = await getResourceAccess(req);
+    const access = await getResourceWriteAccess(req);
     if (!access.authorized || !access.actorId) {
       return NextResponse.json(
-        { error: 'Unauthorized - please sign in' },
+        { error: 'Unauthorized - Admin access required' },
         { status: 401 }
       );
     }
