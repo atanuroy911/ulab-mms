@@ -133,6 +133,14 @@ function getAggregatedMarkValue(student: any, exams: any[], marks: any[], catego
 
     const bestExam = categoryExams.find(e => String(e._id) === String(bestMark.examId));
     return bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
+  } else if (aggregationMethod === 'sum') {
+    const sumRaw = categoryMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
+    const sumTotal = categoryMarks.reduce((sum, mark) => {
+      const exam = categoryExams.find(e => String(e._id) === String(mark.examId));
+      return exam ? sum + exam.totalMarks : sum;
+    }, 0);
+
+    return sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
   } else {
     const averagePercentage = categoryMarks.reduce((sum, mark) => {
       const exam = categoryExams.find(e => String(e._id) === String(mark.examId));

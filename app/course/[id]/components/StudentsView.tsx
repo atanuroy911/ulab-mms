@@ -39,7 +39,7 @@ interface Course {
   name: string;
   code: string;
   quizAggregation?: 'average' | 'best';
-  assignmentAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best' | 'sum';
   quizWeightage?: number;
   assignmentWeightage?: number;
   projectWeightage?: number;
@@ -297,7 +297,7 @@ export default function StudentsView({
                       <span>📋 {course?.courseType === 'Lab' ? 'CLA' : 'Assignment'} (Agg)</span>
                     </div>
                     <div className="text-[10px] font-normal mt-0.5 text-blue-400">
-                      {course?.assignmentAggregation === 'best' ? 'Best' : 'Avg'} → Score / {course?.assignmentWeightage || 0}%
+                      {course?.assignmentAggregation === 'best' ? 'Best' : course?.assignmentAggregation === 'sum' ? 'Sum' : 'Avg'} → Score / {course?.assignmentWeightage || 0}%
                     </div>
                   </th>
                 )}

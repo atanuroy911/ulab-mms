@@ -15,7 +15,7 @@ export interface ICourse extends Document {
   showFinalGrade: boolean;
   quizAggregation: 'average' | 'best'; // How to aggregate quiz marks
   quizWeightage: number; // Weightage for aggregated quiz column
-  assignmentAggregation: 'average' | 'best'; // How to aggregate assignment marks
+  assignmentAggregation: 'average' | 'best' | 'sum'; // How to aggregate assignment/assessment marks ('sum' is Lab-only)
   assignmentWeightage: number; // Weightage for aggregated assignment column
   projectWeightage: number; // Weightage for aggregated project column (sum-based)
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
@@ -104,7 +104,7 @@ const CourseSchema: Schema = new Schema(
     },
     assignmentAggregation: {
       type: String,
-      enum: ['average', 'best'],
+      enum: ['average', 'best', 'sum'],
       default: 'average',
     },
     assignmentWeightage: {

@@ -103,7 +103,7 @@ interface Course {
   showFinalGrade: boolean;
   section: string;
   quizAggregation?: 'average' | 'best';
-  assignmentAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best' | 'sum';
   quizWeightage?: number;
   assignmentWeightage?: number;
   projectWeightage?: number;
@@ -208,7 +208,7 @@ export default function CoursePage() {
   });
   const [courseSettingsData, setCourseSettingsData] = useState({
     quizAggregation: 'average' as 'average' | 'best',
-    assignmentAggregation: 'average' as 'average' | 'best',
+    assignmentAggregation: 'average' as 'average' | 'best' | 'sum',
     quizWeightage: '',
     assignmentWeightage: '',
     projectWeightage: '',
@@ -525,8 +525,9 @@ export default function CoursePage() {
   const openExamModal = (presetCategory?: Exam['examCategory']) => {
     if (presetCategory === 'Quiz' || presetCategory === 'Assignment' || presetCategory === 'Project') {
       const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
+      const categoryLabel = presetCategory === 'Assignment' && course?.courseType === 'Lab' ? 'Assessment' : presetCategory;
       setExamFormData({
-        displayName: `${presetCategory} ${nextIndex}`,
+        displayName: `${categoryLabel} ${nextIndex}`,
         totalMarks: '',
         weightage: '',
         numberOfCOs: '',
@@ -1092,6 +1093,20 @@ export default function CoursePage() {
         isAggregated: true,
         examId: bestMark.examId,
       };
+    } else if (aggregationMethod === 'sum') {
+      // Sum raw marks and totals across scored exams, then weight the combined percentage
+      const sumRaw = categoryMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
+      const sumTotal = categoryMarks.reduce((sum, mark) => {
+        const exam = categoryExams.find(e => e._id === mark.examId);
+        return exam ? sum + exam.totalMarks : sum;
+      }, 0);
+
+      const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
+
+      return {
+        rawMark: weightedSum,
+        isAggregated: true,
+      };
     } else {
       // Calculate average of normalized percentages and convert to weighted contribution
       const averagePercentage = categoryMarks.reduce((sum, mark) => {
@@ -1101,7 +1116,7 @@ export default function CoursePage() {
       }, 0) / categoryMarks.length;
 
       const weightedAverage = (averagePercentage * categoryWeightage) / 100;
-      
+
       // Return a synthetic mark object for display
       return {
         rawMark: weightedAverage,
@@ -1198,7 +1213,7 @@ export default function CoursePage() {
         const totalMarks = Number(course.assignmentWeightage);
         const contribution = aggMark.rawMark;
         breakdown.push({
-          name: 'Assignment (Aggregated)',
+          name: `${course?.courseType === 'Lab' ? 'Assessment' : 'Assignment'} (Aggregated)`,
           mark: contribution,
           totalMarks: totalMarks,
           weightage: totalMarks,
@@ -2330,11 +2345,11 @@ export default function CoursePage() {
                       </CardContent>
                     </Card>
 
-                    {/* Assignment Settings */}
+                    {/* Assignment/Assessment Settings */}
                     <Card>
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                          📋 Assignment Aggregation
+                          📋 {course?.courseType === 'Lab' ? 'Assessment' : 'Assignment'} Aggregation
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -2343,13 +2358,28 @@ export default function CoursePage() {
                             <Label>Aggregation Method</Label>
                             <select
                               value={courseSettingsData.assignmentAggregation}
-                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' })}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' | 'sum' })}
                               className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
                             >
-                              <option value="average">Average of all assignments</option>
-                              <option value="best">Best assignment score</option>
+                              {course?.courseType === 'Lab' ? (
+                                <>
+                                  <option value="average">Average of all assessments</option>
+                                  <option value="sum">Sum of all assessments</option>
+                                </>
+                              ) : (
+                                <>
+                                  <option value="average">Average of all assignments</option>
+                                  <option value="best">Best assignment score</option>
+                                </>
+                              )}
                             </select>
-                            <p className="text-xs text-muted-foreground mt-1">How to calculate the aggregated Assignment column</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {course?.courseType === 'Lab'
+                                ? (courseSettingsData.assignmentAggregation === 'sum'
+                                    ? 'Sums every scored assessment\'s marks and totals, then weights the combined percentage'
+                                    : 'Averages the normalized percentage of every scored assessment')
+                                : 'How to calculate the aggregated Assignment column'}
+                            </p>
                           </div>
 
                           <div>

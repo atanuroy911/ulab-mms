@@ -15,7 +15,7 @@ export interface Course {
   showFinalGrade: boolean;
   quizAggregation?: 'average' | 'best';
   quizWeightage?: number;
-  assignmentAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best' | 'sum';
   assignmentWeightage?: number;
   gradingScale?: string;
 }

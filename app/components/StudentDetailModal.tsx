@@ -42,7 +42,7 @@ interface Course {
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
   quizAggregation?: 'average' | 'best';
-  assignmentAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best' | 'sum';
   quizWeightage?: number;
   assignmentWeightage?: number;
   gradingScale?: string;
@@ -120,6 +120,19 @@ export default function StudentDetailModal({
       }
 
       return null;
+    } else if (aggregationMethod === 'sum') {
+      const sumRaw = categoryMarks.reduce((sum, mark) => sum + mark!.rawMark, 0);
+      const sumTotal = categoryMarks.reduce((sum, mark) => {
+        const exam = categoryExams.find(e => e._id === mark!.examId);
+        return exam ? sum + exam.totalMarks : sum;
+      }, 0);
+
+      const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
+
+      return {
+        rawMark: weightedSum,
+        isAggregated: true,
+      };
     } else {
       const averagePercentage = categoryMarks.reduce((sum, mark) => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
@@ -128,7 +141,7 @@ export default function StudentDetailModal({
       }, 0) / categoryMarks.length;
 
       const weightedScore = (averagePercentage * categoryWeightage) / 100;
-      
+
       return {
         rawMark: weightedScore,
         isAggregated: true,
@@ -196,14 +209,14 @@ export default function StudentDetailModal({
         const contribution = aggMark.rawMark;
         
         breakdown.push({
-          name: 'Assignment (Aggregated)',
+          name: `${course?.courseType === 'Lab' ? 'Assessment' : 'Assignment'} (Aggregated)`,
           mark: contribution,
           totalMarks: totalMarks,
           weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });
-        
+
         totalContribution += contribution;
       }
     }

@@ -130,7 +130,7 @@ export async function GET(
         return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
       };
 
-      const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best'): any => {
+      const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best' | 'sum'): any => {
         const categoryExams = exams.filter((e: any) => e.examCategory === category);
         const categoryMarks = marks.filter((m: any) =>
           m.studentId.toString() === studentId.toString() &&
@@ -161,6 +161,22 @@ export async function GET(
 
           return {
             rawMark: weightedMark,
+            totalMarks: categoryWeightage,
+            isAggregated: true,
+          };
+        }
+
+        if (aggregationMode === 'sum') {
+          const sumRaw = categoryMarks.reduce((sum: number, mark: any) => sum + mark.rawMark, 0);
+          const sumTotal = categoryMarks.reduce((sum: number, mark: any) => {
+            const exam = categoryExams.find((e: any) => e._id.toString() === mark.examId.toString());
+            return exam ? sum + exam.totalMarks : sum;
+          }, 0);
+
+          const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
+
+          return {
+            rawMark: weightedSum,
             totalMarks: categoryWeightage,
             isAggregated: true,
           };
@@ -286,7 +302,8 @@ export async function GET(
       }
 
       if (hasAssignments && course.assignmentWeightage) {
-        headers.push(`Assignment (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
+        const assignmentLabel = course.courseType === 'Lab' ? 'Assessment' : 'Assignment';
+        headers.push(`${assignmentLabel} (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
       }
 
       if (hasProjects && course.projectWeightage) {

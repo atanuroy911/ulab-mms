@@ -54,6 +54,17 @@ function getAggregatedMark(
     return null;
   }
 
+  if (aggregationMethod === 'sum') {
+    const sumRaw = categoryMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
+    const sumTotal = categoryMarks.reduce((sum, mark) => {
+      const exam = categoryExams.find(e => e._id === mark.examId);
+      return exam ? sum + exam.totalMarks : sum;
+    }, 0);
+
+    const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
+    return { mark: weightedSum, totalMarks: categoryWeightage };
+  }
+
   const averagePercentage = categoryMarks.reduce((sum, mark) => {
     const exam = categoryExams.find(e => e._id === mark.examId);
     if (!exam) return sum;
@@ -119,7 +130,7 @@ export function calculateFinalGrade(courseData: CourseData): FinalGradeResult {
       const contribution = (percentage * courseData.course.assignmentWeightage) / 100;
 
       breakdown.push({
-        name: 'Assignment (Aggregated)',
+        name: `${courseData.course.courseType === 'Lab' ? 'Assessment' : 'Assignment'} (Aggregated)`,
         mark: aggMark.mark,
         totalMarks: aggMark.totalMarks,
         weightage: courseData.course.assignmentWeightage,

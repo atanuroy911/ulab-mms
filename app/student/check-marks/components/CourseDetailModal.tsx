@@ -97,9 +97,11 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
               </p>
               {(courseData.exams.some(e => e.examCategory === 'Quiz') || courseData.exams.some(e => e.examCategory === 'Assignment')) && (
                 <p>
-                  Quiz and Assignment marks are aggregated using the{' '}
+                  Quiz and {courseData.course.courseType === 'Lab' ? 'Assessment' : 'Assignment'} marks are aggregated using the{' '}
                   <strong>{courseData.course.quizAggregation === 'best' ? 'Best' : 'Average'}</strong> method for quizzes
-                  and <strong>{courseData.course.assignmentAggregation === 'best' ? 'Best' : 'Average'}</strong> method for assignments.
+                  and <strong>
+                    {courseData.course.assignmentAggregation === 'best' ? 'Best' : courseData.course.assignmentAggregation === 'sum' ? 'Sum' : 'Average'}
+                  </strong> method for {courseData.course.courseType === 'Lab' ? 'assessments' : 'assignments'}.
                 </p>
               )}
             </CardContent>
