@@ -26,7 +26,6 @@ interface AttendanceRecord {
 type CourseSettings = {
   classTime: string;
   classRoom: string;
-  numberOfStudents: string;
   classRepresentativeId: string;
 };
 
@@ -45,7 +44,6 @@ function SettingsForm({
 }) {
   const [classTime, setClassTime] = useState(initialValues.classTime);
   const [classRoom, setClassRoom] = useState(initialValues.classRoom);
-  const [numberOfStudents, setNumberOfStudents] = useState(initialValues.numberOfStudents);
   const [repSearch, setRepSearch] = useState('');
   const [classRepresentativeId, setClassRepresentativeId] = useState(initialValues.classRepresentativeId);
   const [saving, setSaving] = useState(false);
@@ -54,11 +52,10 @@ function SettingsForm({
   useEffect(() => {
     setClassTime(initialValues.classTime);
     setClassRoom(initialValues.classRoom);
-    setNumberOfStudents(initialValues.numberOfStudents);
     setClassRepresentativeId(initialValues.classRepresentativeId);
     const selectedRep = students.find((st) => st._id === initialValues.classRepresentativeId);
     setRepSearch(selectedRep ? selectedRep.name : '');
-  }, [initialValues.classRoom, initialValues.classRepresentativeId, initialValues.classTime, initialValues.numberOfStudents, students]);
+  }, [initialValues.classRoom, initialValues.classRepresentativeId, initialValues.classTime, students]);
 
   const filtered = students.filter((st) => {
     if (!repSearch) return true;
@@ -72,12 +69,8 @@ function SettingsForm({
       const payload: any = {
         classTime: classTime || '',
         classRoom: classRoom || '',
+        numberOfStudents: students.length,
       };
-
-      if (numberOfStudents !== '' && numberOfStudents !== undefined && numberOfStudents !== null) {
-        const asNumber = Number(numberOfStudents);
-        if (!Number.isNaN(asNumber)) payload.numberOfStudents = asNumber;
-      }
 
       // If empty string, treat as explicit clear -> send null; otherwise send id
       payload.classRepresentativeId = classRepresentativeId === '' ? null : classRepresentativeId || null;
@@ -117,7 +110,9 @@ function SettingsForm({
 
       <div>
         <label className="text-sm font-medium">Number of Students</label>
-        <input value={numberOfStudents} onChange={(e) => setNumberOfStudents(e.target.value)} type="number" min={1} className="w-40 rounded-md border px-2 py-2 mt-1" />
+        <div className="w-40 rounded-md border px-2 py-2 mt-1 bg-muted text-muted-foreground text-sm">
+          {students.length} (auto)
+        </div>
       </div>
 
       <div>
@@ -556,7 +551,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       const settingsParams = new URLSearchParams();
       if (course?.classTime) settingsParams.set('classTime', course.classTime);
       if (course?.classRoom) settingsParams.set('classRoom', course.classRoom);
-      if (course?.numberOfStudents != null) settingsParams.set('numberOfStudents', String(course.numberOfStudents));
+      settingsParams.set('numberOfStudents', String(students.length));
       if (course?.classRepresentativeId) settingsParams.set('classRepresentativeId', String(course.classRepresentativeId));
       if (sessionParam) settingsParams.set('sessionId', activeSession?._id || '');
       if (group) settingsParams.set('group', group);
@@ -596,7 +591,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
 
   // show guide if settings missing
   const settingsMissing = !course?.classTime && !course?.classRoom && !course?.classRepresentativeId;
-  const settingsSummary = [course?.classTime, course?.classRoom, course?.numberOfStudents ? String(course.numberOfStudents) : '', course?.classRepresentativeId ? 'Representative set' : ''].filter(Boolean);
+  const settingsSummary = [course?.classTime, course?.classRoom, `${students.length} students`, course?.classRepresentativeId ? 'Representative set' : ''].filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -728,7 +723,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
 
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Users className="h-4 w-4" />
-              <span className="font-medium text-foreground">{course?.numberOfStudents || students.length || '0'} Students</span>
+              <span className="font-medium text-foreground">{students.length} Students</span>
             </div>
 
             <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -1037,13 +1032,12 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             <DialogTitle>Class Settings</DialogTitle>
           </DialogHeader>
           <SettingsForm
-            key={`${course?.classTime || ''}|${course?.classRoom || ''}|${course?.numberOfStudents || ''}|${course?.classRepresentativeId || ''}|${students.length}`}
+            key={`${course?.classTime || ''}|${course?.classRoom || ''}|${course?.classRepresentativeId || ''}|${students.length}`}
             students={students}
             courseId={courseId}
             initialValues={{
               classTime: course?.classTime || '',
               classRoom: course?.classRoom || '',
-              numberOfStudents: course?.numberOfStudents ? String(course.numberOfStudents) : String(students.length || ''),
               classRepresentativeId: course?.classRepresentativeId ? String(course.classRepresentativeId) : '',
             }}
             onSaved={(savedCourse) => {
@@ -1065,7 +1059,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           </DialogHeader>
           <div className="space-y-4 py-2 text-sm text-muted-foreground">
             <p>
-              You haven't set the class settings (Class Time, Class Room, Number of Students, or Representative) yet.
+              You haven't set the class settings (Class Time, Class Room, or Representative) yet.
             </p>
             <p>
               If you don't set these, the options will appear empty in the printed sheet. You only need to set these once.
