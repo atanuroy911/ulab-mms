@@ -249,6 +249,22 @@ export default function BulkMarkEntryModal({
       const newEntries = [...prev];
       if (field === 'rawMark') {
         newEntries[studentIndex].rawMark = value;
+
+        if (numberOfCOs > 0 && selectedExam) {
+          const rawMarkNum = parseFloat(value);
+          const examMaxMarks = coPoMaxMarks[selectedExamId];
+
+          if (!isNaN(rawMarkNum) && rawMarkNum === selectedExam.totalMarks) {
+            newEntries[studentIndex].coMarks = newEntries[studentIndex].coMarks.map((val, i) => {
+              if (val.trim() !== '') return val;
+              const coMax = examMaxMarks?.[i];
+              return coMax !== undefined && coMax > 0 ? coMax.toString() : val;
+            });
+          } else if (!isNaN(rawMarkNum) && rawMarkNum === 0) {
+            newEntries[studentIndex].coMarks = newEntries[studentIndex].coMarks.map(() => '0');
+            newEntries[studentIndex].nonCoMark = '0';
+          }
+        }
       } else if (field === 'co' && subIndex !== undefined) {
         const newCoMarks = [...newEntries[studentIndex].coMarks];
         newCoMarks[subIndex] = value;
