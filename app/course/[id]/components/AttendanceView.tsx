@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { notify } from '@/app/utils/notifications';
+import { formatClassRoomDisplay } from '@/app/utils/classInfo';
 import BulkOcrAttendanceModal from './BulkOcrAttendanceModal';
 
 interface AttendanceRecord {
@@ -722,7 +723,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <MapPin className="h-4 w-4" />
               {course?.classRoom ? (
-                <span className="font-medium text-foreground">{course.classRoom}</span>
+                <span className="font-medium text-foreground">{formatClassRoomDisplay(course.classRoom)}</span>
               ) : (
                 <span className="italic opacity-60">Room not set</span>
               )}

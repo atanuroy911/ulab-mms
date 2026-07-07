@@ -7,6 +7,7 @@ import Student from '@/models/Student';
 import AttendanceSession from '@/models/AttendanceSession';
 import path from 'path';
 import { readFile } from 'fs/promises';
+import { formatClassRoomDisplay } from '@/app/utils/classInfo';
 
 export const runtime = 'nodejs';
 
@@ -215,7 +216,7 @@ function buildPagesHtml(
           </div>
           <div>
             <div class="line right"><span>Class Time</span><span>:</span><span>${escapeHtml(settings?.classTime || course.classTime || '')}</span></div>
-            <div class="line right"><span>Class Room</span><span>:</span><span>${escapeHtml(settings?.classRoom || course.classRoom || '')}</span></div>
+            <div class="line right"><span>Class Room</span><span>:</span><span>${escapeHtml(formatClassRoomDisplay(settings?.classRoom || course.classRoom))}</span></div>
             <div class="line right"><span>Number of Students</span><span>:</span><span>${escapeHtml(String(settings?.numberOfStudents ?? course.numberOfStudents ?? students.length))}</span></div>
             <div class="line right"><span>Class Representative</span><span>:</span><span>${escapeHtml(settings?.classRepresentativeName || '')}</span></div>
           </div>

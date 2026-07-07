@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Loader2, ImagePlus, X, CheckCircle2, HelpCircle, XCircle, Save } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
@@ -36,6 +36,12 @@ function StudentPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
+  const filtered = students.filter((student) => {
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
+    return student.name.toLowerCase().includes(q) || student.studentId.toLowerCase().includes(q);
+  });
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -44,25 +50,34 @@ function StudentPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
-        <Command shouldFilter>
-          <CommandInput placeholder="Search name or ID..." value={query} onValueChange={setQuery} />
-          <CommandList>
-            <CommandEmpty>No matching student.</CommandEmpty>
-            {students.map((student) => (
-              <CommandItem
+        <div className="border-b p-2">
+          <Input
+            placeholder="Search name or ID..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            className="h-8"
+          />
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <div className="p-3 text-center text-sm text-muted-foreground">No matching student.</div>
+          ) : (
+            filtered.map((student) => (
+              <div
                 key={student._id}
-                value={`${student.name} ${student.studentId}`}
-                onSelect={() => {
+                onClick={() => {
                   onSelect(student);
                   setOpen(false);
                   setQuery('');
                 }}
+                className="cursor-pointer rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
               >
-                {student.name} <span className="ml-1 text-muted-foreground">({student.studentId})</span>
-              </CommandItem>
-            ))}
-          </CommandList>
-        </Command>
+                {student.name} <span className="text-muted-foreground">({student.studentId})</span>
+              </div>
+            ))
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );
