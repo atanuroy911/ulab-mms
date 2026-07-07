@@ -115,21 +115,19 @@ export default function BulkPasteMarkModal({
   onMarksSaved,
   coPoMaxMarks = {},
 }: BulkPasteMarkModalProps) {
-  const [selectedExamIds, setSelectedExamIds] = useState<string[]>([]);
+  const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [pasteText, setPasteText] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const selectedExams = exams.filter(e => selectedExamIds.includes(e._id));
+  const selectedExams = exams.filter(e => e._id === selectedExamId);
 
-  const toggleExam = (examId: string) => {
-    setSelectedExamIds(prev =>
-      prev.includes(examId) ? prev.filter(id => id !== examId) : [...prev, examId]
-    );
+  const selectExam = (examId: string) => {
+    setSelectedExamId(prev => (prev === examId ? '' : examId));
   };
 
   const handleClose = () => {
-    setSelectedExamIds([]);
+    setSelectedExamId('');
     setPasteText({});
     setError('');
     onClose();
@@ -220,7 +218,7 @@ export default function BulkPasteMarkModal({
           <div>
             <h2 className="text-2xl font-bold text-gray-100">Bulk Paste Marks</h2>
             <p className="text-sm text-gray-400 mt-1">
-              Paste rows of "Student ID, Mark" per exam (e.g. exported from Google Classroom)
+              Select an exam, then paste rows of "Student ID, Mark" (e.g. exported from Google Classroom)
             </p>
           </div>
           <Button onClick={handleClose} variant="ghost" size="sm" className="text-gray-400 hover:text-gray-200">
@@ -231,15 +229,15 @@ export default function BulkPasteMarkModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Exam selection */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-200 mb-3">Select exam(s):</h3>
+            <h3 className="text-lg font-semibold text-gray-200 mb-3">Select an exam:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {exams.map(exam => {
-                const isSelected = selectedExamIds.includes(exam._id);
+                const isSelected = exam._id === selectedExamId;
                 const examMarks = marks.filter(m => m.examId === exam._id).length;
                 return (
                   <button
                     key={exam._id}
-                    onClick={() => toggleExam(exam._id)}
+                    onClick={() => selectExam(exam._id)}
                     className={`p-4 rounded-lg border-2 transition-all text-left ${
                       isSelected ? 'border-green-500 bg-green-900/30' : 'border-gray-600 bg-gray-900/50 hover:border-gray-500'
                     }`}
