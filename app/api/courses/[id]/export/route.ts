@@ -40,6 +40,19 @@ export async function GET(
     const marks = await Mark.find({ courseId });
     const attendanceSessions = await AttendanceSession.find({ courseId });
 
+    // coPoMapping.maxMarks is keyed by exam _id, but exams get brand-new _ids on
+    // import/duplicate. Re-key by exam displayName here so import can remap it to
+    // the newly created exam ids (see courses/import and courses/[id]/import routes).
+    const maxMarksByExamName: Record<string, number[]> = {};
+    if (course.coPoMapping?.maxMarks) {
+      for (const exam of exams) {
+        const examMax = course.coPoMapping.maxMarks[exam._id.toString()];
+        if (examMax) {
+          maxMarksByExamName[exam.displayName] = examMax;
+        }
+      }
+    }
+
     const exportData = {
       version: '1.0',
       exportDate: new Date().toISOString(),
@@ -56,7 +69,10 @@ export async function GET(
         assignmentWeightage: course.assignmentWeightage,
         projectWeightage: course.projectWeightage,
         gradingScale: course.gradingScale,
-        coPoMapping: course.coPoMapping,
+        coPoMapping: {
+          mapping: course.coPoMapping?.mapping,
+          maxMarks: maxMarksByExamName,
+        },
       },
       students: students.map(student => ({
         studentId: student.studentId,
@@ -81,6 +97,7 @@ export async function GET(
           examDisplayName: exam?.displayName,
           rawMark: mark.rawMark,
           coMarks: mark.coMarks,
+          nonCoMark: mark.nonCoMark,
           questionMarks: mark.questionMarks,
           weightedMark: mark.weightedMark,
         };
