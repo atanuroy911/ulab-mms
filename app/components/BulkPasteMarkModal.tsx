@@ -42,10 +42,11 @@ interface ParsedRow {
   rawMarkText: string;
   student?: Student;
   rawMarkNum?: number;
+  existingMark?: number;
   error?: string;
 }
 
-function parsePastedText(text: string, students: Student[], totalMarks: number): ParsedRow[] {
+function parsePastedText(text: string, students: Student[], totalMarks: number, examMarks: Mark[]): ParsedRow[] {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   return lines.map(line => {
@@ -56,6 +57,10 @@ function parsePastedText(text: string, students: Student[], totalMarks: number):
     const student = students.find(
       s => s.studentId.trim().toLowerCase() === rawStudentId.toLowerCase()
     );
+
+    const existingMark = student
+      ? examMarks.find(m => m.studentId === student._id)?.rawMark
+      : undefined;
 
     const rawMarkNum = parseFloat(rawMarkText);
 
@@ -76,6 +81,7 @@ function parsePastedText(text: string, students: Student[], totalMarks: number):
       rawMarkText,
       student,
       rawMarkNum: isNaN(rawMarkNum) ? undefined : rawMarkNum,
+      existingMark,
       error,
     };
   });
@@ -135,7 +141,8 @@ export default function BulkPasteMarkModal({
 
   const parsedByExam: Record<string, ParsedRow[]> = {};
   for (const exam of selectedExams) {
-    parsedByExam[exam._id] = parsePastedText(pasteText[exam._id] || '', students, exam.totalMarks);
+    const examMarks = marks.filter(m => m.examId === exam._id);
+    parsedByExam[exam._id] = parsePastedText(pasteText[exam._id] || '', students, exam.totalMarks, examMarks);
   }
 
   const handleSave = async () => {
@@ -265,6 +272,7 @@ export default function BulkPasteMarkModal({
             const rows = parsedByExam[exam._id];
             const validCount = rows.filter(r => !r.error).length;
             const errorCount = rows.length - validCount;
+            const overwriteCount = rows.filter(r => !r.error && r.existingMark !== undefined).length;
 
             return (
               <div key={exam._id} className="border border-gray-700 rounded-lg p-4 bg-gray-900/40">
@@ -273,6 +281,7 @@ export default function BulkPasteMarkModal({
                   {rows.length > 0 && (
                     <div className="text-xs">
                       <span className="text-emerald-400">{validCount} valid</span>
+                      {overwriteCount > 0 && <span className="text-blue-400 ml-2">{overwriteCount} will overwrite existing</span>}
                       {errorCount > 0 && <span className="text-amber-400 ml-2">{errorCount} error(s)</span>}
                     </div>
                   )}
@@ -292,29 +301,47 @@ export default function BulkPasteMarkModal({
                         <tr>
                           <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Row</th>
                           <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Student</th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Mark</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Old Mark</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">New Mark</th>
                           <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-800">
-                        {rows.map((row, idx) => (
-                          <tr key={idx} className={row.error ? 'bg-amber-900/10' : ''}>
-                            <td className="px-3 py-2 text-gray-400">{row.rawStudentId || '—'}</td>
-                            <td className="px-3 py-2 text-gray-200">
-                              {row.student ? `${row.student.studentId} · ${row.student.name}` : '—'}
-                            </td>
-                            <td className="px-3 py-2 text-gray-200">{row.rawMarkText || '—'}</td>
-                            <td className="px-3 py-2">
-                              {row.error ? (
-                                <span className="inline-flex items-center gap-1 text-amber-400 text-xs">
-                                  <AlertTriangle className="w-3 h-3" /> {row.error}
+                        {rows.map((row, idx) => {
+                          const hasExisting = row.existingMark !== undefined;
+                          const isChanged = hasExisting && row.rawMarkNum !== undefined && row.rawMarkNum !== row.existingMark;
+                          return (
+                            <tr key={idx} className={row.error ? 'bg-amber-900/10' : hasExisting ? 'bg-blue-900/10' : ''}>
+                              <td className="px-3 py-2 text-gray-400">{row.rawStudentId || '—'}</td>
+                              <td className="px-3 py-2 text-gray-200">
+                                {row.student ? `${row.student.studentId} · ${row.student.name}` : '—'}
+                              </td>
+                              <td className="px-3 py-2">
+                                {hasExisting ? (
+                                  <span className="text-gray-400">{row.existingMark}</span>
+                                ) : (
+                                  <span className="text-gray-600">—</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={isChanged ? 'text-blue-300 font-semibold' : 'text-gray-200'}>
+                                  {row.rawMarkText || '—'}
                                 </span>
-                              ) : (
-                                <span className="text-emerald-400 text-xs">✓ Ready</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="px-3 py-2">
+                                {row.error ? (
+                                  <span className="inline-flex items-center gap-1 text-amber-400 text-xs">
+                                    <AlertTriangle className="w-3 h-3" /> {row.error}
+                                  </span>
+                                ) : hasExisting ? (
+                                  <span className="text-blue-400 text-xs">↻ Will overwrite existing mark</span>
+                                ) : (
+                                  <span className="text-emerald-400 text-xs">✓ New mark</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
