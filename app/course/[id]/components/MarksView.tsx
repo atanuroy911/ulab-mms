@@ -39,6 +39,7 @@ interface MarksViewProps {
   getMark: (studentId: string, examId: string) => Mark | undefined;
   onShowMarkModal: (examId: string | undefined, studentId: string | undefined) => void;
   onShowBulkMarkModal: () => void;
+  onShowBulkPasteModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: () => void;
   onAutoAttendanceMarks: (examId: string) => void;
@@ -59,6 +60,7 @@ export default function MarksView({
   getMark,
   onShowMarkModal,
   onShowBulkMarkModal,
+  onShowBulkPasteModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
   onAutoAttendanceMarks,
@@ -158,13 +160,28 @@ export default function MarksView({
                   setShowDropdown(false);
                   onShowMarkModal(undefined, undefined);
                 }}
-                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3 border-b"
               >
                 <span className="text-xl">🔍</span>
                 <div>
                   <div className="font-medium">Add Individual (Filter)</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     Search and add one at a time
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowDropdown(false);
+                  onShowBulkPasteModal();
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
+              >
+                <span className="text-xl">📋</span>
+                <div>
+                  <div className="font-medium">Bulk Paste (ID + Marks)</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Paste rows exported from Google Classroom
                   </div>
                 </div>
               </button>

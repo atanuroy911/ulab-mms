@@ -14,6 +14,7 @@ import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
+import BulkPasteMarkModal from '@/app/components/BulkPasteMarkModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
 import ProjectView from './components/ProjectView';
@@ -167,6 +168,7 @@ export default function CoursePage() {
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
+  const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
   const [aliasCandidates, setAliasCandidates] = useState<Array<{ _id: string; studentId: string; name: string }>>([]);
   const [showAliasCategorizeModal, setShowAliasCategorizeModal] = useState(false);
   const [aliasCategorizing, setAliasCategorizing] = useState(false);
@@ -1724,6 +1726,7 @@ export default function CoursePage() {
                   setShowMarkModal(true);
                 }}
                 onShowBulkMarkModal={() => setShowBulkMarkModal(true)}
+                onShowBulkPasteModal={() => setShowBulkPasteModal(true)}
                 onShowSetZeroModal={() => {
                   setSelectedExamsForAction([]);
                   setConfirmationStep(0);
@@ -2030,6 +2033,18 @@ export default function CoursePage() {
         onGoToCoPo={() => { setShowBulkMarkModal(false); setActiveView('copo'); }}
         ignoredCoWarnings={ignoredCoWarnings}
         onIgnoreCOWarning={handleIgnoreCOWarning}
+      />
+
+      {/* Bulk Paste Mark Modal */}
+      <BulkPasteMarkModal
+        isOpen={showBulkPasteModal}
+        onClose={() => setShowBulkPasteModal(false)}
+        students={students}
+        exams={exams}
+        marks={marks}
+        courseId={courseId}
+        onMarksSaved={fetchCourseData}
+        coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
       />
 
       {/* Exam Settings Modal */}
