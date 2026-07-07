@@ -64,10 +64,12 @@ export default function Dashboard() {
     code: '',
     semester: 'Spring',
     year: new Date().getFullYear(),
-    section: 'A',
+    section: '1',
     courseType: 'Theory' as 'Theory' | 'Lab',
     aliasEnabled: false,
     alternateCode: '',
+    classTime: '',
+    classRoom: '',
   });
   const [addWizardStep, setAddWizardStep] = useState(0);
   const [selectedAdminCourse, setSelectedAdminCourse] = useState<AdminCourse | null>(null);
@@ -216,10 +218,12 @@ export default function Dashboard() {
         code: '',
         semester: 'Spring',
         year: new Date().getFullYear(),
-        section: 'A',
+        section: '1',
         courseType: 'Theory',
         aliasEnabled: false,
         alternateCode: '',
+        classTime: '',
+        classRoom: '',
       });
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -836,7 +840,7 @@ export default function Dashboard() {
                       onChange={(e) =>
                         setFormData({ ...formData, section: e.target.value.toUpperCase() })
                       }
-                      placeholder="e.g., A"
+                      placeholder="e.g., 1"
                       maxLength={5}
                     />
                   </div>
@@ -861,6 +865,30 @@ export default function Dashboard() {
                       : '🔬 Lab courses include Lab Final and OEL/CE Project'}
                   </p>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="class-time">Class Time (optional)</Label>
+                    <Input
+                      id="class-time"
+                      value={formData.classTime}
+                      onChange={(e) => setFormData({ ...formData, classTime: e.target.value })}
+                      placeholder="e.g., 10:00 AM - 12:00 PM"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="class-room">Class Room (optional)</Label>
+                    <Input
+                      id="class-room"
+                      value={formData.classRoom}
+                      onChange={(e) => setFormData({ ...formData, classRoom: e.target.value })}
+                      placeholder="e.g., Lab 101"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Used to pre-fill the Attendance tab&apos;s class settings. You can change these later.
+                </p>
               </>
             )}
 
@@ -917,6 +945,11 @@ export default function Dashboard() {
                   <div>
                     <div className="text-xs text-muted-foreground">Details</div>
                     <div className="font-medium">{formData.semester} {formData.year} • Section {formData.section} • {formData.courseType}</div>
+                    {(formData.classTime || formData.classRoom) && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {[formData.classTime, formData.classRoom].filter(Boolean).join(' • ')}
+                      </div>
+                    )}
                   </div>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setAddWizardStep(1)}>Edit</Button>
                 </div>
