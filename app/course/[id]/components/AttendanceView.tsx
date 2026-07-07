@@ -8,12 +8,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, MoreVertical, Check, X, Search, Wrench, Download, Upload, Shuffle, RotateCcw, UserX, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, MoreVertical, Check, X, Search, Wrench, Download, Upload, Shuffle, RotateCcw, UserX, AlertTriangle, ScanText } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { notify } from '@/app/utils/notifications';
+import BulkOcrAttendanceModal from './BulkOcrAttendanceModal';
 
 interface AttendanceRecord {
   studentId: string;
@@ -253,6 +254,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showBulkOcrModal, setShowBulkOcrModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSessionDialog, setShowSessionDialog] = useState(false);
@@ -656,6 +658,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowBulkOcrModal(true)}>
+                <ScanText />
+                Add Attendance (Paste / Screenshot)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={exportAttendanceJson} disabled={sessions.length === 0}>
                 <Download />
                 Export Attendance (JSON)
@@ -1051,6 +1058,15 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           />
         </DialogContent>
       </Dialog>
+
+      <BulkOcrAttendanceModal
+        isOpen={showBulkOcrModal}
+        onClose={() => setShowBulkOcrModal(false)}
+        courseId={courseId}
+        students={students}
+        activeSession={activeSession}
+        onSaved={fetchAll}
+      />
 
       <Dialog open={showExportWarningModal} onOpenChange={setShowExportWarningModal}>
         <DialogContent className="max-w-md">

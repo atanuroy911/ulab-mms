@@ -125,9 +125,10 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
     }
 
     const body = await req.json();
-    const { sessionId, studentId, status, applyToAll } = body as {
+    const { sessionId, studentId, studentIds, status, applyToAll } = body as {
       sessionId?: string;
       studentId?: string;
+      studentIds?: string[];
       status?: 'present' | 'absent';
       applyToAll?: boolean;
     };
@@ -136,7 +137,7 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
       return NextResponse.json({ error: 'sessionId and a valid status (present/absent) are required' }, { status: 400 });
     }
 
-    if (!applyToAll && !studentId) {
+    if (!applyToAll && !studentId && !(Array.isArray(studentIds) && studentIds.length > 0)) {
       return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
     }
 
@@ -147,6 +148,33 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
 
     if (!targetSession) {
       return NextResponse.json({ error: 'Attendance session not found' }, { status: 404 });
+    }
+
+    if (Array.isArray(studentIds) && studentIds.length > 0) {
+      const matchedStudents = await Student.find({
+        _id: { $in: studentIds },
+        courseId: new mongoose.Types.ObjectId(courseId),
+      }).lean();
+
+      const now = new Date();
+      const recordByStudentId = new Map(
+        targetSession.records.map((record) => [String(record.studentId), record])
+      );
+
+      for (const student of matchedStudents) {
+        const record = {
+          studentId: student._id,
+          status,
+          recordedAt: now,
+          markedBy: 'auto' as const,
+          studentIdString: student.studentId,
+        };
+        recordByStudentId.set(String(student._id), record as any);
+      }
+
+      targetSession.records = Array.from(recordByStudentId.values()) as any;
+      await targetSession.save();
+      return NextResponse.json({ session: targetSession, matchedCount: matchedStudents.length });
     }
 
     if (applyToAll) {
