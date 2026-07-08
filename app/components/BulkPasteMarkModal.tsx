@@ -2,8 +2,32 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Save, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Save, Loader2, AlertTriangle, Info, Copy, Check } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
+
+const FORMAT_HELP_PROMPT = `I will paste a grade sheet containing student IDs, names, email addresses, and one or more Continuous Lab Assessment (CLA) columns.
+
+Extract only the student ID and the marks for each CLA. Remove any leading "-" from the student ID. Ignore all other columns, including names, email addresses, dates, points, and any other metadata.
+
+For each CLA column, create a separate section titled exactly as:
+
+ID CLA 1
+ID CLA 2
+ID CLA 3
+
+...continuing for however many CLA columns exist in the sheet.
+
+Under each section, output only the student ID and the corresponding mark in the following format:
+
+Student ID
+A single tab character
+Mark
+
+Preserve the original order of the students exactly as they appear in the spreadsheet. If a mark is blank, leave it blank after the tab. Do not replace blank values with 0, N/A, "-", or any other placeholder.
+
+Wrap the contents of each CLA section inside a plain text code block (text) so the output can be copied directly into another application.
+
+Do not include tables, bullet points, explanations, summaries, notes, or any additional text. Output only the CLA sections in the required format.`;
 
 interface Student {
   _id: string;
@@ -125,6 +149,19 @@ export default function BulkPasteMarkModal({
   const [pasteText, setPasteText] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showFormatHelp, setShowFormatHelp] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(FORMAT_HELP_PROMPT);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy prompt', err);
+      notify.error('Failed to copy prompt to clipboard');
+    }
+  };
 
   const selectedExams = exams.filter(e => e._id === selectedExamId);
 
@@ -223,9 +260,20 @@ export default function BulkPasteMarkModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div>
-            <h2 className="text-2xl font-bold text-gray-100">Bulk Paste Marks</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-gray-100">Bulk Paste Marks</h2>
+              <button
+                type="button"
+                onClick={() => setShowFormatHelp(true)}
+                className="text-gray-400 hover:text-blue-400 transition-colors"
+                title="How to get marks in this format"
+                aria-label="How to get marks in this format"
+              >
+                <Info className="w-5 h-5" />
+              </button>
+            </div>
             <p className="text-sm text-gray-400 mt-1">
-              Select an exam, then paste rows of "Student ID, Mark" (e.g. exported from Google Classroom)
+              Select an exam, then paste rows of &quot;Student ID, Mark&quot; (e.g. exported from Google Classroom)
             </p>
           </div>
           <Button onClick={handleClose} variant="ghost" size="sm" className="text-gray-400 hover:text-gray-200">
@@ -377,6 +425,62 @@ export default function BulkPasteMarkModal({
           </div>
         )}
       </div>
+
+      {/* Format Help Dialog */}
+      {showFormatHelp && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-110 p-4"
+          onClick={() => setShowFormatHelp(false)}
+        >
+          <div
+            className="bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700/50 p-6 max-h-[85vh] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-100">Getting marks into this format</h3>
+              <Button onClick={() => setShowFormatHelp(false)} variant="ghost" size="sm" className="text-gray-400 hover:text-gray-200">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <p className="text-sm text-gray-300 mb-3">
+              If your grade sheet (e.g. exported from Google Classroom) has extra columns like names, emails, or dates,
+              you can use an AI assistant (ChatGPT, Gemini, etc.) to clean it up. Paste the prompt below into the chat,
+              then paste your grade sheet right after it — the AI will return each CLA&apos;s IDs and marks in the
+              tab-separated format this modal expects.
+            </p>
+
+            <div className="relative">
+              <pre className="whitespace-pre-wrap break-words rounded-lg border border-gray-700 bg-gray-900 p-4 text-xs text-gray-300 max-h-80 overflow-y-auto">
+                {FORMAT_HELP_PROMPT}
+              </pre>
+              <Button
+                onClick={copyPrompt}
+                size="sm"
+                className="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600"
+              >
+                {promptCopied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-1.5" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-1.5" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button onClick={() => setShowFormatHelp(false)} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
