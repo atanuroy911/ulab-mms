@@ -28,8 +28,54 @@ interface CloseAttendanceSessionArgs {
   sessionId: string;
 }
 
+interface MyAttendanceStatsArgs {
+  courseId: string;
+}
+
+interface StudentAttendanceStatsArgs {
+  courseId: string;
+  studentId: string;
+}
+
 function generateSessionCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+async function getAttendanceStats(courseId: string, studentId: string, loaders: any) {
+  const course = await loaders.courseLoader.load(courseId);
+
+  if (!course) {
+    throw new Error('Course not found');
+  }
+
+  const sessions = await AttendanceSession.find({ courseId }).sort({ date: 1 });
+
+  const attendedSessions = sessions.filter(session =>
+    session.records.some((record: any) => record.studentIdString === studentId)
+  );
+
+  const totalSessions = sessions.length;
+  const attendedCount = attendedSessions.length;
+  const percentage = totalSessions > 0 ? (attendedCount / totalSessions) * 100 : 0;
+
+  const sessionDetails = sessions.map(session => {
+    const attended = session.records.some((record: any) => record.studentIdString === studentId);
+    return {
+      id: session._id.toString(),
+      date: session.date.toISOString(),
+      attended,
+    };
+  });
+
+  return {
+    courseId: course._id.toString(),
+    courseName: course.name,
+    courseCode: course.code,
+    totalSessions,
+    attendedSessions: attendedCount,
+    percentage: Math.round(percentage * 100) / 100,
+    sessions: sessionDetails,
+  };
 }
 
 export const attendanceResolvers = {
@@ -77,6 +123,20 @@ export const attendanceResolvers = {
         open: session.open,
         records: session.records || [],
       };
+    },
+
+    myAttendanceStats: async (_: any, { courseId }: MyAttendanceStatsArgs, context: GraphQLContext & { loaders: Loaders }) => {
+      const user = requireAuth(context);
+      await dbConnect();
+
+      return getAttendanceStats(courseId, user.userId, context.loaders);
+    },
+
+    studentAttendanceStats: async (_: any, { courseId, studentId }: StudentAttendanceStatsArgs, context: GraphQLContext & { loaders: Loaders }) => {
+      requireAuth(context);
+      await dbConnect();
+
+      return getAttendanceStats(courseId, studentId, context.loaders);
     },
   },
 
@@ -147,7 +207,7 @@ export const attendanceResolvers = {
       };
     },
 
-    checkIn: async (_: any, { sessionCode }: CheckInArgs, context: GraphQLContext) => {
+    checkIn: async (_: any, { sessionCode }: CheckInArgs, context: GraphQLContext & { loaders: Loaders }) => {
       const user = requireAuth(context);
       await dbConnect();
 
@@ -200,6 +260,12 @@ export const attendanceResolvers = {
 
       await session.save();
 
+      const stats = await getAttendanceStats(
+        session.courseId.toString(),
+        studentId,
+        context.loaders
+      );
+
       return {
         success: true,
         message: 'Successfully checked in',
@@ -211,6 +277,7 @@ export const attendanceResolvers = {
           open: session.open,
           records: session.records,
         },
+        stats,
       };
     },
   },

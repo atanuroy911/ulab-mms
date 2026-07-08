@@ -106,10 +106,27 @@ export const typeDefs = `#graphql
     markedBy: String
   }
 
+  type AttendanceStats {
+    courseId: ID!
+    courseName: String!
+    courseCode: String!
+    totalSessions: Int!
+    attendedSessions: Int!
+    percentage: Float!
+    sessions: [AttendanceSessionDetail!]!
+  }
+
+  type AttendanceSessionDetail {
+    id: ID!
+    date: String!
+    attended: Boolean!
+  }
+
   type CheckInResult {
     success: Boolean!
     message: String!
     session: AttendanceSession
+    stats: AttendanceStats
   }
 
   # Capstone Types
@@ -190,6 +207,8 @@ export const typeDefs = `#graphql
     myMarks(courseId: ID!): [ExamMark!]!
     courseDetails(courseId: ID!): Course
     myCapstoneGroups: [CapstoneGroup!]!
+    myAttendanceStats(courseId: ID!): AttendanceStats!
+    studentAttendanceStats(courseId: ID!, studentId: String!): AttendanceStats!
 
     # Instructor Queries
     instructorCourses: [Course!]!

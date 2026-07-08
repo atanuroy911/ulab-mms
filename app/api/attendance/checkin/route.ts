@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
 
     await activeSession.save();
 
-    return NextResponse.json({ message: 'Attendance recorded', ok: true });
+    return NextResponse.json({ message: 'Attendance recorded', ok: true, studentId: studentIdString });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Error recording attendance' }, { status: 500 });
