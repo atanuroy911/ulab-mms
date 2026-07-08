@@ -69,20 +69,19 @@ async function getLogoDataUri() {
   return `data:image/svg+xml;base64,${base64}`;
 }
 
-function getSessionDateInfo(session: AttendanceSessionRow) {
-  if (!session?.date) {
-    return { day: null as number | null, formatted: '' };
-  }
-  const dateObj = new Date(session.date);
-  return {
-    day: dateObj.getDate(),
-    formatted: dateObj.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }),
-  };
+async function getValuePlusLogoDataUri() {
+  const logoPath = path.join(process.cwd(), 'public', 'valuepluslogo.png');
+  const png = await readFile(logoPath);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+function getPrintDateLabel() {
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function buildHeaderDates(sessionsInScope: AttendanceSessionListItem[]) {
@@ -124,11 +123,13 @@ function buildPagesHtml(
   attendanceSession: AttendanceSessionRow,
   sessionsInScope: AttendanceSessionListItem[],
   logoDataUri: string,
+  valuePlusLogoDataUri: string,
+  showValuePlusLogo: boolean,
   instructorName: string,
-  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string },
+  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string; classRepresentativeStudentId?: string },
   minPages = 0
 ): string {
-  const { formatted: sessionDateLabel } = getSessionDateInfo(attendanceSession);
+  const printDateLabel = getPrintDateLabel();
   const headerDates = buildHeaderDates(sessionsInScope);
   const days = headerDates.map((d) => d.day);
 
@@ -218,7 +219,13 @@ function buildPagesHtml(
             <div class="line right"><span>Class Time</span><span>:</span><span>${escapeHtml(settings?.classTime || course.classTime || '')}</span></div>
             <div class="line right"><span>Class Room</span><span>:</span><span>${escapeHtml(formatClassRoomDisplay(settings?.classRoom || course.classRoom))}</span></div>
             <div class="line right"><span>Number of Students</span><span>:</span><span>${escapeHtml(String(settings?.numberOfStudents ?? course.numberOfStudents ?? students.length))}</span></div>
-            <div class="line right"><span>Class Representative</span><span>:</span><span>${escapeHtml(settings?.classRepresentativeName || '')}</span></div>
+            <div class="line right"><span>Class Representative</span><span>:</span><span>${escapeHtml(
+              settings?.classRepresentativeName
+                ? settings.classRepresentativeStudentId
+                  ? `${settings.classRepresentativeName} (${settings.classRepresentativeStudentId})`
+                  : settings.classRepresentativeName
+                : ''
+            )}</span></div>
           </div>
         </div>
 
@@ -239,11 +246,17 @@ function buildPagesHtml(
             ${blankHtml}
           </tbody>
         </table>
-        <div class="probation-note">* students in probation.</div>
-
         <div class="footer">
-          <div>${escapeHtml(sessionDateLabel)}</div>
-          <div>Page ${pageNum} of ${totalPages}</div>
+          <div class="footer-top">
+            <span class="footer-date">${escapeHtml(printDateLabel)}</span>
+            <span class="footer-probation">* Student in Probation</span>
+          </div>
+          <div class="footer-bottom">
+            <span class="footer-brand">
+              ${showValuePlusLogo ? `<img class="footer-logo" src="${valuePlusLogoDataUri}" alt="ValuePLUS Computer Systems Ltd." />` : ''}
+            </span>
+            <span class="footer-page">Page ${pageNum} of ${totalPages}</span>
+          </div>
         </div>
       </div>
     `;
@@ -258,8 +271,10 @@ function buildAttendanceHtml(
   attendanceSession: AttendanceSessionRow,
   sessionsInScope: AttendanceSessionListItem[],
   logoDataUri: string,
+  valuePlusLogoDataUri: string,
+  showValuePlusLogo: boolean,
   instructorName: string,
-  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string },
+  settings?: { classTime?: string; classRoom?: string; numberOfStudents?: string | number; classRepresentativeName?: string; classRepresentativeStudentId?: string },
   group?: 'main' | 'alias' | null
 ) {
   const useSplit = Boolean(course.aliasEnabled && course.alternateCode?.trim());
@@ -267,13 +282,13 @@ function buildAttendanceHtml(
   let pagesHtml: string;
   if (useSplit && group === 'alias') {
     // Only the alias-code document.
-    pagesHtml = buildPagesHtml({ ...course, code: course.alternateCode }, students.filter((s) => s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings, 1);
+    pagesHtml = buildPagesHtml({ ...course, code: course.alternateCode }, students.filter((s) => s.useAlias), attendanceSession, sessionsInScope, logoDataUri, valuePlusLogoDataUri, showValuePlusLogo, instructorName, settings, 1);
   } else if (useSplit) {
     // Only the original-code document (also the default when a split course's
     // print is requested with no explicit group, e.g. a direct URL hit).
-    pagesHtml = buildPagesHtml(course, students.filter((s) => !s.useAlias), attendanceSession, sessionsInScope, logoDataUri, instructorName, settings, 1);
+    pagesHtml = buildPagesHtml(course, students.filter((s) => !s.useAlias), attendanceSession, sessionsInScope, logoDataUri, valuePlusLogoDataUri, showValuePlusLogo, instructorName, settings, 1);
   } else {
-    pagesHtml = buildPagesHtml(course, students, attendanceSession, sessionsInScope, logoDataUri, instructorName, settings);
+    pagesHtml = buildPagesHtml(course, students, attendanceSession, sessionsInScope, logoDataUri, valuePlusLogoDataUri, showValuePlusLogo, instructorName, settings);
   }
 
   return `
@@ -327,11 +342,11 @@ function buildAttendanceHtml(
 
       .title {
         display: inline-block;
-        font-size: 12px;
+        font-size: 30px;
         font-weight: 700;
         letter-spacing: 0.2px;
         background: #cfcfcf;
-        padding: 2px 8px;
+        padding: 5px 20px;
       }
 
       .meta {
@@ -454,16 +469,39 @@ function buildAttendanceHtml(
         height: auto;
       }
 
-      .probation-note {
+      .footer {
         margin-top: 6px;
         font-size: 12px;
       }
 
-      .footer {
+      .footer-top {
+        display: flex;
+        align-items: baseline;
+        gap: 24px;
+      }
+
+      .footer-date {
+        font-style: italic;
+      }
+
+      .footer-probation {
+        font-style: normal;
+      }
+
+      .footer-bottom {
         display: flex;
         justify-content: space-between;
-        margin-top: 6px;
-        font-size: 12px;
+        align-items: center;
+        margin-top: 4px;
+      }
+
+      .footer-logo {
+        height: 26px;
+        width: auto;
+        display: block;
+      }
+
+      .footer-page {
         font-style: italic;
       }
 
@@ -528,19 +566,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .lean<AttendanceSessionListItem[]>();
 
     const logoDataUri = await getLogoDataUri();
+    const valuePlusLogoDataUri = await getValuePlusLogoDataUri();
 
     const classTime = url.searchParams.get('classTime') || course.classTime || undefined;
     const classRoom = url.searchParams.get('classRoom') || course.classRoom || undefined;
     const numberOfStudents = url.searchParams.get('numberOfStudents') || (course.numberOfStudents != null ? String(course.numberOfStudents) : undefined);
     const classRepresentativeId = url.searchParams.get('classRepresentativeId') || (course.classRepresentativeId ? String(course.classRepresentativeId) : undefined);
+    const showValuePlusLogo = url.searchParams.get('showValuePlusLogo') !== '0';
 
     let classRepresentativeName: string | undefined = undefined;
+    let classRepresentativeStudentId: string | undefined = undefined;
     if (classRepresentativeId) {
       try {
-        const rep = await Student.findOne({ _id: classRepresentativeId, courseId }).lean<{ name?: string }>();
+        const rep = await Student.findOne({ _id: classRepresentativeId, courseId }).lean<{ name?: string; studentId?: string }>();
         classRepresentativeName = rep?.name;
+        classRepresentativeStudentId = rep?.studentId;
       } catch {
         classRepresentativeName = undefined;
+        classRepresentativeStudentId = undefined;
       }
     }
 
@@ -550,12 +593,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       attendanceSession,
       sessionsInScope,
       logoDataUri,
+      valuePlusLogoDataUri,
+      showValuePlusLogo,
       session.user.name || '',
       {
         classTime,
         classRoom,
         numberOfStudents,
         classRepresentativeName,
+        classRepresentativeStudentId,
       },
       group
     );

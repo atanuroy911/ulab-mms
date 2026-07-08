@@ -256,6 +256,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showBulkOcrModal, setShowBulkOcrModal] = useState(false);
+  const [mimicValuePlusLogo, setMimicValuePlusLogo] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSessionDialog, setShowSessionDialog] = useState(false);
@@ -558,6 +559,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       if (course?.classRepresentativeId) settingsParams.set('classRepresentativeId', String(course.classRepresentativeId));
       if (sessionParam) settingsParams.set('sessionId', activeSession?._id || '');
       if (group) settingsParams.set('group', group);
+      settingsParams.set('showValuePlusLogo', mimicValuePlusLogo ? '1' : '0');
 
       const qs = settingsParams.toString();
       const url = `/api/courses/${courseId}/attendance-pdf${qs ? `?${qs}` : ''}`;
@@ -633,6 +635,14 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           >
             {exportLoading ? 'Opening...' : 'Print Attendance'}
           </Button>
+
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none">
+            <Checkbox
+              checked={mimicValuePlusLogo}
+              onCheckedChange={(checked) => setMimicValuePlusLogo(checked === true)}
+            />
+            Mimic ValuePlus Logo
+          </label>
 
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)}>
             <QrCode className="mr-2 h-4 w-4" />
