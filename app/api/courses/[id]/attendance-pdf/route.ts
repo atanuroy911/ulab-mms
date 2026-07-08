@@ -250,6 +250,7 @@ function buildPagesHtml(
           <div class="footer-top">
             <span class="footer-date">${escapeHtml(printDateLabel)}</span>
             <span class="footer-probation">* Student in Probation</span>
+            <span></span>
           </div>
           <div class="footer-bottom">
             <span class="footer-brand">
@@ -475,16 +476,18 @@ function buildAttendanceHtml(
       }
 
       .footer-top {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
         align-items: baseline;
-        gap: 24px;
       }
 
       .footer-date {
+        text-align: left;
         font-style: italic;
       }
 
       .footer-probation {
+        text-align: center;
         font-style: normal;
       }
 

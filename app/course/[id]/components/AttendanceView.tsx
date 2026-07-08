@@ -264,6 +264,8 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [sessionDialogError, setSessionDialogError] = useState('');
   const [showExportWarningModal, setShowExportWarningModal] = useState(false);
   const [showPrintChoiceModal, setShowPrintChoiceModal] = useState(false);
+  const [showPrintOptionsModal, setShowPrintOptionsModal] = useState(false);
+  const [pendingPrintGroup, setPendingPrintGroup] = useState<'main' | 'alias' | undefined>(undefined);
   const [bulkActionPending, setBulkActionPending] = useState<'randomize' | 'reset' | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -571,13 +573,18 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
+  const openPrintOptions = (group?: 'main' | 'alias') => {
+    setPendingPrintGroup(group);
+    setShowPrintOptionsModal(true);
+  };
+
   const handleExportClick = () => {
     if (settingsMissing) {
       setShowExportWarningModal(true);
     } else if (course?.aliasEnabled && course.alternateCode) {
       setShowPrintChoiceModal(true);
     } else {
-      exportAttendance();
+      openPrintOptions();
     }
   };
 
@@ -635,14 +642,6 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           >
             {exportLoading ? 'Opening...' : 'Print Attendance'}
           </Button>
-
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none">
-            <Checkbox
-              checked={mimicValuePlusLogo}
-              onCheckedChange={(checked) => setMimicValuePlusLogo(checked === true)}
-            />
-            Mimic ValuePlus Logo
-          </label>
 
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)}>
             <QrCode className="mr-2 h-4 w-4" />
@@ -1100,7 +1099,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 if (course?.aliasEnabled && course.alternateCode) {
                   setShowPrintChoiceModal(true);
                 } else {
-                  exportAttendance();
+                  openPrintOptions();
                 }
               }}
               disabled={exportLoading}
@@ -1136,7 +1135,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 className="justify-start"
                 onClick={() => {
                   setShowPrintChoiceModal(false);
-                  exportAttendance('main');
+                  openPrintOptions('main');
                 }}
                 disabled={exportLoading}
               >
@@ -1148,13 +1147,51 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 className="justify-start"
                 onClick={() => {
                   setShowPrintChoiceModal(false);
-                  exportAttendance('alias');
+                  openPrintOptions('alias');
                 }}
                 disabled={exportLoading}
               >
                 Print New Code ({course?.alternateCode})
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPrintOptionsModal} onOpenChange={setShowPrintOptionsModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Print Attendance Sheet</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>
+              This opens a printable attendance sheet
+              {pendingPrintGroup === 'main' && ` for ${course?.code}`}
+              {pendingPrintGroup === 'alias' && ` for ${course?.alternateCode}`}
+              {' '}in a new tab, with every session recorded so far and the current class settings (time, room,
+              representative).
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm py-1">
+            <Checkbox
+              checked={mimicValuePlusLogo}
+              onCheckedChange={(checked) => setMimicValuePlusLogo(checked === true)}
+            />
+            Mimic ValuePlus Logo
+          </label>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowPrintOptionsModal(false)} disabled={exportLoading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowPrintOptionsModal(false);
+                exportAttendance(pendingPrintGroup);
+              }}
+              disabled={exportLoading}
+            >
+              {exportLoading ? 'Opening...' : 'Print'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
