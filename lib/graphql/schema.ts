@@ -210,6 +210,11 @@ export const typeDefs = `#graphql
     myAttendanceStats(courseId: ID!): AttendanceStats!
     studentAttendanceStats(courseId: ID!, studentId: String!): AttendanceStats!
 
+    # Public student lookup by roll number - no auth required.
+    # Mirrors the existing public REST endpoint GET /api/student/marks?studentId=,
+    # used for the mobile app's "My Courses" list without a login step.
+    studentCourses(studentId: String!): [Course!]!
+
     # Instructor Queries
     instructorCourses: [Course!]!
     courseStudents(courseId: ID!): [StudentMarkSummary!]!

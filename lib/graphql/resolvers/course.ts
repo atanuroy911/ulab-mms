@@ -1,11 +1,16 @@
 import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
 import Exam from '@/models/Exam';
+import Student from '@/models/Student';
 import { requireAuth, type GraphQLContext } from '../auth';
 import type { Loaders } from '../dataloaders';
 
 interface CourseArgs {
   id: string;
+}
+
+interface StudentCoursesArgs {
+  studentId: string;
 }
 
 interface CreateCourseArgs {
@@ -93,6 +98,35 @@ export const courseResolvers = {
         numberOfStudents: course.numberOfStudents,
         isArchived: course.isArchived || false,
       };
+    },
+
+    studentCourses: async (_: any, { studentId }: StudentCoursesArgs) => {
+      await dbConnect();
+
+      const studentRecords = await Student.find({
+        studentId: { $regex: new RegExp(`^${studentId}$`, 'i') },
+      });
+
+      if (studentRecords.length === 0) {
+        return [];
+      }
+
+      const courseIds = studentRecords.map(record => record.courseId);
+      const courses = await Course.find({ _id: { $in: courseIds } }).sort({ createdAt: -1 });
+
+      return courses.map(course => ({
+        id: course._id.toString(),
+        name: course.name,
+        code: course.code,
+        semester: course.semester,
+        year: course.year,
+        section: course.section,
+        courseType: course.courseType,
+        classTime: course.classTime,
+        classRoom: course.classRoom,
+        numberOfStudents: course.numberOfStudents,
+        isArchived: course.isArchived || false,
+      }));
     },
 
     courseDetails: async (_: any, { courseId }: { courseId: string }, context: GraphQLContext & { loaders: Loaders }) => {
