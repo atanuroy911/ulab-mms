@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Exam from '@/models/Exam';
 import Course from '@/models/Course';
+import Mark from '@/models/Mark';
 
 // PUT - Update exam settings
 export async function PUT(
@@ -22,6 +23,12 @@ export async function PUT(
       await request.json();
 
     await dbConnect();
+
+    const existingExam = await Exam.findOne({ _id: id, userId: session.user.id });
+    if (!existingExam) {
+      return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+    }
+    const previousNumberOfCOs = existingExam.numberOfCOs || 0;
 
     const updateData: any = {};
 
@@ -83,6 +90,16 @@ export async function PUT(
 
     if (!exam) {
       return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+    }
+
+    // If the number of COs was reduced, any existing coMarks for this exam are now
+    // misaligned with the new CO count and could leak stale/wrong values into Course
+    // File export — clear them so teachers must re-enter CO breakdowns.
+    if (numberOfCOs !== undefined && numberOfCOs < previousNumberOfCOs) {
+      await Mark.updateMany(
+        { examId: id, coMarks: { $exists: true, $ne: null } },
+        { $set: { coMarks: null } }
+      );
     }
 
     if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {

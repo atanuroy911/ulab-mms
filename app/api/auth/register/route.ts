@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
+import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,13 @@ export async function POST(request: NextRequest) {
     }
 
     await dbConnect();
+
+    if (!(await isCredentialsLoginEnabled())) {
+      return NextResponse.json(
+        { error: 'Email/password sign-up is currently disabled. Please sign up with Google instead.' },
+        { status: 403 }
+      );
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });

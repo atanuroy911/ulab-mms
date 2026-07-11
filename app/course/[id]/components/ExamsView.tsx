@@ -30,7 +30,7 @@ interface ExamSettings {
 interface CourseSummary {
   courseType: 'Theory' | 'Lab';
   quizAggregation?: 'average' | 'best';
-  assignmentAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best' | 'sum';
   quizWeightage?: number;
   assignmentWeightage?: number;
   projectWeightage?: number;

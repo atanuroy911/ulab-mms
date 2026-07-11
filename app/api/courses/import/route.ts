@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
 
     await dbConnect();
 
-    // 1. Create the course
+    // 1. Create the course (coPoMapping.maxMarks is added after exams are created,
+    // since it needs to be remapped from exam displayName to the new exam ids)
     const newCourse = await Course.create({
       name: importData.course.name,
       code: importData.course.code,
@@ -41,7 +42,6 @@ export async function POST(request: NextRequest) {
       quizWeightage: importData.course.quizWeightage,
       assignmentAggregation: importData.course.assignmentAggregation,
       assignmentWeightage: importData.course.assignmentWeightage,
-      coPoMapping: importData.course.coPoMapping,
       userId: session.user.id,
     });
 
@@ -81,6 +81,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // 3b. Remap coPoMapping.maxMarks from exam displayName -> new exam id
+    if (importData.course.coPoMapping) {
+      const remappedMaxMarks: Record<string, number[]> = {};
+      const sourceMaxMarks = importData.course.coPoMapping.maxMarks || {};
+      for (const [displayName, maxMarks] of Object.entries(sourceMaxMarks)) {
+        const examInfo = examMap.get(displayName);
+        if (examInfo) {
+          remappedMaxMarks[examInfo.id.toString()] = maxMarks as number[];
+        }
+      }
+
+      newCourse.coPoMapping = {
+        mapping: importData.course.coPoMapping.mapping,
+        maxMarks: remappedMaxMarks,
+      };
+      await newCourse.save();
+    }
+
     // 4. Import marks
     for (const markData of importData.marks) {
       const studentId = studentMap.get(markData.studentId);
@@ -101,6 +119,7 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           rawMark: markData.rawMark,
           coMarks: markData.coMarks,
+          nonCoMark: markData.nonCoMark,
           questionMarks: markData.questionMarks,
           weightedMark,
         });

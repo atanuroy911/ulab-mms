@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import dbConnect from '@/lib/mongodb';
 import AdminCourse from '@/models/AdminCourse';
+import { verifyAdminToken } from '@/lib/adminAuth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-// GET all admin courses
+// GET all admin courses - readable by any signed-in teacher (used by the course-creation
+// combobox) as well as the admin dashboard's catalog manager.
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions as any);
+    const isAdmin = await verifyAdminToken(request);
+    if (!session && !isAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await dbConnect();
 
     const courses = await AdminCourse.find({}).sort({ courseCode: 1 });
@@ -22,6 +32,10 @@ export async function GET(request: NextRequest) {
 // POST create a new admin course
 export async function POST(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const { courseCode, courseTitle, creditHour, prerequisite, content } = await request.json();
 
     // Validation
@@ -80,6 +94,10 @@ export async function POST(request: NextRequest) {
 // PUT update an existing admin course
 export async function PUT(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const { _id, courseCode, courseTitle, creditHour, prerequisite, content } = await request.json();
 
     if (!_id) {
@@ -160,6 +178,10 @@ export async function PUT(request: NextRequest) {
 // DELETE a course
 export async function DELETE(request: NextRequest) {
   try {
+    if (!(await verifyAdminToken(request))) {
+      return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

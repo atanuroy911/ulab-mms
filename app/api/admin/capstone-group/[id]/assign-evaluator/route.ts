@@ -4,7 +4,7 @@ import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import User from '@/models/User';
 
-const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
+import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
 
 // Verify admin token
 async function verifyAdminToken(request: NextRequest): Promise<boolean> {

@@ -3,7 +3,9 @@ import dbConnect from '@/lib/mongodb';
 import { StoredFile } from '@/models/StoredFile';
 import { ResourceFolder } from '@/models/ResourceFolder';
 import mongoose from 'mongoose';
-import { getResourceAccess } from '@/lib/resourceAuth';
+import { getResourceAccess, getResourceWriteAccess } from '@/lib/resourceAuth';
+
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB - files are stored as Mongo documents
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,10 +59,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const access = await getResourceAccess(req);
+    const access = await getResourceWriteAccess(req);
     if (!access.authorized || !access.actorId) {
       return NextResponse.json(
-        { error: 'Unauthorized - please sign in' },
+        { error: 'Unauthorized - Admin access required' },
         { status: 401 }
       );
     }
@@ -74,6 +76,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'No file provided' },
         { status: 400 }
+      );
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: 'File is too large. Maximum size is 25MB.' },
+        { status: 413 }
       );
     }
 

@@ -1,5 +1,36 @@
 import { Student } from '../types';
 
+// Splits a single "ID <something> Name" line into [id, name], tolerating
+// comma-, hyphen-, or plain whitespace-separated input (e.g. pasted straight
+// from a spreadsheet, or reformatted by an LLM). Tries the least ambiguous
+// separator first so IDs that themselves contain hyphens (e.g. "2021-1-60-001")
+// aren't split on their own internal hyphens.
+function splitIdAndName(line: string): [string, string] | null {
+  const stripQuotes = (part: string) => part.trim().replace(/^["']|["']$/g, '');
+
+  if (line.includes(',')) {
+    const [id, ...rest] = line.split(',');
+    const name = rest.join(',');
+    if (id.trim() && name.trim()) return [stripQuotes(id), stripQuotes(name)];
+  }
+
+  // Hyphen surrounded by spaces reads unambiguously as a separator, unlike a
+  // bare hyphen which is often just part of the ID itself.
+  if (/\s-\s/.test(line)) {
+    const idx = line.search(/\s-\s/);
+    const id = line.slice(0, idx);
+    const name = line.slice(idx + 3);
+    if (id.trim() && name.trim()) return [stripQuotes(id), stripQuotes(name)];
+  }
+
+  const whitespaceMatch = line.match(/^(\S+)\s+(.+)$/);
+  if (whitespaceMatch) {
+    return [stripQuotes(whitespaceMatch[1]), stripQuotes(whitespaceMatch[2])];
+  }
+
+  return null;
+}
+
 export const parseCSV = (csvText: string): Student[] => {
   const lines = csvText.trim().split('\n');
   const students: Student[] = [];
@@ -8,18 +39,20 @@ export const parseCSV = (csvText: string): Student[] => {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Split by comma, handling quoted values
-    const parts = line.split(',').map(part => part.trim().replace(/^["']|["']$/g, ''));
-    
-    if (parts.length >= 2) {
-      const [id, name] = parts;
-      if (id && name) {
-        students.push({
-          id,
-          name,
-          marks: {}
-        });
-      }
+    const parsed = splitIdAndName(line);
+    if (!parsed) continue;
+
+    // A leading "-" on the ID is common when a spreadsheet renders a numeric
+    // ID as a negative-looking value; it's not part of the real ID.
+    const id = parsed[0].replace(/^-+/, '').trim();
+    const name = parsed[1].trim();
+
+    if (id && name) {
+      students.push({
+        id,
+        name,
+        marks: {}
+      });
     }
   }
 

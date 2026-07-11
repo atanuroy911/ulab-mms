@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
             quizWeightage: course.quizWeightage,
             assignmentAggregation: course.assignmentAggregation,
             assignmentWeightage: course.assignmentWeightage,
+            gradingScale: course.gradingScale,
           },
           exams: exams.map(exam => ({
             _id: exam._id,

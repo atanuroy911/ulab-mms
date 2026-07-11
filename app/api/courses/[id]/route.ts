@@ -6,6 +6,7 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import { cascadeDeleteCourseData } from '@/lib/courseCascadeDelete';
 
 // GET a specific course
 export async function GET(
@@ -88,6 +89,8 @@ export async function PUT(
       classRoom,
       numberOfStudents,
       classRepresentativeId,
+      aliasEnabled,
+      alternateCode,
     } = body;
 
     await dbConnect();
@@ -166,6 +169,19 @@ export async function PUT(
       updateData.classRepresentativeId = classRepresentativeId;
     }
 
+    if (aliasEnabled !== undefined) {
+      if (aliasEnabled && !String(alternateCode || '').trim()) {
+        return NextResponse.json(
+          { error: 'Please provide a New Code' },
+          { status: 400 }
+        );
+      }
+      updateData.aliasEnabled = Boolean(aliasEnabled);
+      updateData.alternateCode = aliasEnabled ? String(alternateCode).trim() : '';
+    } else if (alternateCode !== undefined) {
+      updateData.alternateCode = String(alternateCode).trim();
+    }
+
     const course = await Course.findOneAndUpdate(
       { _id: id, userId: session.user.id },
       updateData,
@@ -211,12 +227,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Delete all related data
-    await Promise.all([
-      Student.deleteMany({ courseId: id }),
-      Exam.deleteMany({ courseId: id }),
-      Mark.deleteMany({ courseId: id }),
-    ]);
+    // Delete all related data (students, exams, marks, attendance, project & capstone data)
+    await cascadeDeleteCourseData(id);
 
     return NextResponse.json(
       { message: 'Course and all related data deleted successfully' },

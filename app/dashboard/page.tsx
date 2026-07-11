@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import { CourseCombobox } from '@/app/components/CourseCombobox';
@@ -28,6 +28,8 @@ interface Course {
   courseType: 'Theory' | 'Lab';
   isArchived: boolean;
   createdAt: string;
+  aliasEnabled?: boolean;
+  alternateCode?: string;
 }
 
 interface AdminCourse {
@@ -53,6 +55,8 @@ export default function Dashboard() {
   const [duplicating, setDuplicating] = useState(false);
   const [archiving, setArchiving] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [deletingCourseLoading, setDeletingCourseLoading] = useState(false);
   const [duplicatingCourse, setDuplicatingCourse] = useState<Course | null>(null);
   const [duplicateMode, setDuplicateMode] = useState<'copy' | 'duplicate'>('duplicate');
   const [formData, setFormData] = useState({
@@ -60,9 +64,14 @@ export default function Dashboard() {
     code: '',
     semester: 'Spring',
     year: new Date().getFullYear(),
-    section: 'A',
+    section: '1',
     courseType: 'Theory' as 'Theory' | 'Lab',
+    aliasEnabled: false,
+    alternateCode: '',
+    classTime: '',
+    classRoom: '',
   });
+  const [addWizardStep, setAddWizardStep] = useState(0);
   const [selectedAdminCourse, setSelectedAdminCourse] = useState<AdminCourse | null>(null);
   const [isCustomCourse, setIsCustomCourse] = useState(false);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
@@ -74,6 +83,8 @@ export default function Dashboard() {
     year: new Date().getFullYear(),
     section: 'A',
     courseType: 'Theory' as 'Theory' | 'Lab',
+    aliasEnabled: false,
+    alternateCode: '',
   });
   const [duplicateFormData, setDuplicateFormData] = useState({
     name: '',
@@ -160,9 +171,25 @@ export default function Dashboard() {
     }
   }, [formData.code, formData.semester, formData.year, formData.section, showAddModal]);
 
+  const ADD_WIZARD_STEPS = ['Course Identity', 'Details', 'New Code', 'Review'];
+
+  const isAddStepValid = (step: number) => {
+    if (step === 0) return Boolean(formData.name.trim() && formData.code.trim());
+    if (step === 1) return Boolean(formData.semester && formData.year && formData.section.trim() && formData.courseType && !duplicateError && !checkingDuplicate);
+    if (step === 2) return !formData.aliasEnabled || Boolean(formData.alternateCode.trim());
+    return true;
+  };
+
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (addWizardStep < ADD_WIZARD_STEPS.length - 1) {
+      if (isAddStepValid(addWizardStep)) {
+        setAddWizardStep(addWizardStep + 1);
+      }
+      return;
+    }
 
     try {
       const response = await fetch('/api/courses', {
@@ -185,13 +212,18 @@ export default function Dashboard() {
       setSelectedAdminCourse(null);
       setIsCustomCourse(false);
       setDuplicateError('');
+      setAddWizardStep(0);
       setFormData({
         name: '',
         code: '',
         semester: 'Spring',
         year: new Date().getFullYear(),
-        section: 'A',
+        section: '1',
         courseType: 'Theory',
+        aliasEnabled: false,
+        alternateCode: '',
+        classTime: '',
+        classRoom: '',
       });
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -222,26 +254,27 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm('Are you sure you want to delete this course? All students, exams, and marks will be deleted.')) {
-      return;
-    }
+  const confirmDeleteCourse = async () => {
+    if (!deletingCourse) return;
+    setDeletingCourseLoading(true);
 
     try {
-      const response = await fetch(`/api/courses/${courseId}`, {
+      const response = await fetch(`/api/courses/${deletingCourse._id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        const deletedCourse = courses.find(c => c._id === courseId);
-        notify.course.deleted(deletedCourse?.name);
-        setCourses(courses.filter((c) => c._id !== courseId));
+        notify.course.deleted(deletingCourse.name);
+        setCourses(courses.filter((c) => c._id !== deletingCourse._id));
+        setDeletingCourse(null);
       } else {
         notify.course.deleteError();
       }
     } catch (err) {
       console.error('Error deleting course:', err);
       notify.course.deleteError();
+    } finally {
+      setDeletingCourseLoading(false);
     }
   };
 
@@ -278,6 +311,8 @@ export default function Dashboard() {
         year: new Date().getFullYear(),
         section: 'A',
         courseType: 'Theory',
+        aliasEnabled: false,
+        alternateCode: '',
       });
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -292,6 +327,8 @@ export default function Dashboard() {
       semester: course.semester,
       year: course.year,
       section: course.section,
+      aliasEnabled: Boolean(course.aliasEnabled),
+      alternateCode: course.alternateCode || '',
       courseType: course.courseType,
     });
     setShowEditModal(true);
@@ -586,8 +623,8 @@ export default function Dashboard() {
                           <Archive className="h-4 w-4 mr-2" />
                           {archiving === course._id ? 'Archiving...' : 'Archive'}
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteCourse(course._id)}
+                        <DropdownMenuItem
+                          onClick={() => setDeletingCourse(course)}
                           className="text-destructive"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
@@ -630,15 +667,35 @@ export default function Dashboard() {
           setIsCustomCourse(false);
           setDuplicateError('');
           setError('');
+          setAddWizardStep(0);
         }
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Course</DialogTitle>
             <DialogDescription>
-              Select a course from the catalogue or create a custom one
+              Step {addWizardStep + 1} of {ADD_WIZARD_STEPS.length}: {ADD_WIZARD_STEPS[addWizardStep]}
             </DialogDescription>
           </DialogHeader>
+
+          <div className="flex items-center gap-2">
+            {ADD_WIZARD_STEPS.map((stepLabel, idx) => (
+              <div key={stepLabel} className="flex flex-1 items-center gap-2">
+                <div
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                    idx === addWizardStep
+                      ? 'bg-primary text-primary-foreground'
+                      : idx < addWizardStep
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {idx + 1}
+                </div>
+                {idx < ADD_WIZARD_STEPS.length - 1 && <div className={`h-px flex-1 ${idx < addWizardStep ? 'bg-primary/40' : 'bg-border'}`} />}
+              </div>
+            ))}
+          </div>
 
           {error && (
             <Alert variant="destructive">
@@ -653,155 +710,258 @@ export default function Dashboard() {
           )}
 
           <form onSubmit={handleAddCourse} className="space-y-4">
-            {/* Course Selection from Catalogue */}
-            <div className="space-y-2">
-              <Label>Select from Course Catalogue</Label>
-              <CourseCombobox
-                onSelect={handleCourseSelect}
-                selectedCourse={selectedAdminCourse}
-              />
-              <p className="text-xs text-muted-foreground">
-                Search by course code or title. Select &quot;Create custom course&quot; if not found.
-              </p>
-            </div>
+            {addWizardStep === 0 && (
+              <>
+                {/* Course Selection from Catalogue */}
+                <div className="space-y-2">
+                  <Label>Select from Course Catalogue</Label>
+                  <CourseCombobox
+                    onSelect={handleCourseSelect}
+                    selectedCourse={selectedAdminCourse}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Search by course code or title. Select &quot;Create custom course&quot; if not found.
+                  </p>
+                </div>
 
-            {/* Show course info if selected from catalogue */}
-            {selectedAdminCourse && (
-              <Card className="bg-muted/50">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Info className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <CardTitle className="text-base">{selectedAdminCourse.courseTitle}</CardTitle>
-                      <CardDescription className="text-xs mt-1">
-                        {selectedAdminCourse.courseCode} • {selectedAdminCourse.creditHour} Credit Hour{selectedAdminCourse.creditHour > 1 ? 's' : ''}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                {selectedAdminCourse.prerequisite && (
-                  <CardContent className="pt-0 pb-3">
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Prerequisite:</strong> {selectedAdminCourse.prerequisite}
-                    </p>
-                  </CardContent>
+                {/* Show course info if selected from catalogue */}
+                {selectedAdminCourse && (
+                  <Card className="bg-muted/50">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Info className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <CardTitle className="text-base">{selectedAdminCourse.courseTitle}</CardTitle>
+                          <CardDescription className="text-xs mt-1">
+                            {selectedAdminCourse.courseCode} • {selectedAdminCourse.creditHour} Credit Hour{selectedAdminCourse.creditHour > 1 ? 's' : ''}
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    {selectedAdminCourse.prerequisite && (
+                      <CardContent className="pt-0 pb-3">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Prerequisite:</strong> {selectedAdminCourse.prerequisite}
+                        </p>
+                      </CardContent>
+                    )}
+                  </Card>
                 )}
-              </Card>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="course-name">Course Name</Label>
+                    <Input
+                      id="course-name"
+                      type="text"
+                      required
+                      disabled={!isCustomCourse && selectedAdminCourse !== null}
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      placeholder="e.g., Data Structures"
+                      className={!isCustomCourse && selectedAdminCourse ? 'bg-muted' : ''}
+                    />
+                    {!isCustomCourse && selectedAdminCourse && (
+                      <p className="text-xs text-muted-foreground">
+                        Auto-filled from catalogue
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="course-code">Course Code</Label>
+                    <Input
+                      id="course-code"
+                      type="text"
+                      required
+                      disabled={!isCustomCourse && selectedAdminCourse !== null}
+                      value={formData.code}
+                      onChange={(e) =>
+                        setFormData({ ...formData, code: e.target.value })
+                      }
+                      placeholder="e.g., CSE201"
+                      className={!isCustomCourse && selectedAdminCourse ? 'bg-muted' : ''}
+                    />
+                    {!isCustomCourse && selectedAdminCourse && (
+                      <p className="text-xs text-muted-foreground">
+                        Auto-filled from catalogue
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="course-name">Course Name</Label>
-                <Input
-                  id="course-name"
-                  type="text"
-                  required
-                  disabled={!isCustomCourse && selectedAdminCourse !== null}
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="e.g., Data Structures"
-                  className={!isCustomCourse && selectedAdminCourse ? 'bg-muted' : ''}
-                />
-                {!isCustomCourse && selectedAdminCourse && (
+            {addWizardStep === 1 && (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="semester">Semester</Label>
+                    <select
+                      id="semester"
+                      value={formData.semester}
+                      onChange={(e) =>
+                        setFormData({ ...formData, semester: e.target.value })
+                      }
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="Spring">Spring</option>
+                      <option value="Summer">Summer</option>
+                      <option value="Fall">Fall</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="year">Year</Label>
+                    <Input
+                      id="year"
+                      type="number"
+                      required
+                      min="2000"
+                      max="2100"
+                      value={formData.year}
+                      onChange={(e) =>
+                        setFormData({ ...formData, year: parseInt(e.target.value) })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="section">Section</Label>
+                    <Input
+                      id="section"
+                      type="text"
+                      required
+                      value={formData.section}
+                      onChange={(e) =>
+                        setFormData({ ...formData, section: e.target.value.toUpperCase() })
+                      }
+                      placeholder="e.g., 1"
+                      maxLength={5}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="course-type">Course Type</Label>
+                  <select
+                    id="course-type"
+                    value={formData.courseType}
+                    onChange={(e) =>
+                      setFormData({ ...formData, courseType: e.target.value as 'Theory' | 'Lab' })
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="Theory">Theory Course</option>
+                    <option value="Lab">Lab Course</option>
+                  </select>
                   <p className="text-xs text-muted-foreground">
-                    Auto-filled from catalogue
+                    {formData.courseType === 'Theory'
+                      ? '📖 Theory courses include Midterm and Final exams with CO breakdown'
+                      : '🔬 Lab courses include Lab Final and OEL/CE Project'}
                   </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="class-time">Class Time (optional)</Label>
+                    <Input
+                      id="class-time"
+                      value={formData.classTime}
+                      onChange={(e) => setFormData({ ...formData, classTime: e.target.value })}
+                      placeholder="e.g., 10:00 AM - 12:00 PM"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="class-room">Class Room (optional)</Label>
+                    <Input
+                      id="class-room"
+                      value={formData.classRoom}
+                      onChange={(e) => setFormData({ ...formData, classRoom: e.target.value })}
+                      placeholder="e.g., Lab 101"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Used to pre-fill the Attendance tab&apos;s class settings. You can change these later.
+                </p>
+              </>
+            )}
+
+            {addWizardStep === 2 && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Does this course have a New Code for some students?</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Use this if some students (e.g. a newer admission batch) are officially registered under a different
+                    course code for the same class. You&apos;ll be able to choose which students use it afterward.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={!formData.aliasEnabled ? 'default' : 'outline'}
+                      onClick={() => setFormData({ ...formData, aliasEnabled: false, alternateCode: '' })}
+                    >
+                      No
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={formData.aliasEnabled ? 'default' : 'outline'}
+                      onClick={() => setFormData({ ...formData, aliasEnabled: true })}
+                    >
+                      Yes
+                    </Button>
+                  </div>
+                </div>
+
+                {formData.aliasEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="alternate-code">New Code</Label>
+                    <Input
+                      id="alternate-code"
+                      value={formData.alternateCode}
+                      onChange={(e) => setFormData({ ...formData, alternateCode: e.target.value })}
+                      placeholder="e.g., CSE470B"
+                    />
+                  </div>
                 )}
               </div>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="course-code">Course Code</Label>
-                <Input
-                  id="course-code"
-                  type="text"
-                  required
-                  disabled={!isCustomCourse && selectedAdminCourse !== null}
-                  value={formData.code}
-                  onChange={(e) =>
-                    setFormData({ ...formData, code: e.target.value })
-                  }
-                  placeholder="e.g., CSE201"
-                  className={!isCustomCourse && selectedAdminCourse ? 'bg-muted' : ''}
-                />
-                {!isCustomCourse && selectedAdminCourse && (
-                  <p className="text-xs text-muted-foreground">
-                    Auto-filled from catalogue
-                  </p>
-                )}
+            {addWizardStep === 3 && (
+              <div className="space-y-2 rounded-lg border divide-y">
+                <div className="flex items-center justify-between p-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Course</div>
+                    <div className="font-medium">{formData.name || '—'} ({formData.code || '—'})</div>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setAddWizardStep(0)}>Edit</Button>
+                </div>
+                <div className="flex items-center justify-between p-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Details</div>
+                    <div className="font-medium">{formData.semester} {formData.year} • Section {formData.section} • {formData.courseType}</div>
+                    {(formData.classTime || formData.classRoom) && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {[formData.classTime, formData.classRoom].filter(Boolean).join(' • ')}
+                      </div>
+                    )}
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setAddWizardStep(1)}>Edit</Button>
+                </div>
+                <div className="flex items-center justify-between p-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">New Code</div>
+                    <div className="font-medium">{formData.aliasEnabled ? formData.alternateCode : 'Not used'}</div>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setAddWizardStep(2)}>Edit</Button>
+                </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="semester">Semester</Label>
-                <select
-                  id="semester"
-                  value={formData.semester}
-                  onChange={(e) =>
-                    setFormData({ ...formData, semester: e.target.value })
-                  }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="Spring">Spring</option>
-                  <option value="Summer">Summer</option>
-                  <option value="Fall">Fall</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="year">Year</Label>
-                <Input
-                  id="year"
-                  type="number"
-                  required
-                  min="2000"
-                  max="2100"
-                  value={formData.year}
-                  onChange={(e) =>
-                    setFormData({ ...formData, year: parseInt(e.target.value) })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="section">Section</Label>
-                <Input
-                  id="section"
-                  type="text"
-                  required
-                  value={formData.section}
-                  onChange={(e) =>
-                    setFormData({ ...formData, section: e.target.value.toUpperCase() })
-                  }
-                  placeholder="e.g., A"
-                  maxLength={5}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="course-type">Course Type</Label>
-              <select
-                id="course-type"
-                value={formData.courseType}
-                onChange={(e) =>
-                  setFormData({ ...formData, courseType: e.target.value as 'Theory' | 'Lab' })
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="Theory">Theory Course</option>
-                <option value="Lab">Lab Course</option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                {formData.courseType === 'Theory' 
-                  ? '📖 Theory courses include Midterm and Final exams with CO breakdown'
-                  : '🔬 Lab courses include Lab Final and OEL/CE Project'}
-              </p>
-            </div>
+            )}
 
             <DialogFooter>
               <Button
@@ -813,23 +973,35 @@ export default function Dashboard() {
                   setDuplicateError('');
                   setSelectedAdminCourse(null);
                   setIsCustomCourse(false);
+                  setAddWizardStep(0);
                 }}
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={!!duplicateError || checkingDuplicate}
-              >
-                {checkingDuplicate ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Checking...
-                  </>
-                ) : (
-                  'Create Course'
-                )}
-              </Button>
+              {addWizardStep > 0 && (
+                <Button type="button" variant="outline" onClick={() => setAddWizardStep(addWizardStep - 1)}>
+                  Back
+                </Button>
+              )}
+              {addWizardStep < ADD_WIZARD_STEPS.length - 1 ? (
+                <Button type="submit" disabled={!isAddStepValid(addWizardStep)}>
+                  Next
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  disabled={!!duplicateError || checkingDuplicate}
+                >
+                  {checkingDuplicate ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    'Create Course'
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
@@ -937,10 +1109,38 @@ export default function Dashboard() {
                 <option value="Lab">Lab Course</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                {editFormData.courseType === 'Theory' 
+                {editFormData.courseType === 'Theory'
                   ? '📖 Theory courses include Midterm and Final exams with CO breakdown'
                   : '🔬 Lab courses include Lab Final and OEL/CE Project'}
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Does this course have a New Code for some students?</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={!editFormData.aliasEnabled ? 'default' : 'outline'}
+                  onClick={() => setEditFormData({ ...editFormData, aliasEnabled: false, alternateCode: '' })}
+                >
+                  No
+                </Button>
+                <Button
+                  type="button"
+                  variant={editFormData.aliasEnabled ? 'default' : 'outline'}
+                  onClick={() => setEditFormData({ ...editFormData, aliasEnabled: true })}
+                >
+                  Yes
+                </Button>
+              </div>
+              {editFormData.aliasEnabled && (
+                <Input
+                  value={editFormData.alternateCode}
+                  onChange={(e) => setEditFormData({ ...editFormData, alternateCode: e.target.value })}
+                  placeholder="e.g., CSE470B"
+                  className="mt-2"
+                />
+              )}
             </div>
 
             <DialogFooter>
@@ -955,7 +1155,9 @@ export default function Dashboard() {
               >
                 Cancel
               </Button>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit" disabled={editFormData.aliasEnabled && !editFormData.alternateCode.trim()}>
+                Save Changes
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1161,6 +1363,40 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={deletingCourse !== null} onOpenChange={(open) => !open && setDeletingCourse(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Delete Course</DialogTitle>
+            </div>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertDescription>
+              <p>
+                This will permanently delete <strong>{deletingCourse?.name}</strong> ({deletingCourse?.code}) and everything in it,
+                including:
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>All students enrolled in this course</li>
+                <li>All exams and marks</li>
+                <li>All attendance sessions and records</li>
+                <li>All project group and marks data</li>
+                <li>All capstone data tied to this course, if any</li>
+              </ul>
+              <p className="mt-2 font-medium">This cannot be undone.</p>
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingCourse(null)} disabled={deletingCourseLoading}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteCourse} disabled={deletingCourseLoading}>
+              {deletingCourseLoading ? 'Deleting...' : 'Delete Course'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

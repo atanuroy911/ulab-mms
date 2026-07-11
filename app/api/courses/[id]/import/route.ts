@@ -45,7 +45,8 @@ export async function POST(
     await Exam.deleteMany({ courseId });
     await Mark.deleteMany({ courseId });
 
-    // 2. Update course settings
+    // 2. Update course settings (coPoMapping.maxMarks is applied after exams are
+    // recreated below, since it needs to be remapped from exam displayName to the new exam ids)
     await Course.findByIdAndUpdate(courseId, {
       showFinalGrade: importData.course.showFinalGrade,
       quizAggregation: importData.course.quizAggregation,
@@ -90,6 +91,25 @@ export async function POST(
       });
     }
 
+    // 4b. Remap coPoMapping.maxMarks from exam displayName -> new exam id
+    if (importData.course.coPoMapping) {
+      const remappedMaxMarks: Record<string, number[]> = {};
+      const sourceMaxMarks = importData.course.coPoMapping.maxMarks || {};
+      for (const [displayName, maxMarks] of Object.entries(sourceMaxMarks)) {
+        const examInfo = examMap.get(displayName);
+        if (examInfo) {
+          remappedMaxMarks[examInfo.id.toString()] = maxMarks as number[];
+        }
+      }
+
+      await Course.findByIdAndUpdate(courseId, {
+        coPoMapping: {
+          mapping: importData.course.coPoMapping.mapping,
+          maxMarks: remappedMaxMarks,
+        },
+      });
+    }
+
     // 5. Import marks
     for (const markData of importData.marks) {
       const studentId = studentMap.get(markData.studentId);
@@ -109,6 +129,7 @@ export async function POST(
           courseId,
           rawMark: markData.rawMark,
           coMarks: markData.coMarks,
+          nonCoMark: markData.nonCoMark,
           questionMarks: markData.questionMarks,
           weightedMark,
           userId: session.user.id,

@@ -673,7 +673,28 @@ export default function AddMarkModal({
                     max={selectedExam.totalMarks}
                     step="0.01"
                     value={rawMark}
-                    onChange={(e) => setRawMark(e.target.value)}
+                    onChange={(e) => {
+                      const newRawMark = e.target.value;
+                      setRawMark(newRawMark);
+
+                      if (numberOfCOs > 0) {
+                        const rawMarkNum = parseFloat(newRawMark);
+                        const examMaxMarks = coPoMaxMarks[selectedExamId];
+
+                        if (!isNaN(rawMarkNum) && rawMarkNum === selectedExam.totalMarks) {
+                          // Full marks: autofill each CO to its configured max, leave unconfigured ones blank
+                          setCoMarks(prev => prev.map((val, i) => {
+                            if (val.trim() !== '') return val;
+                            const coMax = examMaxMarks?.[i];
+                            return coMax !== undefined && coMax > 0 ? coMax.toString() : val;
+                          }));
+                        } else if (!isNaN(rawMarkNum) && rawMarkNum === 0) {
+                          // Zero marks: autofill all COs and non-CO to 0
+                          setCoMarks(prev => prev.map(() => '0'));
+                          setNonCoMark('0');
+                        }
+                      }
+                    }}
                     onKeyDown={(e) => handleKeyDown(e, 'rawMark')}
                     className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
                     placeholder="Enter raw mark"

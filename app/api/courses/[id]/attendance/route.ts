@@ -6,6 +6,7 @@ import Student from '@/models/Student';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
+import { buildAbsentFillRecords } from '@/lib/attendanceHelpers';
 
 async function resolveParams(params: any) {
   const resolved = await params;
@@ -56,6 +57,11 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
     const activeSession = await AttendanceSession.findOne({ courseId: new mongoose.Types.ObjectId(courseId), open: true });
 
     if (activeSession) {
+      // Closing a session: anyone not already marked present/absent is now absent.
+      const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
+      const fillRecords = buildAbsentFillRecords(activeSession.records, allStudents);
+      activeSession.records.push(...(fillRecords as any));
+
       activeSession.open = false;
       await activeSession.save();
       return NextResponse.json({ session: activeSession, action: 'closed' });
@@ -119,14 +125,20 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
     }
 
     const body = await req.json();
-    const { sessionId, studentId, status } = body as {
+    const { sessionId, studentId, studentIds, status, applyToAll } = body as {
       sessionId?: string;
       studentId?: string;
+      studentIds?: string[];
       status?: 'present' | 'absent';
+      applyToAll?: boolean;
     };
 
-    if (!sessionId || !studentId || !status) {
-      return NextResponse.json({ error: 'sessionId, studentId and status are required' }, { status: 400 });
+    if (!sessionId || !status || !['present', 'absent'].includes(status)) {
+      return NextResponse.json({ error: 'sessionId and a valid status (present/absent) are required' }, { status: 400 });
+    }
+
+    if (!applyToAll && !studentId && !(Array.isArray(studentIds) && studentIds.length > 0)) {
+      return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
     }
 
     const targetSession = await AttendanceSession.findOne({
@@ -136,6 +148,48 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
 
     if (!targetSession) {
       return NextResponse.json({ error: 'Attendance session not found' }, { status: 404 });
+    }
+
+    if (Array.isArray(studentIds) && studentIds.length > 0) {
+      const matchedStudents = await Student.find({
+        _id: { $in: studentIds },
+        courseId: new mongoose.Types.ObjectId(courseId),
+      }).lean();
+
+      const now = new Date();
+      const recordByStudentId = new Map(
+        targetSession.records.map((record) => [String(record.studentId), record])
+      );
+
+      for (const student of matchedStudents) {
+        const record = {
+          studentId: student._id,
+          status,
+          recordedAt: now,
+          markedBy: 'auto' as const,
+          studentIdString: student.studentId,
+        };
+        recordByStudentId.set(String(student._id), record as any);
+      }
+
+      targetSession.records = Array.from(recordByStudentId.values()) as any;
+      await targetSession.save();
+      return NextResponse.json({ session: targetSession, matchedCount: matchedStudents.length });
+    }
+
+    if (applyToAll) {
+      const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
+      const now = new Date();
+      targetSession.records = allStudents.map((student) => ({
+        studentId: student._id,
+        status,
+        recordedAt: now,
+        markedBy: 'manual',
+        studentIdString: student.studentId,
+      })) as any;
+
+      await targetSession.save();
+      return NextResponse.json({ session: targetSession });
     }
 
     const student = await Student.findOne({ _id: studentId, courseId: new mongoose.Types.ObjectId(courseId) });

@@ -40,6 +40,19 @@ export async function GET(
     const marks = await Mark.find({ courseId });
     const attendanceSessions = await AttendanceSession.find({ courseId });
 
+    // coPoMapping.maxMarks is keyed by exam _id, but exams get brand-new _ids on
+    // import/duplicate. Re-key by exam displayName here so import can remap it to
+    // the newly created exam ids (see courses/import and courses/[id]/import routes).
+    const maxMarksByExamName: Record<string, number[]> = {};
+    if (course.coPoMapping?.maxMarks) {
+      for (const exam of exams) {
+        const examMax = course.coPoMapping.maxMarks[exam._id.toString()];
+        if (examMax) {
+          maxMarksByExamName[exam.displayName] = examMax;
+        }
+      }
+    }
+
     const exportData = {
       version: '1.0',
       exportDate: new Date().toISOString(),
@@ -56,7 +69,10 @@ export async function GET(
         assignmentWeightage: course.assignmentWeightage,
         projectWeightage: course.projectWeightage,
         gradingScale: course.gradingScale,
-        coPoMapping: course.coPoMapping,
+        coPoMapping: {
+          mapping: course.coPoMapping?.mapping,
+          maxMarks: maxMarksByExamName,
+        },
       },
       students: students.map(student => ({
         studentId: student.studentId,
@@ -81,6 +97,7 @@ export async function GET(
           examDisplayName: exam?.displayName,
           rawMark: mark.rawMark,
           coMarks: mark.coMarks,
+          nonCoMark: mark.nonCoMark,
           questionMarks: mark.questionMarks,
           weightedMark: mark.weightedMark,
         };
@@ -113,7 +130,7 @@ export async function GET(
         return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
       };
 
-      const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best'): any => {
+      const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best' | 'sum'): any => {
         const categoryExams = exams.filter((e: any) => e.examCategory === category);
         const categoryMarks = marks.filter((m: any) =>
           m.studentId.toString() === studentId.toString() &&
@@ -144,6 +161,22 @@ export async function GET(
 
           return {
             rawMark: weightedMark,
+            totalMarks: categoryWeightage,
+            isAggregated: true,
+          };
+        }
+
+        if (aggregationMode === 'sum') {
+          const sumRaw = categoryMarks.reduce((sum: number, mark: any) => sum + mark.rawMark, 0);
+          const sumTotal = categoryMarks.reduce((sum: number, mark: any) => {
+            const exam = categoryExams.find((e: any) => e._id.toString() === mark.examId.toString());
+            return exam ? sum + exam.totalMarks : sum;
+          }, 0);
+
+          const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
+
+          return {
+            rawMark: weightedSum,
             totalMarks: categoryWeightage,
             isAggregated: true,
           };
@@ -269,7 +302,8 @@ export async function GET(
       }
 
       if (hasAssignments && course.assignmentWeightage) {
-        headers.push(`Assignment (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
+        const assignmentLabel = course.courseType === 'Lab' ? 'Assessment' : 'Assignment';
+        headers.push(`${assignmentLabel} (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
       }
 
       if (hasProjects && course.projectWeightage) {

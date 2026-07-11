@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { calculateLetterGrade } from '@/app/utils/grading';
 import { Copy, Check } from 'lucide-react';
 
@@ -22,6 +23,12 @@ export default function UrmsGradeSheet({
   calculateFinalGrade,
 }: UrmsGradeSheetProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [activeCode, setActiveCode] = useState<'old' | 'new'>('old');
+
+  const hasNewCode = Boolean(course?.aliasEnabled && course?.alternateCode);
+  const visibleStudents = hasNewCode
+    ? students.filter((student) => (activeCode === 'new' ? student.useAlias : !student.useAlias))
+    : students;
 
   const getStudentGrade = (studentId: string) => {
     const gradeData = calculateFinalGrade(studentId);
@@ -45,6 +52,17 @@ export default function UrmsGradeSheet({
           </SheetDescription>
         </SheetHeader>
 
+        {hasNewCode && (
+          <div className="px-6 pt-4 shrink-0 bg-muted">
+            <Tabs value={activeCode} onValueChange={(value) => setActiveCode(value as 'old' | 'new')}>
+              <TabsList className="w-full">
+                <TabsTrigger value="old">Old Code ({course.code})</TabsTrigger>
+                <TabsTrigger value="new">New Code ({course.alternateCode})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
+
         <div className="flex-1 p-4 bg-muted/10 flex flex-col min-h-0">
           <div className="bg-background rounded-md border shadow-sm flex-1 overflow-y-auto relative">
             <table className="w-full text-sm text-left">
@@ -57,11 +75,11 @@ export default function UrmsGradeSheet({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {students.map((student) => {
+                {visibleStudents.map((student) => {
                   const gradeObj = getStudentGrade(student._id);
                   const gradeDisplay = gradeObj ? gradeObj.display : 'F';
                   const gradeLetter = gradeObj ? gradeObj.letter : 'F';
-                  
+
                   return (
                     <tr key={student._id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-3 font-mono text-sm">{student.studentId}</td>

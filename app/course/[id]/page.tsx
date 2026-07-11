@@ -5,7 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { parseCSV } from '@/app/utils/csv';
+import { ImportStudentsModal } from './components/ImportStudentsModal';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
@@ -14,6 +14,7 @@ import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
+import BulkPasteMarkModal from '@/app/components/BulkPasteMarkModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
 import ProjectView from './components/ProjectView';
@@ -55,7 +56,8 @@ import {
   BookOpen,
   FlaskConical,
   Edit,
-  Menu
+  Menu,
+  Tag
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -66,6 +68,7 @@ interface Student {
   studentId: string;
   name: string;
   withdrawn?: boolean;
+  useAlias?: boolean;
 }
 
 interface Exam {
@@ -100,7 +103,7 @@ interface Course {
   showFinalGrade: boolean;
   section: string;
   quizAggregation?: 'average' | 'best';
-  assignmentAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best' | 'sum';
   quizWeightage?: number;
   assignmentWeightage?: number;
   projectWeightage?: number;
@@ -109,6 +112,8 @@ interface Course {
     maxMarks: Record<string, number[]>;
     mapping: boolean[][];
   };
+  aliasEnabled?: boolean;
+  alternateCode?: string;
 }
 
 export default function CoursePage() {
@@ -124,7 +129,7 @@ export default function CoursePage() {
   const [loading, setLoading] = useState(true);
 
   // Modal states
-  const [showImportModal, setShowImportModal] = useState(false);
+  const [showImportStudentsModal, setShowImportStudentsModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
   const [showMarkModal, setShowMarkModal] = useState(false);
   const [showExamSettings, setShowExamSettings] = useState<string | null>(null);
@@ -142,7 +147,7 @@ export default function CoursePage() {
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
-  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
+  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
   const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
@@ -155,7 +160,6 @@ export default function CoursePage() {
   const [selectedExamsForAction, setSelectedExamsForAction] = useState<string[]>([]);
   const [confirmationStep, setConfirmationStep] = useState(0);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showBulkAddStudentModal, setShowBulkAddStudentModal] = useState(false);
   const [showEditStudentModal, setShowEditStudentModal] = useState(false);
   const [studentToEdit, setStudentToEdit] = useState<Student | null>(null);
   const [editStudentData, setEditStudentData] = useState({ studentId: '', name: '' });
@@ -164,6 +168,10 @@ export default function CoursePage() {
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
+  const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
+  const [aliasCandidates, setAliasCandidates] = useState<Array<{ _id: string; studentId: string; name: string }>>([]);
+  const [showAliasCategorizeModal, setShowAliasCategorizeModal] = useState(false);
+  const [aliasCategorizing, setAliasCategorizing] = useState(false);
   const [isAutoCalculatingAttendance, setIsAutoCalculatingAttendance] = useState(false);
   // CO marks warning session state: tracks exam IDs the user has dismissed for this session
   const [ignoredCoWarnings, setIgnoredCoWarnings] = useState<Set<string>>(new Set());
@@ -200,11 +208,13 @@ export default function CoursePage() {
   });
   const [courseSettingsData, setCourseSettingsData] = useState({
     quizAggregation: 'average' as 'average' | 'best',
-    assignmentAggregation: 'average' as 'average' | 'best',
+    assignmentAggregation: 'average' as 'average' | 'best' | 'sum',
     quizWeightage: '',
     assignmentWeightage: '',
     projectWeightage: '',
     gradingScale: DEFAULT_GRADING_SCALE,
+    aliasEnabled: false,
+    alternateCode: '',
   });
   const [error, setError] = useState('');
 
@@ -257,41 +267,7 @@ export default function CoursePage() {
     }
   };
 
-  const handleImportStudents = async () => {
-    try {
-      const parsedStudents = parseCSV(csvInput);
-      
-      if (parsedStudents.length === 0) {
-        setError('No valid student data found');
-        return;
-      }
 
-      const response = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId,
-          students: parsedStudents.map(s => ({
-            studentId: s.id,
-            name: s.name,
-          })),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStudents([...students, ...data.students]);
-        setShowImportModal(false);
-        setCsvInput('');
-        setError('');
-      } else {
-        setError(data.error);
-      }
-    } catch (err) {
-      setError('Error importing students');
-    }
-  };
 
   const handleAddIndividualStudent = async () => {
     try {
@@ -319,12 +295,69 @@ export default function CoursePage() {
         setShowAddStudentModal(false);
         notify.student.added(newStudentData.name);
         setNewStudentData({ studentId: '', name: '' });
+        await checkAliasCandidates(true);
       } else {
         notify.student.addError(data.error);
       }
     } catch (err) {
       console.error('Error adding student:', err);
       notify.student.addError();
+    }
+  };
+
+  const checkAliasCandidates = async (silentIfNone = false) => {
+    if (!course?.aliasEnabled) return;
+    try {
+      const res = await fetch(`/api/courses/${courseId}/students/alias-categorize`);
+      const data = await res.json();
+      if (res.ok && data.candidates?.length > 0) {
+        setAliasCandidates(data.candidates);
+        setShowAliasCategorizeModal(true);
+      } else if (!silentIfNone) {
+        notify.info('No students match the New Code batch rule right now.');
+      }
+    } catch (err) {
+      console.error('Error checking alias candidates:', err);
+    }
+  };
+
+  const applyAliasCategorize = async () => {
+    setAliasCategorizing(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/students/alias-categorize`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        notify.success(`${data.updated} student(s) moved to the New Code`);
+        setShowAliasCategorizeModal(false);
+        setAliasCandidates([]);
+        await fetchCourseData();
+      } else {
+        notify.error(data.error || 'Failed to auto-categorize students');
+      }
+    } catch (err) {
+      console.error('Error applying alias categorize:', err);
+      notify.error('Failed to auto-categorize students');
+    } finally {
+      setAliasCategorizing(false);
+    }
+  };
+
+  const handleToggleAlias = async (student: Student) => {
+    try {
+      const res = await fetch(`/api/students/${student._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useAlias: !student.useAlias }),
+      });
+      if (res.ok) {
+        await fetchCourseData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.error || 'Failed to update New Code status');
+      }
+    } catch (err) {
+      console.error('Error toggling alias:', err);
+      notify.error('Failed to update New Code status');
     }
   };
 
@@ -363,42 +396,7 @@ export default function CoursePage() {
     }
   };
 
-  const handleBulkImportStudents = async () => {
-    try {
-      const parsedStudents = parseCSV(csvInput);
-      
-      if (parsedStudents.length === 0) {
-        notify.validation.noData('student');
-        return;
-      }
 
-      const response = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId,
-          students: parsedStudents.map(s => ({
-            studentId: s.id,
-            name: s.name,
-          })),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        await fetchCourseData();
-        setShowBulkAddStudentModal(false);
-        setCsvInput('');
-        notify.student.bulkImported(parsedStudents.length);
-      } else {
-        notify.student.bulkImportError(data.error);
-      }
-    } catch (err) {
-      console.error('Error importing students:', err);
-      notify.student.bulkImportError();
-    }
-  };
 
   const handleDeleteStudent = async () => {
     if (!studentToDelete) return;
@@ -440,6 +438,30 @@ export default function CoursePage() {
       }
     } catch (err) {
       console.error('Error deleting all students:', err);
+      notify.student.bulkDeleteError();
+    }
+  };
+
+  const handleBulkDeleteStudents = async (studentIds: string[]) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/students`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ studentIds }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        await fetchCourseData();
+        notify.student.bulkDeleted(data.deletedStudents || 0);
+      } else {
+        notify.student.bulkDeleteError(data.error);
+      }
+    } catch (err) {
+      console.error('Error deleting selected students:', err);
       notify.student.bulkDeleteError();
     }
   };
@@ -503,8 +525,9 @@ export default function CoursePage() {
   const openExamModal = (presetCategory?: Exam['examCategory']) => {
     if (presetCategory === 'Quiz' || presetCategory === 'Assignment' || presetCategory === 'Project') {
       const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
+      const categoryLabel = presetCategory === 'Assignment' && course?.courseType === 'Lab' ? 'Assessment' : presetCategory;
       setExamFormData({
-        displayName: `${presetCategory} ${nextIndex}`,
+        displayName: `${categoryLabel} ${nextIndex}`,
         totalMarks: '',
         weightage: '',
         numberOfCOs: '',
@@ -757,10 +780,17 @@ export default function CoursePage() {
         return;
       }
 
+      if (courseSettingsData.aliasEnabled && !courseSettingsData.alternateCode.trim()) {
+        setError('Please provide a New Code');
+        return;
+      }
+
       const updateData: any = {
         quizAggregation: courseSettingsData.quizAggregation,
         assignmentAggregation: courseSettingsData.assignmentAggregation,
         gradingScale: encodeGradingScale(courseSettingsData.gradingScale),
+        aliasEnabled: courseSettingsData.aliasEnabled,
+        alternateCode: courseSettingsData.alternateCode,
       };
 
       if (courseSettingsData.quizWeightage) {
@@ -849,33 +879,44 @@ export default function CoursePage() {
     }
   };
 
+  const downloadCourseFile = async (group: 'main' | 'alias', codeForFilename: string) => {
+    const response = await fetch(`/api/courses/${courseId}/export-file`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Export failed');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const suffix = course?.aliasEnabled ? (group === 'alias' ? '_newcode' : '_oldcode') : '';
+    a.download = `${codeForFilename}_${course?.name}_course_file${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
   const handleExportCourseFile = async () => {
     setExportingCourseFile(true);
     try {
-      const response = await fetch(`/api/courses/${courseId}/export-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${course?.code}_${course?.name}_course_file_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
+      if (course?.aliasEnabled && course.alternateCode) {
+        await downloadCourseFile('main', course.code);
+        await downloadCourseFile('alias', course.alternateCode);
+        notify.exportImport.exportSuccess('Excel', `${course.code} + ${course.alternateCode}`);
       } else {
-        const data = await response.json().catch(() => ({}));
-        notify.exportImport.exportError(data.error);
+        await downloadCourseFile('main', course?.code || '');
+        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
       }
     } catch (err) {
       console.error('Export error:', err);
-      notify.exportImport.exportError();
+      notify.exportImport.exportError(err instanceof Error ? err.message : undefined);
     } finally {
       setExportingCourseFile(false);
     }
@@ -1052,6 +1093,20 @@ export default function CoursePage() {
         isAggregated: true,
         examId: bestMark.examId,
       };
+    } else if (aggregationMethod === 'sum') {
+      // Sum raw marks and totals across scored exams, then weight the combined percentage
+      const sumRaw = categoryMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
+      const sumTotal = categoryMarks.reduce((sum, mark) => {
+        const exam = categoryExams.find(e => e._id === mark.examId);
+        return exam ? sum + exam.totalMarks : sum;
+      }, 0);
+
+      const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
+
+      return {
+        rawMark: weightedSum,
+        isAggregated: true,
+      };
     } else {
       // Calculate average of normalized percentages and convert to weighted contribution
       const averagePercentage = categoryMarks.reduce((sum, mark) => {
@@ -1061,7 +1116,7 @@ export default function CoursePage() {
       }, 0) / categoryMarks.length;
 
       const weightedAverage = (averagePercentage * categoryWeightage) / 100;
-      
+
       // Return a synthetic mark object for display
       return {
         rawMark: weightedAverage,
@@ -1158,7 +1213,7 @@ export default function CoursePage() {
         const totalMarks = Number(course.assignmentWeightage);
         const contribution = aggMark.rawMark;
         breakdown.push({
-          name: 'Assignment (Aggregated)',
+          name: `${course?.courseType === 'Lab' ? 'Assessment' : 'Assignment'} (Aggregated)`,
           mark: contribution,
           totalMarks: totalMarks,
           weightage: totalMarks,
@@ -1488,9 +1543,11 @@ export default function CoursePage() {
                   quizWeightage: course?.quizWeightage?.toString() || '',
                   assignmentWeightage: course?.assignmentWeightage?.toString() || '',
                   projectWeightage: course?.projectWeightage?.toString() || '',
-                  gradingScale: course?.gradingScale 
-                    ? decodeGradingScale(course.gradingScale) 
+                  gradingScale: course?.gradingScale
+                    ? decodeGradingScale(course.gradingScale)
                     : DEFAULT_GRADING_SCALE,
+                  aliasEnabled: Boolean(course?.aliasEnabled),
+                  alternateCode: course?.alternateCode || '',
                 });
                 setShowCourseSettings(true);
               }}
@@ -1600,7 +1657,7 @@ export default function CoursePage() {
                 students={students}
                 exams={exams}
                 marks={marks}
-                onImportStudents={() => setShowImportModal(true)}
+                onImportStudents={() => setShowImportStudentsModal(true)}
                 onAddExam={() => setShowExamModal(true)}
                 onImportCourse={() => setShowImportCourseModal(true)}
                 onExportCSV={handleExportCSV}
@@ -1644,7 +1701,7 @@ export default function CoursePage() {
                 getGradeColor={getGradeColor}
                 getGradeBgColor={getGradeBgColor}
                 onShowAddStudentModal={() => setShowAddStudentModal(true)}
-                onShowBulkAddStudentModal={() => setShowBulkAddStudentModal(true)}
+                onShowBulkAddStudentModal={() => setShowImportStudentsModal(true)}
                 onEditStudent={(student) => {
                   setStudentToEdit(student);
                   setEditStudentData({ studentId: student.studentId, name: student.name });
@@ -1664,7 +1721,10 @@ export default function CoursePage() {
                   setShowDeleteStudentModal(true);
                 }}
                 onDeleteAllStudents={handleDeleteAllStudents}
+                onBulkDeleteStudents={handleBulkDeleteStudents}
                 onToggleWithdrawStudent={handleToggleWithdrawStudent}
+                onToggleAlias={handleToggleAlias}
+                onAutoCategorizeAlias={() => checkAliasCandidates(false)}
               />
             )}
 
@@ -1681,6 +1741,7 @@ export default function CoursePage() {
                   setShowMarkModal(true);
                 }}
                 onShowBulkMarkModal={() => setShowBulkMarkModal(true)}
+                onShowBulkPasteModal={() => setShowBulkPasteModal(true)}
                 onShowSetZeroModal={() => {
                   setSelectedExamsForAction([]);
                   setConfirmationStep(0);
@@ -1736,7 +1797,7 @@ export default function CoursePage() {
                   <CardDescription className="mb-6">
                     Import students using CSV to get started
                   </CardDescription>
-                  <Button onClick={() => setShowImportModal(true)}>
+                  <Button onClick={() => setShowImportStudentsModal(true)}>
                     <Upload className="w-4 h-4 mr-2" />
                     Import Students
                   </Button>
@@ -1750,44 +1811,47 @@ export default function CoursePage() {
 
     {/* Modals - Rendered as siblings for proper z-index */}
     <div>
-      {/* Import Students Modal */}
-      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
-        <DialogContent>
+      <ImportStudentsModal
+        isOpen={showImportStudentsModal}
+        onClose={() => setShowImportStudentsModal(false)}
+        students={students}
+        courseId={courseId}
+        onImportComplete={async () => {
+          await fetchCourseData();
+          await checkAliasCandidates(true);
+        }}
+      />
+
+      {/* Alias auto-categorize confirmation */}
+      <Dialog open={showAliasCategorizeModal} onOpenChange={(open) => !open && setShowAliasCategorizeModal(false)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Import Students</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5" />
+              Move New Batch Students to New Code?
+            </DialogTitle>
+            <DialogDescription>
+              {aliasCandidates.length} student{aliasCandidates.length !== 1 ? 's' : ''} (batch 25 or later) will be
+              grouped under the New Code &quot;{course?.alternateCode}&quot; instead of &quot;{course?.code}&quot;.
+            </DialogDescription>
           </DialogHeader>
-          
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <Label>Paste CSV (Format: StudentID, StudentName)</Label>
-              <textarea
-                value={csvInput}
-                onChange={(e) => setCsvInput(e.target.value)}
-                className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2"
-                placeholder="e.g.&#10;S001, John Doe&#10;S002, Jane Smith"
-              />
-            </div>
+          <div className="max-h-56 overflow-y-auto rounded-md border">
+            {aliasCandidates.map((s) => (
+              <div key={s._id} className="flex items-center justify-between border-b px-3 py-2 text-sm last:border-b-0">
+                <span className="font-medium">{s.name}</span>
+                <span className="text-muted-foreground">{s.studentId}</span>
+              </div>
+            ))}
           </div>
-
+          <p className="text-xs text-muted-foreground">
+            You can add or remove individual students from the New Code group anytime from the student list.
+          </p>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowImportModal(false);
-                setError('');
-              }}
-            >
-              Cancel
+            <Button variant="outline" onClick={() => setShowAliasCategorizeModal(false)} disabled={aliasCategorizing}>
+              Not Now
             </Button>
-            <Button onClick={handleImportStudents}>
-              <Upload className="w-4 h-4 mr-2" />
-              Import
+            <Button onClick={applyAliasCategorize} disabled={aliasCategorizing}>
+              {aliasCategorizing ? 'Applying...' : 'Confirm Add'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1986,6 +2050,18 @@ export default function CoursePage() {
         onIgnoreCOWarning={handleIgnoreCOWarning}
       />
 
+      {/* Bulk Paste Mark Modal */}
+      <BulkPasteMarkModal
+        isOpen={showBulkPasteModal}
+        onClose={() => setShowBulkPasteModal(false)}
+        students={students}
+        exams={exams}
+        marks={marks}
+        courseId={courseId}
+        onMarksSaved={fetchCourseData}
+        coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
+      />
+
       {/* Exam Settings Modal */}
       <Dialog open={!!showExamSettings} onOpenChange={(open) => !open && setShowExamSettings(null)}>
         <DialogContent className="max-w-md">
@@ -2171,6 +2247,14 @@ export default function CoursePage() {
                 >
                   📄 Excel Export
                 </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'alias' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('alias')}
+                >
+                  🏷️ New Code
+                </Button>
               </aside>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-32">
@@ -2198,6 +2282,14 @@ export default function CoursePage() {
                     onClick={() => setCourseSettingsTab('excelExport')}
                   >
                     📄 Excel Export
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'alias' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('alias')}
+                  >
+                    🏷️ New Code
                   </Button>
                 </div>
 
@@ -2253,11 +2345,11 @@ export default function CoursePage() {
                       </CardContent>
                     </Card>
 
-                    {/* Assignment Settings */}
+                    {/* Assignment/Assessment Settings */}
                     <Card>
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                          📋 Assignment Aggregation
+                          📋 {course?.courseType === 'Lab' ? 'Assessment' : 'Assignment'} Aggregation
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -2266,13 +2358,28 @@ export default function CoursePage() {
                             <Label>Aggregation Method</Label>
                             <select
                               value={courseSettingsData.assignmentAggregation}
-                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' })}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' | 'sum' })}
                               className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
                             >
-                              <option value="average">Average of all assignments</option>
-                              <option value="best">Best assignment score</option>
+                              {course?.courseType === 'Lab' ? (
+                                <>
+                                  <option value="average">Average of all assessments</option>
+                                  <option value="sum">Sum of all assessments</option>
+                                </>
+                              ) : (
+                                <>
+                                  <option value="average">Average of all assignments</option>
+                                  <option value="best">Best assignment score</option>
+                                </>
+                              )}
                             </select>
-                            <p className="text-xs text-muted-foreground mt-1">How to calculate the aggregated Assignment column</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {course?.courseType === 'Lab'
+                                ? (courseSettingsData.assignmentAggregation === 'sum'
+                                    ? 'Sums every scored assessment\'s marks and totals, then weights the combined percentage'
+                                    : 'Averages the normalized percentage of every scored assessment')
+                                : 'How to calculate the aggregated Assignment column'}
+                            </p>
                           </div>
 
                           <div>
@@ -2465,6 +2572,52 @@ export default function CoursePage() {
 
                 {courseSettingsTab === 'excelExport' && (
                   <ExcelExportMappingInfo />
+                )}
+
+                {courseSettingsTab === 'alias' && (
+                  <div className="max-w-2xl space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">New Code</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Turn this on if some students in this course (e.g. a newer admission batch) are officially
+                        registered under a different course code. You&apos;ll be able to choose which students use it
+                        from the Students &amp; Marks tab, including an auto-categorize option.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Does this course have a New Code for some students?</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={!courseSettingsData.aliasEnabled ? 'default' : 'outline'}
+                          onClick={() => setCourseSettingsData({ ...courseSettingsData, aliasEnabled: false, alternateCode: '' })}
+                        >
+                          No
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={courseSettingsData.aliasEnabled ? 'default' : 'outline'}
+                          onClick={() => setCourseSettingsData({ ...courseSettingsData, aliasEnabled: true })}
+                        >
+                          Yes
+                        </Button>
+                      </div>
+                    </div>
+
+                    {courseSettingsData.aliasEnabled && (
+                      <div className="space-y-2">
+                        <Label htmlFor="course-settings-alternate-code">New Code</Label>
+                        <Input
+                          id="course-settings-alternate-code"
+                          value={courseSettingsData.alternateCode}
+                          onChange={(e) => setCourseSettingsData({ ...courseSettingsData, alternateCode: e.target.value })}
+                          placeholder="e.g., CSE470B"
+                          className="max-w-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Action Buttons */}
@@ -3569,53 +3722,7 @@ export default function CoursePage() {
       </DialogContent>
     </Dialog>
 
-    {/* Bulk Import Students Modal */}
-    <Dialog open={showBulkAddStudentModal} onOpenChange={setShowBulkAddStudentModal}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            Bulk Import Students (CSV)
-          </DialogTitle>
-          <DialogDescription>
-            Import multiple students using CSV format
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <Label>CSV Data (Format: StudentID, StudentName)</Label>
-            <textarea
-              value={csvInput}
-              onChange={(e) => setCsvInput(e.target.value)}
-              className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2"
-              placeholder="e.g.&#10;S001, John Doe&#10;S002, Jane Smith&#10;S003, Bob Johnson"
-            />
-          </div>
-          <Alert>
-            <AlertDescription className="text-xs">
-              Each line should contain: Student ID, Student Name (comma-separated)
-            </AlertDescription>
-          </Alert>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowBulkAddStudentModal(false);
-              setCsvInput('');
-            }}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleBulkImportStudents}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import Students
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     {/* Delete Student Modal with Double Confirmation */}
     <Dialog open={showDeleteStudentModal} onOpenChange={(open) => {
