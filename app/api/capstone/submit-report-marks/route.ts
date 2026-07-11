@@ -27,23 +27,20 @@ export async function POST(request: NextRequest) {
       const value = Number(m.marks ?? 0);
       if (!mongoose.Types.ObjectId.isValid(studentId)) continue;
 
-      let doc = await CapstoneMarks.findOne({ studentId, groupId, supervisorId: group.supervisorId, courseId: group.courseId, submissionType: 'poster' });
+      let doc = await CapstoneMarks.findOne({ studentId, groupId, supervisorId: group.supervisorId, courseId: group.courseId, submissionType: 'report' });
       if (!doc) {
         doc = new CapstoneMarks({ studentId, groupId, supervisorId: group.supervisorId, courseId: group.courseId, submittedBy: session.user.id });
       }
-      doc.posterMarks = value;
-      doc.submissionType = 'poster';
+      doc.reportMarks = value;
+      doc.submissionType = 'report';
       doc.submittedBy = new mongoose.Types.ObjectId(session.user.id);
       await doc.save();
       saved.push({ studentId, value });
     }
 
-
-
     return NextResponse.json({ ok: true, savedCount: saved.length });
   } catch (error: any) {
-    console.error('POST /api/capstone/submit-poster-marks error:', error);
+    console.error('POST /api/capstone/submit-report-marks error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
-

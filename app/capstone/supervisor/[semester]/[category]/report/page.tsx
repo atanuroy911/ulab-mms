@@ -17,7 +17,8 @@ import { toast } from 'sonner';
 interface Student {
   _id: string;
   name: string;
-  rollNumber: string;
+  rollNumber?: string;
+  studentId?: string;
 }
 
 interface CapstoneRecord {
@@ -28,6 +29,22 @@ interface CapstoneRecord {
   createdAt: string;
 }
 
+interface CapstoneGroup {
+  _id: string;
+  groupName: string;
+  courseId: {
+    _id: string;
+    code: string;
+    name: string;
+  };
+  supervisorId: {
+    _id: string;
+    name: string;
+  };
+  semester?: string;
+  studentIds: Student[];
+}
+
 export default function ReportPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -36,6 +53,8 @@ export default function ReportPage() {
   const category = params?.category as string;
   const [students, setStudents] = useState<Student[]>([]);
   const [capstoneRecords, setCapstoneRecords] = useState<CapstoneRecord[]>([]);
+  const [capstoneGroups, setCapstoneGroups] = useState<CapstoneGroup[]>([]);
+  const [groupSearchQuery, setGroupSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -49,6 +68,7 @@ export default function ReportPage() {
     } else if (status === 'authenticated') {
       fetchStudents();
       fetchCapstoneRecords();
+      fetchCapstoneGroups();
     }
   }, [status, router]);
 
@@ -74,6 +94,18 @@ export default function ReportPage() {
     } catch (error) {
       console.error('Error fetching capstone records:', error);
       setLoading(false);
+    }
+  };
+
+  const fetchCapstoneGroups = async () => {
+    try {
+      const response = await fetch(`/api/capstone-groups?semester=${encodeURIComponent(semester)}`);
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      const data: CapstoneGroup[] = await response.json();
+      setCapstoneGroups(data);
+    } catch (error) {
+      console.error('Error fetching capstone groups:', error);
+      toast.error('Failed to load capstone groups');
     }
   };
 
@@ -131,6 +163,35 @@ export default function ReportPage() {
     }
   };
 
+  const normalizeSemester = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const getFilteredCapstoneGroups = () => {
+    if (!groupSearchQuery.trim()) {
+      return capstoneGroups;
+    }
+
+    const query = groupSearchQuery.toLowerCase();
+    return capstoneGroups.filter(
+      (group) =>
+        group.groupName.toLowerCase().includes(query) ||
+        group.courseId?.code?.toLowerCase().includes(query) ||
+        group.supervisorId?.name?.toLowerCase().includes(query) ||
+        group.semester?.toLowerCase().includes(query) ||
+        group.studentIds?.some(
+          (s) =>
+            s.name.toLowerCase().includes(query) ||
+            s.studentId?.toLowerCase().includes(query)
+        )
+    );
+  };
+
+  const getSemesterGroupLabel = (groupSemester?: string) => {
+    if (!groupSemester) return 'N/A';
+    return normalizeSemester(groupSemester) === normalizeSemester(semester)
+      ? groupSemester
+      : groupSemester;
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -183,7 +244,79 @@ export default function ReportPage() {
           </p>
         </div>
 
-        {/* Students Grid */}
+        {/* Capstone Groups Section */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>All Capstone Groups</CardTitle>
+            <CardDescription>
+              View all capstone groups in the system
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {capstoneGroups.length === 0 ? (
+              <p className="text-muted-foreground">No capstone groups found</p>
+            ) : (
+              <>
+                <Input
+                  placeholder="Search by group name, course, semester, supervisor, or student..."
+                  value={groupSearchQuery}
+                  onChange={(e) => setGroupSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+
+                <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-3">
+                  {getFilteredCapstoneGroups().length > 0 ? (
+                    getFilteredCapstoneGroups().map((group) => (
+                      <div
+                        key={group._id}
+                        className="p-3 bg-muted rounded-lg border border-border hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-semibold text-sm">{group.groupName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {group.courseId?.code} • Course: {group.courseId?.name}
+                              {group.semester && ` • Semester: ${getSemesterGroupLabel(group.semester)}`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {group.studentIds?.length || 0} members
+                            </span>
+                            <Button
+                              size="sm"
+                              onClick={() => router.push(`/capstone/supervisor/${semester}/${category}/report/group/${group._id}`)}
+                              className="ml-2"
+                            >
+                              Submit Marks
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Supervisor: <span className="font-medium">{group.supervisorId?.name}</span>
+                        </p>
+                        <div className="text-xs">
+                          <p className="font-medium text-muted-foreground mb-1">Members:</p>
+                          <ul className="space-y-1 pl-2">
+                            {group.studentIds?.map((student) => (
+                              <li key={student._id} className="text-muted-foreground">
+                                {student.name} ({student.studentId || student.rollNumber || 'N/A'})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-center text-muted-foreground py-4">
+                      No groups match your search
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {students.length > 0 ? (
             students.map((student) => {

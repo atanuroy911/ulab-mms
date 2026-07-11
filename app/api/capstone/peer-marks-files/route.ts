@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
-import { ResourceFolder } from '@/models/ResourceFolder';
-import { StoredFile } from '@/models/StoredFile';
+import CapstoneMarks from '@/models/CapstoneMarks';
 
 export async function GET() {
   try {
@@ -13,12 +12,31 @@ export async function GET() {
     }
 
     await dbConnect();
-    const folder = await ResourceFolder.findOne({ name: 'Capstone - Peer Marks' });
-    if (!folder) return NextResponse.json({ files: [] });
-    const files = await StoredFile.find({ folderId: folder._id }).populate('uploadedBy', 'name email').sort({ createdAt: -1 });
+
+    // Fetch peer marks grouped by group
+    const marks = await CapstoneMarks.find({ submissionType: 'peer' })
+      .populate('studentId', 'name studentId')
+      .populate('groupId', 'groupName')
+      .populate('supervisorId', 'name email')
+      .populate('submittedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Transform to display format
+    const files = marks.map((mark: any) => ({
+      _id: mark._id,
+      filename: `${mark.groupId?.groupName || 'Group'}-peer-marks-${mark.createdAt.toISOString()}`,
+      originalName: `${mark.groupId?.groupName || 'Group'}-peer-marks-${mark.createdAt.toISOString()}.xlsx`,
+      uploadedBy: mark.submittedBy || mark.supervisorId,
+      createdAt: mark.createdAt,
+      studentName: mark.studentId?.name,
+      marks: mark.peerMarks,
+      comments: mark.peerComments,
+    }));
+
     return NextResponse.json({ files });
   } catch (error: any) {
     console.error('GET /api/capstone/peer-marks-files error:', error);
     return NextResponse.json({ error: 'Failed to fetch peer marks files' }, { status: 500 });
   }
 }
+
