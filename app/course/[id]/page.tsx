@@ -1825,6 +1825,12 @@ export default function CoursePage() {
         onClose={() => setShowImportStudentsModal(false)}
         students={students}
         courseId={courseId}
+        course={{
+          code: course?.code || '',
+          name: course?.name,
+          aliasEnabled: course?.aliasEnabled,
+          alternateCode: course?.alternateCode,
+        }}
         onImportComplete={async () => {
           await fetchCourseData();
           await checkAliasCandidates(true);

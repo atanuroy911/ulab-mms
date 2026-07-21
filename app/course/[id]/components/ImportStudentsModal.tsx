@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Upload, Info, Copy, Check } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Upload, Info, Copy, Check, FileText, Loader2, AlertTriangle, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { parseCSV } from '@/app/utils/csv';
+import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '../lib/pdfStudentImport';
 import { toast } from 'sonner';
 
 const FORMAT_HELP_PROMPT = `I will paste a student roster copied from the URMS Attendance Sheet page (https://urms-awp.ulab.edu.bd/AttendanceSheet), which contains student IDs, names, and possibly other columns such as email, section, or program.
@@ -31,12 +33,46 @@ interface Student {
   name: string;
 }
 
+interface ImportCourseInfo {
+  code: string;
+  name?: string;
+  aliasEnabled?: boolean;
+  alternateCode?: string;
+}
+
 interface ImportStudentsModalProps {
   isOpen: boolean;
   onClose: () => void;
   students: Student[];
   courseId: string;
+  course: ImportCourseInfo;
   onImportComplete: () => Promise<void>;
+}
+
+interface PdfSlotState {
+  key: string;
+  expectedCode: string;
+  file: File | null;
+  parsing: boolean;
+  result: PdfParseResult | null;
+  mismatchConfirmed: boolean;
+}
+
+function makeSlots(course: ImportCourseInfo): PdfSlotState[] {
+  const slots: PdfSlotState[] = [
+    { key: 'primary', expectedCode: course.code, file: null, parsing: false, result: null, mismatchConfirmed: false },
+  ];
+  if (course.aliasEnabled && course.alternateCode) {
+    slots.push({
+      key: 'alias',
+      expectedCode: course.alternateCode,
+      file: null,
+      parsing: false,
+      result: null,
+      mismatchConfirmed: false,
+    });
+  }
+  return slots;
 }
 
 export function ImportStudentsModal({
@@ -44,6 +80,7 @@ export function ImportStudentsModal({
   onClose,
   students,
   courseId,
+  course,
   onImportComplete,
 }: ImportStudentsModalProps) {
   const [csvInput, setCsvInput] = useState('');
@@ -52,6 +89,50 @@ export function ImportStudentsModal({
   const [error, setError] = useState('');
   const [showFormatHelp, setShowFormatHelp] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [pdfSlots, setPdfSlots] = useState<PdfSlotState[]>(() => makeSlots(course));
+
+  const applyPdfSlotsToInput = (slots: PdfSlotState[]) => {
+    const lines = slots
+      .filter((slot) => slot.result && (courseCodeMatches(slot.result.courseInfo.code, slot.expectedCode) || slot.mismatchConfirmed))
+      .flatMap((slot) => slot.result!.studentLines);
+    setCsvInput(lines.join('\n'));
+  };
+
+  const handlePdfFileSelect = async (slotKey: string, file: File) => {
+    setPdfSlots((prev) => {
+      const next = prev.map((s) => (s.key === slotKey ? { ...s, file, parsing: true, result: null, mismatchConfirmed: false } : s));
+      return next;
+    });
+
+    try {
+      const result = await parsePdfRoster(file);
+      setPdfSlots((prev) => {
+        const next = prev.map((s) => (s.key === slotKey ? { ...s, parsing: false, result } : s));
+        applyPdfSlotsToInput(next);
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to parse PDF', err);
+      toast.error('Failed to read this PDF. Make sure it is a text-based (not scanned-image) PDF.');
+      setPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, parsing: false } : s)));
+    }
+  };
+
+  const handlePdfRemove = (slotKey: string) => {
+    setPdfSlots((prev) => {
+      const next = prev.map((s) => (s.key === slotKey ? { ...s, file: null, result: null, mismatchConfirmed: false } : s));
+      applyPdfSlotsToInput(next);
+      return next;
+    });
+  };
+
+  const confirmPdfMismatch = (slotKey: string) => {
+    setPdfSlots((prev) => {
+      const next = prev.map((s) => (s.key === slotKey ? { ...s, mismatchConfirmed: true } : s));
+      applyPdfSlotsToInput(next);
+      return next;
+    });
+  };
 
   const copyPrompt = async () => {
     try {
@@ -154,8 +235,11 @@ export function ImportStudentsModal({
     setDeleteMissing(false);
     setError('');
     setShowFormatHelp(false);
+    setPdfSlots(makeSlots(course));
     onClose();
   };
+
+  const needsTwoPdfs = Boolean(course.aliasEnabled && course.alternateCode);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
@@ -163,7 +247,7 @@ export function ImportStudentsModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Import Students (CSV)
+            Import Students
             <button
               type="button"
               onClick={() => setShowFormatHelp(true)}
@@ -175,7 +259,8 @@ export function ImportStudentsModal({
             </button>
           </DialogTitle>
           <DialogDescription>
-            Import multiple students using CSV format. The list will be compared against the current roster.
+            Import multiple students by pasting a list or uploading a roster PDF. The list will be compared against
+            the current roster.
           </DialogDescription>
         </DialogHeader>
 
@@ -186,15 +271,132 @@ export function ImportStudentsModal({
         )}
 
         <div className="space-y-4">
-          <div>
-            <Label>Student List (ID and Name per line - comma, space, or hyphen separated)</Label>
-            <textarea
-              value={csvInput}
-              onChange={(e) => setCsvInput(e.target.value)}
-              className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2 font-mono text-sm"
-              placeholder="e.g.&#10;212014001, John Doe&#10;221016002 Jane Smith&#10;231016003 - Alex Roy"
-            />
-          </div>
+          <Tabs defaultValue="paste">
+            <TabsList>
+              <TabsTrigger value="paste">Paste Text</TabsTrigger>
+              <TabsTrigger value="pdf">Upload PDF</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="paste">
+              <Label>Student List (ID and Name per line - comma, space, or hyphen separated)</Label>
+              <textarea
+                value={csvInput}
+                onChange={(e) => setCsvInput(e.target.value)}
+                className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2 font-mono text-sm"
+                placeholder="e.g.&#10;212014001, John Doe&#10;221016002 Jane Smith&#10;231016003 - Alex Roy"
+              />
+            </TabsContent>
+
+            <TabsContent value="pdf" className="space-y-3">
+              {needsTwoPdfs && (
+                <Alert>
+                  <AlertDescription className="text-xs">
+                    This course has two codes ({course.code} and {course.alternateCode}). Upload both roster/attendance
+                    PDFs for this course, one for each code.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {pdfSlots.map((slot) => (
+                <div key={slot.key} className="rounded-lg border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">PDF for {slot.expectedCode}</Label>
+                    {slot.file && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-1.5 text-xs text-muted-foreground"
+                        onClick={() => handlePdfRemove(slot.key)}
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  {!slot.file ? (
+                    <label className="flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed p-4 text-center text-xs text-muted-foreground cursor-pointer hover:border-primary/50">
+                      <FileText className="w-5 h-5" />
+                      Click to select a PDF
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handlePdfFileSelect(slot.key, file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  ) : slot.parsing ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Reading {slot.file.name}...
+                    </div>
+                  ) : slot.result ? (
+                    <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">
+                        {slot.file.name} &middot; {slot.result.studentLines.length} student row(s) found
+                      </div>
+
+                      {slot.result.courseInfo.code && courseCodeMatches(slot.result.courseInfo.code, slot.expectedCode) ? (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                          <Check className="w-3.5 h-3.5" />
+                          Detected course {slot.result.courseInfo.code} matches {slot.expectedCode}
+                        </div>
+                      ) : slot.result.courseInfo.code ? (
+                        <Alert variant="destructive" className="py-2">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <AlertDescription className="text-xs space-y-1.5">
+                            <div>
+                              This PDF looks like it&apos;s for course <strong>{slot.result.courseInfo.code}</strong>
+                              {slot.result.courseInfo.name ? <> ({slot.result.courseInfo.name})</> : null}, not{' '}
+                              <strong>{slot.expectedCode}</strong>.
+                            </div>
+                            {!slot.mismatchConfirmed ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                className="h-6 text-xs"
+                                onClick={() => confirmPdfMismatch(slot.key)}
+                              >
+                                Use it anyway
+                              </Button>
+                            ) : (
+                              <div className="text-xs italic">Using this PDF anyway.</div>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <Alert className="py-2">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <AlertDescription className="text-xs space-y-1.5">
+                            <div>Couldn&apos;t detect a course code in this PDF -- please confirm it&apos;s the right file for {slot.expectedCode}.</div>
+                            {!slot.mismatchConfirmed ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 text-xs"
+                                onClick={() => confirmPdfMismatch(slot.key)}
+                              >
+                                Confirm and use
+                              </Button>
+                            ) : (
+                              <div className="text-xs italic">Confirmed.</div>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </TabsContent>
+          </Tabs>
 
           {csvInput.trim() && diffResult.toAdd.length === 0 && diffResult.unchanged.length === 0 && diffResult.missing.length === 0 && (
              <Alert>
