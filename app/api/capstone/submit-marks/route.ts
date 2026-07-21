@@ -4,10 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneMarks from '@/models/CapstoneMarks';
-import { ResourceFolder } from '@/models/ResourceFolder';
-import { StoredFile } from '@/models/StoredFile';
 import User from '@/models/User';
-import * as XLSX from 'xlsx';
 import mongoose from 'mongoose';
 
 export async function POST(request: NextRequest) {
@@ -36,9 +33,9 @@ export async function POST(request: NextRequest) {
       const value = Number(m.marks ?? 0);
       if (!mongoose.Types.ObjectId.isValid(studentId)) continue;
 
-      let doc = await CapstoneMarks.findOne({ studentId, supervisorId: group.supervisorId, courseId: group.courseId });
+      let doc = await CapstoneMarks.findOne({ studentId, groupId, supervisorId: group.supervisorId, courseId: group.courseId, submissionType: 'weeklyJournal' });
       if (!doc) {
-        doc = new CapstoneMarks({ studentId, supervisorId: group.supervisorId, courseId: group.courseId, submittedBy: session.user.id });
+        doc = new CapstoneMarks({ studentId, groupId, supervisorId: group.supervisorId, courseId: group.courseId, submittedBy: session.user.id });
       }
       doc.weeklyJournalMarks = value;
       doc.submissionType = 'weeklyJournal';
@@ -47,21 +44,7 @@ export async function POST(request: NextRequest) {
       saved.push({ studentId, value });
     }
 
-    // Create Excel workbook
-    const rows = marks.map((m: any) => ({ Name: m.name, StudentId: m.studentId, Marks: m.marks }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'WeeklyJournal');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    // Ensure a folder exists
-    let folder = await ResourceFolder.findOne({ name: 'Capstone - Weekly Journal' });
-    if (!folder) {
-      folder = await ResourceFolder.create({ name: 'Capstone - Weekly Journal', parentId: null, createdBy: session.user.id });
-    }
-
-    const originalName = `${group.groupName || 'group'}-weekly-journal-${new Date().toISOString()}.xlsx`;
-    await StoredFile.create({ filename: originalName, originalName, folderId: folder._id, uploadedBy: session.user.id, fileSize: buffer.length, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileData: buffer });
 
     return NextResponse.json({ ok: true, savedCount: saved.length });
   } catch (error: any) {

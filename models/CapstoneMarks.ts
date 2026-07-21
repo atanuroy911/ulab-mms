@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface ICapstoneMarks extends Document {
   studentId: mongoose.Types.ObjectId;
   courseId: mongoose.Types.ObjectId; // Capstone course (CSE4098A, CSE4098B, etc.)
+  groupId: mongoose.Types.ObjectId; // Capstone group
   supervisorId: mongoose.Types.ObjectId;
   evaluatorId?: mongoose.Types.ObjectId;
   supervisorRole?: 'supervisor' | 'evaluator' | 'both'; // Role assigned by admin
@@ -17,9 +18,11 @@ export interface ICapstoneMarks extends Document {
   posterComments?: string;
   weeklyJournalMarks?: number;
   weeklyJournalComments?: string;
+  reportMarks?: number;
+  reportComments?: string;
   finalMarks?: number;
   submittedBy: mongoose.Types.ObjectId; // User who submitted the marks
-  submissionType: 'supervisor' | 'evaluator' | 'peer' | 'poster' | 'weeklyJournal';
+  submissionType: 'supervisor' | 'evaluator' | 'peer' | 'poster' | 'weeklyJournal' | 'report';
   assignedBy?: mongoose.Types.ObjectId; // Admin who assigned the student
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +38,11 @@ const CapstoneMarsSchema: Schema = new Schema(
     courseId: {
       type: Schema.Types.ObjectId,
       ref: 'Course',
+      required: true,
+    },
+    groupId: {
+      type: Schema.Types.ObjectId,
+      ref: 'CapstoneGroup',
       required: true,
     },
     supervisorId: {
@@ -107,6 +115,16 @@ const CapstoneMarsSchema: Schema = new Schema(
       type: String,
       default: '',
     },
+    reportMarks: {
+      type: Number,
+      min: [0, 'Marks cannot be negative'],
+      max: [100, 'Marks cannot exceed 100'],
+      default: null,
+    },
+    reportComments: {
+      type: String,
+      default: '',
+    },
     finalMarks: {
       type: Number,
       default: null,
@@ -118,7 +136,7 @@ const CapstoneMarsSchema: Schema = new Schema(
     },
     submissionType: {
       type: String,
-      enum: ['supervisor', 'evaluator', 'peer', 'poster', 'weeklyJournal'],
+      enum: ['supervisor', 'evaluator', 'peer', 'poster', 'weeklyJournal', 'report'],
       required: true,
     },
     assignedBy: {
@@ -133,7 +151,7 @@ const CapstoneMarsSchema: Schema = new Schema(
 );
 
 // Compound indexes
-CapstoneMarsSchema.index({ studentId: 1, courseId: 1, supervisorId: 1 });
+CapstoneMarsSchema.index({ studentId: 1, courseId: 1, groupId: 1, supervisorId: 1, submissionType: 1 }, { unique: true });
 CapstoneMarsSchema.index({ supervisorId: 1, courseId: 1 });
 CapstoneMarsSchema.index({ evaluatorId: 1, courseId: 1 });
 CapstoneMarsSchema.index({ courseId: 1 });
