@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
     }
 
-    const { courseCode, courseTitle, creditHour, prerequisite, content } = await request.json();
+    const { courseCode, courseTitle, creditHour, prerequisite, content, unescoCode, majors } = await request.json();
 
     // Validation
     if (!courseCode || !courseTitle || creditHour === undefined || creditHour === null) {
@@ -70,6 +70,8 @@ export async function POST(request: NextRequest) {
       creditHour: Number(creditHour),
       prerequisite: prerequisite?.trim() || 'N/A',
       content: content?.trim() || '',
+      unescoCode: unescoCode?.trim() || '',
+      majors: Array.isArray(majors) ? majors : [],
     });
 
     return NextResponse.json({ course }, { status: 201 });
@@ -98,7 +100,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
     }
 
-    const { _id, courseCode, courseTitle, creditHour, prerequisite, content } = await request.json();
+    const { _id, courseCode, courseTitle, creditHour, prerequisite, content, unescoCode, majors } = await request.json();
 
     if (!_id) {
       return NextResponse.json(
@@ -145,6 +147,8 @@ export async function PUT(request: NextRequest) {
         creditHour: Number(creditHour),
         prerequisite: prerequisite?.trim() || 'N/A',
         content: content?.trim() || '',
+        unescoCode: unescoCode?.trim() || '',
+        majors: Array.isArray(majors) ? majors : [],
       },
       { new: true, runValidators: true }
     );

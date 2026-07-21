@@ -4,6 +4,7 @@ export interface IAdminSettings extends Document {
   passwordHash: string;
   username: string; // Always 'admin'
   credentialsLoginEnabled: boolean; // Whether teachers can sign in/up with email+password
+  courseCodeEditableByTeacher: boolean; // Whether teachers can edit a course's New/UNESCO code (aliasEnabled/alternateCode)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +23,10 @@ const AdminSettingsSchema: Schema = new Schema(
     credentialsLoginEnabled: {
       type: Boolean,
       default: true,
+    },
+    courseCodeEditableByTeacher: {
+      type: Boolean,
+      default: true, // Matches the alias/New Code feature's pre-existing always-editable behavior
     },
   },
   {

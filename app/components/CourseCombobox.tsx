@@ -14,6 +14,7 @@ interface AdminCourse {
   creditHour: number;
   prerequisite?: string;
   content?: string;
+  unescoCode?: string;
 }
 
 interface CourseComboboxProps {
@@ -142,6 +143,9 @@ export function CourseCombobox({ selectedCourse, onSelect, disabled = false }: C
                       <div>
                         <p className="font-mono font-semibold">{course.courseCode}</p>
                         <p className="text-xs text-muted-foreground">{course.courseTitle}</p>
+                        {course.unescoCode && (
+                          <p className="text-xs text-muted-foreground font-mono">{course.unescoCode}</p>
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground ml-2">
                         {course.creditHour} cr

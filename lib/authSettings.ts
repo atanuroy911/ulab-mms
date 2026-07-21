@@ -8,3 +8,13 @@ export async function isCredentialsLoginEnabled(): Promise<boolean> {
   const settings = await AdminSettings.findOne().select('credentialsLoginEnabled').lean();
   return settings?.credentialsLoginEnabled !== false;
 }
+
+// Whether teachers can edit a course's New/UNESCO code (aliasEnabled/alternateCode)
+// from the course settings panel. Defaults to enabled (matches the schema default
+// and the feature's pre-existing behavior) so this doesn't lock teachers out unless
+// an admin explicitly turns it off.
+export async function isCourseCodeEditableByTeacher(): Promise<boolean> {
+  await dbConnect();
+  const settings = await AdminSettings.findOne().select('courseCodeEditableByTeacher').lean();
+  return settings?.courseCodeEditableByTeacher !== false;
+}

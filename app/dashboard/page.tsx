@@ -39,6 +39,7 @@ interface AdminCourse {
   creditHour: number;
   prerequisite?: string;
   content?: string;
+  unescoCode?: string;
 }
 
 export default function Dashboard() {

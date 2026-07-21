@@ -57,7 +57,8 @@ import {
   FlaskConical,
   Edit,
   Menu,
-  Tag
+  Tag,
+  AlertTriangle
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -217,12 +218,20 @@ export default function CoursePage() {
     alternateCode: '',
   });
   const [error, setError] = useState('');
+  const [courseCodeEditableByTeacher, setCourseCodeEditableByTeacher] = useState(true);
 
   useEffect(() => {
     if (courseId) {
       fetchCourseData();
     }
   }, [courseId]);
+
+  useEffect(() => {
+    fetch('/api/auth/settings')
+      .then((res) => res.json())
+      .then((data) => setCourseCodeEditableByTeacher(data.courseCodeEditableByTeacher !== false))
+      .catch(() => setCourseCodeEditableByTeacher(true));
+  }, []);
 
   const fetchCourseData = async () => {
     try {
@@ -2580,10 +2589,20 @@ export default function CoursePage() {
                       <h3 className="text-lg font-semibold">New Code</h3>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Turn this on if some students in this course (e.g. a newer admission batch) are officially
-                        registered under a different course code. You&apos;ll be able to choose which students use it
-                        from the Students &amp; Marks tab, including an auto-categorize option.
+                        registered under a different course code (this also doubles as the course&apos;s UNESCO code
+                        from the admin catalogue, when one was imported). You&apos;ll be able to choose which students
+                        use it from the Students &amp; Marks tab, including an auto-categorize option.
                       </p>
                     </div>
+
+                    {!courseCodeEditableByTeacher && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          The admin has locked this to whatever the course catalogue suggested. Contact your admin to change it.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
                     <div className="space-y-2">
                       <Label>Does this course have a New Code for some students?</Label>
@@ -2591,6 +2610,7 @@ export default function CoursePage() {
                         <Button
                           type="button"
                           variant={!courseSettingsData.aliasEnabled ? 'default' : 'outline'}
+                          disabled={!courseCodeEditableByTeacher}
                           onClick={() => setCourseSettingsData({ ...courseSettingsData, aliasEnabled: false, alternateCode: '' })}
                         >
                           No
@@ -2598,6 +2618,7 @@ export default function CoursePage() {
                         <Button
                           type="button"
                           variant={courseSettingsData.aliasEnabled ? 'default' : 'outline'}
+                          disabled={!courseCodeEditableByTeacher}
                           onClick={() => setCourseSettingsData({ ...courseSettingsData, aliasEnabled: true })}
                         >
                           Yes
@@ -2613,6 +2634,7 @@ export default function CoursePage() {
                           value={courseSettingsData.alternateCode}
                           onChange={(e) => setCourseSettingsData({ ...courseSettingsData, alternateCode: e.target.value })}
                           placeholder="e.g., CSE470B"
+                          disabled={!courseCodeEditableByTeacher}
                           className="max-w-sm"
                         />
                       </div>

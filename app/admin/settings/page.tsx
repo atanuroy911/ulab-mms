@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Loader2, LogOut, ArrowLeft, Shield, KeyRound, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LogOut, ArrowLeft, Shield, KeyRound, AlertTriangle, BookOpen } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,10 @@ export default function AdminSettings() {
   const [credentialsLoading, setCredentialsLoading] = useState(true);
   const [credentialsSaving, setCredentialsSaving] = useState(false);
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
+  const [courseCodeEditableByTeacher, setCourseCodeEditableByTeacher] = useState(true);
+  const [courseCodeSettingLoading, setCourseCodeSettingLoading] = useState(true);
+  const [courseCodeSettingSaving, setCourseCodeSettingSaving] = useState(false);
+  const [showCourseCodeDisableConfirm, setShowCourseCodeDisableConfirm] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -83,16 +87,55 @@ export default function AdminSettings() {
         const data = await response.json();
         if (response.ok) {
           setCredentialsLoginEnabled(data.credentialsLoginEnabled);
+          setCourseCodeEditableByTeacher(data.courseCodeEditableByTeacher);
         }
       } catch (err) {
         console.error('Error loading sign-in settings:', err);
       } finally {
         setCredentialsLoading(false);
+        setCourseCodeSettingLoading(false);
       }
     };
 
     loadCredentialsSetting();
   }, []);
+
+  const applyCourseCodeEditableSetting = async (next: boolean) => {
+    setCourseCodeSettingSaving(true);
+    try {
+      const response = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseCodeEditableByTeacher: next }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setCourseCodeEditableByTeacher(data.courseCodeEditableByTeacher);
+        notify.success(
+          data.courseCodeEditableByTeacher
+            ? 'Teachers can now edit the New/UNESCO code'
+            : 'The New/UNESCO code is now admin-only'
+        );
+      } else {
+        notify.error(data.error || 'Failed to update course code setting');
+      }
+    } catch (err) {
+      console.error('Error updating course code setting:', err);
+      notify.error('Failed to update course code setting');
+    } finally {
+      setCourseCodeSettingSaving(false);
+      setShowCourseCodeDisableConfirm(false);
+    }
+  };
+
+  const handleToggleCourseCodeEditable = () => {
+    if (courseCodeEditableByTeacher) {
+      // Turning it off is the risky direction - confirm first.
+      setShowCourseCodeDisableConfirm(true);
+    } else {
+      applyCourseCodeEditableSetting(true);
+    }
+  };
 
   const applyCredentialsLoginSetting = async (nextEnabled: boolean) => {
     setCredentialsSaving(true);
@@ -432,6 +475,49 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
+        {/* Course Catalogue Editing */}
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-6 w-6 text-purple-600" />
+              <div>
+                <CardTitle>New/UNESCO Code Editing</CardTitle>
+                <CardDescription className="mt-1">
+                  Control whether teachers can edit a course&apos;s New Code (the alias code, which is also the UNESCO code from the catalogue) from Course Settings
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Teacher-editable New Code</span>
+                  {courseCodeSettingLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Badge variant={courseCodeEditableByTeacher ? 'default' : 'secondary'}>
+                      {courseCodeEditableByTeacher ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {courseCodeEditableByTeacher
+                    ? 'Teachers can turn on aliasing and edit the New Code from Course Settings, as they always could.'
+                    : "Course Settings' New Code is locked: it stays whatever the admin catalogue/fixed registry suggested, and teachers can't change it."}
+                </p>
+              </div>
+              <Button
+                variant={courseCodeEditableByTeacher ? 'destructive' : 'default'}
+                onClick={handleToggleCourseCodeEditable}
+                disabled={courseCodeSettingLoading || courseCodeSettingSaving}
+              >
+                {courseCodeSettingSaving ? 'Saving...' : courseCodeEditableByTeacher ? 'Turn Off' : 'Turn On'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Security Info */}
         <Card className="mt-6 border-blue-200 dark:border-blue-800">
           <CardContent className="pt-6">
@@ -495,6 +581,35 @@ export default function AdminSettings() {
             </Button>
             <Button variant="destructive" onClick={() => applyCredentialsLoginSetting(false)} disabled={credentialsSaving}>
               {credentialsSaving ? 'Turning off...' : 'Turn Off'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCourseCodeDisableConfirm} onOpenChange={setShowCourseCodeDisableConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Turn Off Teacher-editable New Code?</DialogTitle>
+            </div>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertDescription>
+              <p>Once this is off:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Teachers will no longer be able to toggle aliasing on/off or edit the New Code from Course Settings.</li>
+                <li>The New Code stays whatever the admin course catalogue (or fixed registry) already suggested.</li>
+              </ul>
+              <p className="mt-2 font-medium">You can turn this back on at any time.</p>
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCourseCodeDisableConfirm(false)} disabled={courseCodeSettingSaving}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => applyCourseCodeEditableSetting(false)} disabled={courseCodeSettingSaving}>
+              {courseCodeSettingSaving ? 'Turning off...' : 'Turn Off'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,17 +1,17 @@
-Course Code,Course Title,Credit Hour,Prerequisite,Content
+Course Code,Course Title,Credit Hour,Prerequisite,Content,UNESCO/New Code
 MAT1101,Differential and Integral Calculus,3.00,N/A,"Functional Analysis and Graphical Information
 Topics: Functions, Limits, Continuity, Derivatives, Integrals
 
-Textbook: 
+Textbook:
 1. Calculus by Howard Anton, Irl C. Bivens, Stephen Davis, 11th Edition
-2. Calculus: An Applied Approach by Ron Larson, 9th Edition"
+2. Calculus: An Applied Approach by Ron Larson, 9th Edition",0541-014-1103
 CSE1101,Introduction to Programming,3.00,N/A,"Basic programming concepts using Python
 Topics: Variables, Data Types, Control Flow, Functions, OOP
 
 Textbook:
-1. Python Programming by John Zelle"
+1. Python Programming by John Zelle",0613-014-1201
 PHY1101,Physics I,3.00,MAT1101,"Mechanics and Thermodynamics
 Topics: Kinematics, Dynamics, Energy, Heat
 
 Textbook:
-1. Physics for Scientists and Engineers by Serway & Jewett"
+1. Physics for Scientists and Engineers by Serway & Jewett",0533-014-1101

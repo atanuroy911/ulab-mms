@@ -20,7 +20,9 @@ import {
   Clock,
   FileText,
   List,
-  Trash
+  Trash,
+  RefreshCw,
+  Library
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +46,8 @@ interface AdminCourse {
   creditHour: number;
   prerequisite?: string;
   content?: string;
+  unescoCode?: string;
+  majors?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -56,6 +60,21 @@ interface ImportResult {
     updated: Array<{ courseCode: string; courseTitle: string }>;
     created: Array<{ courseCode: string; courseTitle: string }>;
   };
+}
+
+interface FixedProgram {
+  id: string;
+  name: string;
+  short: string;
+  icon: string;
+}
+
+interface RegistryDiffEntry {
+  code: string;
+  unescoCode: string;
+  title: string;
+  status: 'new' | 'changed' | 'unchanged';
+  existing?: { courseTitle: string; unescoCode: string };
 }
 
 export default function CourseManagement() {
@@ -82,11 +101,95 @@ export default function CourseManagement() {
     creditHour: '',
     prerequisite: 'N/A',
     content: '',
+    unescoCode: '',
+    majors: [] as string[],
   });
+  const [fixedPrograms, setFixedPrograms] = useState<FixedProgram[]>([]);
+  const [showRegistryModal, setShowRegistryModal] = useState(false);
+  const [registryMajor, setRegistryMajor] = useState('');
+  const [registryLoading, setRegistryLoading] = useState(false);
+  const [registryAvailable, setRegistryAvailable] = useState(true);
+  const [registryEntries, setRegistryEntries] = useState<RegistryDiffEntry[]>([]);
+  const [selectedRegistryCodes, setSelectedRegistryCodes] = useState<Set<string>>(new Set());
+  const [registryImporting, setRegistryImporting] = useState(false);
 
   useEffect(() => {
     fetchCourses();
+    fetchFixedPrograms();
   }, []);
+
+  const fetchFixedPrograms = async () => {
+    try {
+      const response = await fetch('/api/admin/courses/registry');
+      const data = await response.json();
+      if (response.ok) {
+        setFixedPrograms(data.programs || []);
+      }
+    } catch (error) {
+      console.error('Fetch fixed programs error:', error);
+    }
+  };
+
+  const fetchRegistryDiff = async (major: string) => {
+    setRegistryLoading(true);
+    setRegistryEntries([]);
+    setSelectedRegistryCodes(new Set());
+    try {
+      const response = await fetch(`/api/admin/courses/registry?major=${encodeURIComponent(major)}`);
+      const data = await response.json();
+      if (response.ok) {
+        setRegistryAvailable(data.available !== false);
+        const entries: RegistryDiffEntry[] = data.entries || [];
+        setRegistryEntries(entries);
+        setSelectedRegistryCodes(new Set(entries.filter(e => e.status !== 'unchanged').map(e => e.code)));
+      } else {
+        toast.error(data.error || 'Failed to load fixed registry');
+      }
+    } catch (error) {
+      console.error('Fetch registry diff error:', error);
+      toast.error('Failed to load fixed registry');
+    } finally {
+      setRegistryLoading(false);
+    }
+  };
+
+  const toggleRegistryCode = (code: string) => {
+    setSelectedRegistryCodes(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  const handleRegistryImport = async () => {
+    if (selectedRegistryCodes.size === 0) {
+      toast.error('Select at least one course to import');
+      return;
+    }
+
+    setRegistryImporting(true);
+    try {
+      const response = await fetch('/api/admin/courses/registry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ major: registryMajor, codes: Array.from(selectedRegistryCodes) }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`Imported from ${registryMajor}: ${data.created} created, ${data.updated} updated`);
+        fetchCourses();
+        fetchRegistryDiff(registryMajor);
+      } else {
+        toast.error(data.error || 'Failed to import from registry');
+      }
+    } catch (error) {
+      console.error('Registry import error:', error);
+      toast.error('Failed to import from registry');
+    } finally {
+      setRegistryImporting(false);
+    }
+  };
 
   const fetchCourses = async () => {
     try {
@@ -238,6 +341,8 @@ export default function CourseManagement() {
       creditHour: course.creditHour.toString(),
       prerequisite: course.prerequisite || 'N/A',
       content: course.content || '',
+      unescoCode: course.unescoCode || '',
+      majors: course.majors || [],
     });
     setShowEditModal(true);
   };
@@ -249,7 +354,18 @@ export default function CourseManagement() {
       creditHour: '',
       prerequisite: 'N/A',
       content: '',
+      unescoCode: '',
+      majors: [],
     });
+  };
+
+  const toggleFormMajor = (majorId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      majors: prev.majors.includes(majorId)
+        ? prev.majors.filter(m => m !== majorId)
+        : [...prev.majors, majorId],
+    }));
   };
 
   const handleExportCSV = () => {
@@ -264,6 +380,7 @@ export default function CourseManagement() {
       'Credit Hour': course.creditHour,
       'Prerequisite': course.prerequisite || 'N/A',
       'Content': course.content || '',
+      'UNESCO/New Code': course.unescoCode || '',
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -284,6 +401,7 @@ export default function CourseManagement() {
         'Credit Hour': '',
         'Prerequisite': '',
         'Content': '',
+        'UNESCO/New Code': '',
       }];
     } else {
       // Template with existing courses
@@ -293,6 +411,7 @@ export default function CourseManagement() {
         'Credit Hour': course.creditHour,
         'Prerequisite': course.prerequisite || 'N/A',
         'Content': course.content || '',
+        'UNESCO/New Code': course.unescoCode || '',
       }));
     }
 
@@ -329,6 +448,7 @@ export default function CourseManagement() {
         creditHour: parseFloat(row['Credit Hour']) || 0,
         prerequisite: row['Prerequisite']?.toString().trim() || 'N/A',
         content: row['Content']?.toString().trim() || '',
+        unescoCode: row['UNESCO/New Code']?.toString().trim() || '',
       }));
 
       // Send to API
@@ -409,6 +529,16 @@ export default function CourseManagement() {
             <Upload className="h-4 w-4 mr-2" />
             Import
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowRegistryModal(true);
+              if (registryMajor) fetchRegistryDiff(registryMajor);
+            }}
+          >
+            <Library className="h-4 w-4 mr-2" />
+            Import from Fixed Registry
+          </Button>
           <Button onClick={() => setShowAddModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Course
@@ -475,9 +605,11 @@ export default function CourseManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>Course Code</TableHead>
+                <TableHead>UNESCO/New Code</TableHead>
                 <TableHead>Course Title</TableHead>
                 <TableHead>Credit Hour</TableHead>
                 <TableHead>Prerequisite</TableHead>
+                <TableHead>Majors</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -485,9 +617,17 @@ export default function CourseManagement() {
               {filteredCourses.map((course) => (
                 <TableRow key={course._id}>
                   <TableCell className="font-mono font-semibold">{course.courseCode}</TableCell>
+                  <TableCell className="font-mono text-muted-foreground">{course.unescoCode || 'N/A'}</TableCell>
                   <TableCell>{course.courseTitle}</TableCell>
                   <TableCell>{course.creditHour}</TableCell>
                   <TableCell className="text-muted-foreground">{course.prerequisite || 'N/A'}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(course.majors || []).map((m) => (
+                        <Badge key={m} variant="outline">{m}</Badge>
+                      ))}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
@@ -579,14 +719,41 @@ export default function CourseManagement() {
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="add-prerequisite">Prerequisite</Label>
+                <Input
+                  id="add-prerequisite"
+                  value={formData.prerequisite}
+                  onChange={(e) => setFormData({ ...formData, prerequisite: e.target.value })}
+                  placeholder="e.g., N/A"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-unescoCode">UNESCO/New Code</Label>
+                <Input
+                  id="add-unescoCode"
+                  value={formData.unescoCode}
+                  onChange={(e) => setFormData({ ...formData, unescoCode: e.target.value })}
+                  placeholder="e.g., 0613-014-1201"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="add-prerequisite">Prerequisite</Label>
-              <Input
-                id="add-prerequisite"
-                value={formData.prerequisite}
-                onChange={(e) => setFormData({ ...formData, prerequisite: e.target.value })}
-                placeholder="e.g., N/A"
-              />
+              <Label>Majors</Label>
+              <div className="flex flex-wrap gap-2">
+                {fixedPrograms.map((p) => (
+                  <Badge
+                    key={p.id}
+                    variant={formData.majors.includes(p.id) ? 'default' : 'outline'}
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleFormMajor(p.id)}
+                  >
+                    {p.icon} {p.short}
+                  </Badge>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -670,14 +837,41 @@ export default function CourseManagement() {
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-prerequisite">Prerequisite</Label>
+                <Input
+                  id="edit-prerequisite"
+                  value={formData.prerequisite}
+                  onChange={(e) => setFormData({ ...formData, prerequisite: e.target.value })}
+                  placeholder="e.g., N/A"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-unescoCode">UNESCO/New Code</Label>
+                <Input
+                  id="edit-unescoCode"
+                  value={formData.unescoCode}
+                  onChange={(e) => setFormData({ ...formData, unescoCode: e.target.value })}
+                  placeholder="e.g., 0613-014-1201"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="edit-prerequisite">Prerequisite</Label>
-              <Input
-                id="edit-prerequisite"
-                value={formData.prerequisite}
-                onChange={(e) => setFormData({ ...formData, prerequisite: e.target.value })}
-                placeholder="e.g., N/A"
-              />
+              <Label>Majors</Label>
+              <div className="flex flex-wrap gap-2">
+                {fixedPrograms.map((p) => (
+                  <Badge
+                    key={p.id}
+                    variant={formData.majors.includes(p.id) ? 'default' : 'outline'}
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleFormMajor(p.id)}
+                  >
+                    {p.icon} {p.short}
+                  </Badge>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -721,7 +915,7 @@ export default function CourseManagement() {
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                The file should have columns: Course Code, Course Title, Credit Hour, Prerequisite, Content
+                The file should have columns: Course Code, Course Title, Credit Hour, Prerequisite, Content, UNESCO/New Code
               </AlertDescription>
             </Alert>
 
@@ -986,6 +1180,12 @@ export default function CourseManagement() {
                         </p>
                       </div>
                       <div className="min-w-0">
+                        <Label className="text-xs text-muted-foreground">UNESCO/New Code</Label>
+                        <p className="text-sm font-mono mt-1 break-all">
+                          {viewingCourse.unescoCode || 'N/A'}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
                         <Label className="text-xs text-muted-foreground flex items-center gap-1">
                           <List className="h-3 w-3 flex-shrink-0" />
                           Prerequisite
@@ -994,6 +1194,16 @@ export default function CourseManagement() {
                           {viewingCourse.prerequisite || 'N/A'}
                         </p>
                       </div>
+                      {(viewingCourse.majors || []).length > 0 && (
+                        <div className="min-w-0">
+                          <Label className="text-xs text-muted-foreground">Majors</Label>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {(viewingCourse.majors || []).map((m) => (
+                              <Badge key={m} variant="outline">{m}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -1136,6 +1346,134 @@ export default function CourseManagement() {
                 <>
                   <Trash className="h-4 w-4 mr-2" />
                   Delete All Courses
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import from Fixed Registry Modal */}
+      <Dialog open={showRegistryModal} onOpenChange={setShowRegistryModal}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import from Fixed Registry</DialogTitle>
+            <DialogDescription>
+              Compare the DB catalogue against the PDF-transcribed fixed registry for a major, and merge selected courses.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="registry-major">Major</Label>
+              <Select
+                value={registryMajor}
+                onValueChange={(value) => {
+                  setRegistryMajor(value);
+                  fetchRegistryDiff(value);
+                }}
+              >
+                <SelectTrigger id="registry-major">
+                  <SelectValue placeholder="Select a major..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {fixedPrograms.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.icon} {p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {registryLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : !registryMajor ? null : !registryAvailable ? (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>No fixed catalogue available for this major.</AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {registryEntries.filter(e => e.status === 'new').length} new,{' '}
+                    {registryEntries.filter(e => e.status === 'changed').length} changed,{' '}
+                    {registryEntries.filter(e => e.status === 'unchanged').length} unchanged
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={() => fetchRegistryDiff(registryMajor)}>
+                    <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+
+                <div className="border rounded-lg max-h-96 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>UNESCO Code</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {registryEntries.map((entry) => (
+                        <TableRow key={entry.code}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={selectedRegistryCodes.has(entry.code)}
+                              onChange={() => toggleRegistryCode(entry.code)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono">{entry.code}</TableCell>
+                          <TableCell>
+                            {entry.title}
+                            {entry.status === 'changed' && entry.existing && entry.existing.courseTitle !== entry.title && (
+                              <div className="text-xs text-muted-foreground">was: {entry.existing.courseTitle}</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {entry.unescoCode}
+                            {entry.status === 'changed' && entry.existing && entry.existing.unescoCode !== entry.unescoCode && (
+                              <div className="text-muted-foreground">was: {entry.existing.unescoCode || 'N/A'}</div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={entry.status === 'new' ? 'default' : entry.status === 'changed' ? 'secondary' : 'outline'}
+                            >
+                              {entry.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRegistryModal(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={handleRegistryImport}
+              disabled={registryImporting || selectedRegistryCodes.size === 0}
+            >
+              {registryImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import Selected ({selectedRegistryCodes.size})
                 </>
               )}
             </Button>

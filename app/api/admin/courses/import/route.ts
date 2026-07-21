@@ -9,6 +9,7 @@ interface CourseImport {
   creditHour: number;
   prerequisite?: string;
   content?: string;
+  unescoCode?: string;
 }
 
 interface ImportResult {
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
                 creditHour,
                 prerequisite: courseData.prerequisite?.trim() || 'N/A',
                 content: courseData.content?.trim() || '',
+                unescoCode: courseData.unescoCode?.trim() || '',
               },
               { new: true, runValidators: true }
             );
@@ -114,6 +116,7 @@ export async function POST(request: NextRequest) {
             creditHour,
             prerequisite: courseData.prerequisite?.trim() || 'N/A',
             content: courseData.content?.trim() || '',
+            unescoCode: courseData.unescoCode?.trim() || '',
           });
           result.created++;
           result.details.created.push({ courseCode, courseTitle });
@@ -155,6 +158,7 @@ export async function GET(request: NextRequest) {
       creditHour: course.creditHour,
       prerequisite: course.prerequisite || 'N/A',
       content: course.content || '',
+      unescoCode: course.unescoCode || '',
     }));
 
     return NextResponse.json({ courses: exportData }, { status: 200 });
