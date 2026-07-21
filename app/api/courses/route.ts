@@ -129,10 +129,17 @@ export async function POST(request: NextRequest) {
     // Suggest a New Code (aka UNESCO code) from the admin catalogue, falling back to
     // the fixed PDF-transcribed registry, when the teacher didn't type one in. Storing
     // it doesn't turn aliasing on by itself -- everywhere else keys off aliasEnabled.
+    // Some catalogue/registry entries use the course code itself as a placeholder when
+    // no real UNESCO code is on file -- that's not an actual "New Code", so ignore it.
+    const trimmedCode = code.trim();
+    const isDistinctCode = (candidate?: string | null) =>
+      Boolean(candidate && candidate.trim() && candidate.trim().toUpperCase() !== trimmedCode.toUpperCase());
+
     let resolvedAlternateCode = String(alternateCode || '').trim();
     if (!resolvedAlternateCode) {
-      const adminCourse = await AdminCourse.findOne({ courseCode: code.trim() }).select('unescoCode').lean();
-      resolvedAlternateCode = adminCourse?.unescoCode || findFixedCourseByCode(code.trim())?.course.unescoCode || '';
+      const adminCourse = await AdminCourse.findOne({ courseCode: trimmedCode }).select('unescoCode').lean();
+      const fallback = adminCourse?.unescoCode || findFixedCourseByCode(trimmedCode)?.course.unescoCode || '';
+      resolvedAlternateCode = isDistinctCode(fallback) ? fallback : '';
     }
 
     const course = await Course.create({

@@ -115,26 +115,33 @@ export default function Dashboard() {
     }
   };
 
+  // Some catalogue/registry entries don't have a real UNESCO code on file yet and
+  // use the course code itself as a placeholder -- that's not an actual "New Code",
+  // so don't treat it as one (it would otherwise always force New Code on).
+  const isDistinctCode = (code: string, candidate?: string | null) =>
+    Boolean(candidate && candidate.trim() && candidate.trim().toUpperCase() !== code.trim().toUpperCase());
+
   const handleCourseSelect = (course: AdminCourse | null) => {
     if (course) {
       setSelectedAdminCourse(course);
       setIsCustomCourse(false);
+      const hasDistinctUnescoCode = isDistinctCode(course.courseCode, course.unescoCode);
       setFormData({
         ...formData,
         name: course.courseTitle,
         code: course.courseCode,
-        aliasEnabled: Boolean(course.unescoCode),
-        alternateCode: course.unescoCode || '',
+        aliasEnabled: hasDistinctUnescoCode,
+        alternateCode: hasDistinctUnescoCode ? course.unescoCode! : '',
       });
       setDuplicateError('');
 
-      // Admin catalogue doesn't have a UNESCO code for this course yet --
+      // Admin catalogue doesn't have a distinct UNESCO code for this course yet --
       // fall back to the fixed registry so New Code is still auto-filled.
-      if (!course.unescoCode) {
+      if (!hasDistinctUnescoCode) {
         fetch(`/api/courses/catalogue-lookup?code=${encodeURIComponent(course.courseCode)}`)
           .then((res) => res.json())
           .then((data) => {
-            if (data.unescoCode) {
+            if (isDistinctCode(course.courseCode, data.unescoCode)) {
               setFormData((prev) => ({ ...prev, aliasEnabled: true, alternateCode: data.unescoCode }));
             }
           })
