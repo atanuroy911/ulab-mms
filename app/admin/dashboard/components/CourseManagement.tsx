@@ -191,12 +191,60 @@ export default function CourseManagement() {
     }
   };
 
+  const handleRegistryImportAllMajors = async () => {
+    if (fixedPrograms.length === 0) {
+      toast.error('No fixed catalogue programs available');
+      return;
+    }
+
+    setRegistryImporting(true);
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let failed = 0;
+
+    try {
+      for (const program of fixedPrograms) {
+        try {
+          const diffRes = await fetch(`/api/admin/courses/registry?major=${encodeURIComponent(program.id)}`);
+          const diffData = await diffRes.json();
+          if (!diffRes.ok || diffData.available === false) continue;
+
+          const codes = (diffData.entries || [])
+            .filter((e: RegistryDiffEntry) => e.status !== 'unchanged')
+            .map((e: RegistryDiffEntry) => e.code);
+          if (codes.length === 0) continue;
+
+          const importRes = await fetch('/api/admin/courses/registry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ major: program.id, codes }),
+          });
+          const importData = await importRes.json();
+          if (importRes.ok) {
+            totalCreated += importData.created;
+            totalUpdated += importData.updated;
+          } else {
+            failed++;
+          }
+        } catch {
+          failed++;
+        }
+      }
+
+      toast.success(`Imported from all majors: ${totalCreated} created, ${totalUpdated} updated${failed ? `, ${failed} failed` : ''}`);
+      fetchCourses();
+      if (registryMajor) fetchRegistryDiff(registryMajor);
+    } finally {
+      setRegistryImporting(false);
+    }
+  };
+
   const fetchCourses = async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/admin/courses');
       const data = await response.json();
-      
+
       if (response.ok) {
         setCourses(data.courses || []);
       } else {
@@ -1395,16 +1443,34 @@ export default function CourseManagement() {
               </Alert>
             ) : (
               <>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-sm text-muted-foreground">
                     {registryEntries.filter(e => e.status === 'new').length} new,{' '}
                     {registryEntries.filter(e => e.status === 'changed').length} changed,{' '}
                     {registryEntries.filter(e => e.status === 'unchanged').length} unchanged
                   </p>
-                  <Button variant="ghost" size="sm" onClick={() => fetchRegistryDiff(registryMajor)}>
-                    <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                    Refresh
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedRegistryCodes(new Set(registryEntries.map(e => e.code)))}
+                      disabled={registryEntries.length === 0}
+                    >
+                      Select All ({registryEntries.length})
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedRegistryCodes(new Set())}
+                      disabled={selectedRegistryCodes.size === 0}
+                    >
+                      Select None
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => fetchRegistryDiff(registryMajor)}>
+                      <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                      Refresh
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="border rounded-lg max-h-96 overflow-y-auto">
@@ -1457,9 +1523,27 @@ export default function CourseManagement() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRegistryModal(false)}>
+          <DialogFooter className="flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setShowRegistryModal(false)} disabled={registryImporting}>
               Close
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleRegistryImportAllMajors}
+              disabled={registryImporting || fixedPrograms.length === 0}
+              title="Import every new/changed course from every major's fixed catalogue"
+            >
+              {registryImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Library className="h-4 w-4 mr-2" />
+                  Import All Majors
+                </>
+              )}
             </Button>
             <Button
               onClick={handleRegistryImport}

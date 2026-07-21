@@ -123,8 +123,23 @@ export default function Dashboard() {
         ...formData,
         name: course.courseTitle,
         code: course.courseCode,
+        aliasEnabled: Boolean(course.unescoCode),
+        alternateCode: course.unescoCode || '',
       });
       setDuplicateError('');
+
+      // Admin catalogue doesn't have a UNESCO code for this course yet --
+      // fall back to the fixed registry so New Code is still auto-filled.
+      if (!course.unescoCode) {
+        fetch(`/api/courses/catalogue-lookup?code=${encodeURIComponent(course.courseCode)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.unescoCode) {
+              setFormData((prev) => ({ ...prev, aliasEnabled: true, alternateCode: data.unescoCode }));
+            }
+          })
+          .catch(() => {});
+      }
     } else {
       // Custom course option selected
       setSelectedAdminCourse(null);
@@ -133,6 +148,8 @@ export default function Dashboard() {
         ...formData,
         name: '',
         code: '',
+        aliasEnabled: false,
+        alternateCode: '',
       });
       setDuplicateError('');
     }
@@ -928,6 +945,11 @@ export default function Dashboard() {
                       onChange={(e) => setFormData({ ...formData, alternateCode: e.target.value })}
                       placeholder="e.g., CSE470B"
                     />
+                    {selectedAdminCourse && formData.alternateCode && (
+                      <p className="text-xs text-muted-foreground">
+                        Auto-filled from the course catalogue&apos;s UNESCO code. You can edit it.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
