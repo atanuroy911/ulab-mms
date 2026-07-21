@@ -38,6 +38,8 @@ interface ImportCourseInfo {
   name?: string;
   aliasEnabled?: boolean;
   alternateCode?: string;
+  classTime?: string;
+  classRoom?: string;
 }
 
 interface ImportStudentsModalProps {
@@ -47,6 +49,8 @@ interface ImportStudentsModalProps {
   courseId: string;
   course: ImportCourseInfo;
   onImportComplete: () => Promise<void>;
+  /** Called after the PDF's detected Class Time/Room are used to fill in blanks on the course. */
+  onCourseUpdated?: () => void;
 }
 
 interface PdfSlotState {
@@ -82,6 +86,7 @@ export function ImportStudentsModal({
   courseId,
   course,
   onImportComplete,
+  onCourseUpdated,
 }: ImportStudentsModalProps) {
   const [csvInput, setCsvInput] = useState('');
   const [deleteMissing, setDeleteMissing] = useState(false);
@@ -90,12 +95,39 @@ export function ImportStudentsModal({
   const [showFormatHelp, setShowFormatHelp] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [pdfSlots, setPdfSlots] = useState<PdfSlotState[]>(() => makeSlots(course));
+  const [scheduleFilled, setScheduleFilled] = useState(false);
 
   const applyPdfSlotsToInput = (slots: PdfSlotState[]) => {
     const lines = slots
       .filter((slot) => slot.result && (courseCodeMatches(slot.result.courseInfo.code, slot.expectedCode) || slot.mismatchConfirmed))
       .flatMap((slot) => slot.result!.studentLines);
     setCsvInput(lines.join('\n'));
+  };
+
+  // If the course doesn't have a class time/room yet, fill them in from a trustworthy
+  // (matched or confirmed) PDF's detected schedule -- one-shot per modal session.
+  const maybeFillSchedule = async (result: PdfParseResult) => {
+    if (scheduleFilled) return;
+    const { classTime, classRoom } = result.courseInfo;
+    const update: { classTime?: string; classRoom?: string } = {};
+    if (!course.classTime?.trim() && classTime) update.classTime = classTime;
+    if (!course.classRoom?.trim() && classRoom) update.classRoom = classRoom;
+    if (Object.keys(update).length === 0) return;
+
+    setScheduleFilled(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+      });
+      if (res.ok) {
+        toast.success('Filled in class time/room from the PDF');
+        onCourseUpdated?.();
+      }
+    } catch (err) {
+      console.error('Failed to auto-fill class time/room', err);
+    }
   };
 
   const handlePdfFileSelect = async (slotKey: string, file: File) => {
@@ -111,6 +143,9 @@ export function ImportStudentsModal({
         applyPdfSlotsToInput(next);
         return next;
       });
+      if (courseCodeMatches(result.courseInfo.code, pdfSlots.find((s) => s.key === slotKey)?.expectedCode || course.code)) {
+        maybeFillSchedule(result);
+      }
     } catch (err) {
       console.error('Failed to parse PDF', err);
       toast.error('Failed to read this PDF. Make sure it is a text-based (not scanned-image) PDF.');
@@ -130,6 +165,8 @@ export function ImportStudentsModal({
     setPdfSlots((prev) => {
       const next = prev.map((s) => (s.key === slotKey ? { ...s, mismatchConfirmed: true } : s));
       applyPdfSlotsToInput(next);
+      const confirmedSlot = next.find((s) => s.key === slotKey);
+      if (confirmedSlot?.result) maybeFillSchedule(confirmedSlot.result);
       return next;
     });
   };
@@ -236,6 +273,7 @@ export function ImportStudentsModal({
     setError('');
     setShowFormatHelp(false);
     setPdfSlots(makeSlots(course));
+    setScheduleFilled(false);
     onClose();
   };
 

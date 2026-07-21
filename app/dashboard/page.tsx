@@ -24,6 +24,8 @@ interface Course {
   _id: string;
   name: string;
   code: string;
+  classTime?: string;
+  classRoom?: string;
   semester: string;
   year: number;
   section: string;
@@ -314,11 +316,42 @@ export default function Dashboard() {
       .filter((slot) => slot.result && (courseCodeMatches(slot.result.courseInfo.code, slot.expectedCode) || slot.mismatchConfirmed))
       .flatMap((slot) => slot.result!.studentLines);
 
+  // If the newly created course doesn't have a class time/room yet, fill them in from a
+  // trustworthy (matched or confirmed) PDF's detected schedule -- one-shot per wizard run.
+  const maybeFillScheduleForNewCourse = async (result: PdfParseResult) => {
+    if (!createdCourseForImport) return;
+    const { classTime, classRoom } = result.courseInfo;
+    const update: { classTime?: string; classRoom?: string } = {};
+    if (!createdCourseForImport.classTime?.trim() && classTime) update.classTime = classTime;
+    if (!createdCourseForImport.classRoom?.trim() && classRoom) update.classRoom = classRoom;
+    if (Object.keys(update).length === 0) return;
+
+    try {
+      const res = await fetch(`/api/courses/${createdCourseForImport._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCreatedCourseForImport(data.course);
+        setCourses((prev) => prev.map((c) => (c._id === data.course._id ? data.course : c)));
+        notify.success('Filled in class time/room from the PDF');
+      }
+    } catch (err) {
+      console.error('Failed to auto-fill class time/room', err);
+    }
+  };
+
   const handleImportPdfFileSelect = async (slotKey: string, file: File) => {
     setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, file, parsing: true, result: null, mismatchConfirmed: false } : s)));
     try {
       const result = await parsePdfRoster(file);
       setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, parsing: false, result } : s)));
+      const slot = importPdfSlots.find((s) => s.key === slotKey);
+      if (courseCodeMatches(result.courseInfo.code, slot?.expectedCode || createdCourseForImport?.code || '')) {
+        maybeFillScheduleForNewCourse(result);
+      }
     } catch (err) {
       console.error('Failed to parse PDF', err);
       notify.error('Failed to read this PDF. Make sure it is a text-based (not scanned-image) PDF.');
@@ -331,7 +364,12 @@ export default function Dashboard() {
   };
 
   const confirmImportPdfMismatch = (slotKey: string) => {
-    setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, mismatchConfirmed: true } : s)));
+    setImportPdfSlots((prev) => {
+      const next = prev.map((s) => (s.key === slotKey ? { ...s, mismatchConfirmed: true } : s));
+      const confirmedSlot = next.find((s) => s.key === slotKey);
+      if (confirmedSlot?.result) maybeFillScheduleForNewCourse(confirmedSlot.result);
+      return next;
+    });
   };
 
   const handleImportStudentsForNewCourse = async () => {

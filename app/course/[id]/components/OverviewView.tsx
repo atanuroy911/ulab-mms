@@ -193,7 +193,7 @@ export default function OverviewView({
                 className="w-full justify-start"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Import Students (CSV)
+                Import Students (CSV/PDF)
               </Button>
             </div>
 

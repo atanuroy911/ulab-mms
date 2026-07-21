@@ -98,6 +98,8 @@ interface Course {
   _id: string;
   name: string;
   code: string;
+  classTime?: string;
+  classRoom?: string;
   semester: string;
   year: number;
   courseType: 'Theory' | 'Lab';
@@ -1830,6 +1832,11 @@ export default function CoursePage() {
           name: course?.name,
           aliasEnabled: course?.aliasEnabled,
           alternateCode: course?.alternateCode,
+          classTime: course?.classTime,
+          classRoom: course?.classRoom,
+        }}
+        onCourseUpdated={() => {
+          fetchCourseData();
         }}
         onImportComplete={async () => {
           await fetchCourseData();

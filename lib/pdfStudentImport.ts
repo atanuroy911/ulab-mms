@@ -7,6 +7,8 @@ import { splitIdAndName } from '@/app/utils/csv';
 export interface PdfCourseInfo {
   code: string | null;
   name: string | null;
+  classTime: string | null;
+  classRoom: string | null;
 }
 
 export interface PdfParseResult {
@@ -90,10 +92,35 @@ export async function extractPdfLines(file: File): Promise<string[]> {
   return lines;
 }
 
-/** Best-effort detection of the course code/name from the PDF's header/title lines. */
+/** Pulls the value after a "Label :" on a header line, stopping at the next known field label. */
+function extractLabeledValue(line: string, labelPattern: RegExp): string | null {
+  const match = line.match(labelPattern);
+  if (!match || match.index === undefined) return null;
+  const afterLabel = line.slice(match.index + match[0].length);
+  const value = afterLabel.split(HEADER_FIELD_LABELS)[0].trim();
+  return value || null;
+}
+
+/** Best-effort detection of Class Time / Class Room from the PDF's header lines (URMS-style "Label : value"). */
+function detectScheduleInfo(lines: string[]): { classTime: string | null; classRoom: string | null } {
+  const searchLines = lines.slice(0, 40);
+  let classTime: string | null = null;
+  let classRoom: string | null = null;
+
+  for (const line of searchLines) {
+    if (!classTime) classTime = extractLabeledValue(line, /\bClass Time\s*:/i);
+    if (!classRoom) classRoom = extractLabeledValue(line, /\bClass Room\s*:/i);
+    if (classTime && classRoom) break;
+  }
+
+  return { classTime, classRoom };
+}
+
+/** Best-effort detection of the course code/name/schedule from the PDF's header/title lines. */
 export function detectCourseInfo(lines: string[]): PdfCourseInfo {
   // Course headers are almost always near the top of the document.
   const searchLines = lines.slice(0, 40);
+  const schedule = detectScheduleInfo(lines);
 
   // Prefer a line that explicitly labels itself as the course line (URMS-style
   // "Course : CSE2201 Algorithms Class Time : ..."), so we don't pick up an
@@ -108,7 +135,7 @@ export function detectCourseInfo(lines: string[]): PdfCourseInfo {
         .split(HEADER_FIELD_LABELS)[0]
         .replace(/^[\s:.\-–—]+|[\s:.\-–—]+$/g, '')
         .trim();
-      return { code, name: name || null };
+      return { code, name: name || null, ...schedule };
     }
   }
 
@@ -124,10 +151,10 @@ export function detectCourseInfo(lines: string[]): PdfCourseInfo {
       .replace(/^[\s:.\-–—]+|[\s:.\-–—]+$/g, '')
       .trim();
 
-    return { code, name: remainder || null };
+    return { code, name: remainder || null, ...schedule };
   }
 
-  return { code: null, name: null };
+  return { code: null, name: null, ...schedule };
 }
 
 /** Extracts "StudentID, StudentName" lines from PDF text lines, filtering out non-roster rows. */
