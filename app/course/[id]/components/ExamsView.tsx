@@ -43,6 +43,7 @@ interface ExamsViewProps {
   onShowExamSettings: (examId: string) => void;
   onSetExamSettings: (settings: ExamSettings) => void;
   onDeleteExam: (examId: string) => void;
+  onConfigureCategory: (category: 'Quiz' | 'Assignment' | 'Project') => void;
 }
 
 export default function ExamsView({
@@ -52,6 +53,7 @@ export default function ExamsView({
   onShowExamSettings,
   onSetExamSettings,
   onDeleteExam,
+  onConfigureCategory,
 }: ExamsViewProps) {
   const quizExams = exams.filter((exam) => exam.examCategory === 'Quiz');
   const assignmentExams = exams.filter((exam) => exam.examCategory === 'Assignment');
@@ -102,6 +104,20 @@ export default function ExamsView({
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary">{course.quizWeightage ?? 0}%</Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    title="Configure Quiz weightage/aggregation"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onConfigureCategory('Quiz');
+                    }}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
                   <span className="text-sm text-muted-foreground">{openGroup === 'quiz' ? 'Collapse' : 'Expand'}</span>
                   {openGroup === 'quiz' ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
                 </div>
@@ -184,6 +200,20 @@ export default function ExamsView({
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary">{course.assignmentWeightage ?? 0}%</Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    title={`Configure ${course.courseType === 'Lab' ? 'CLA' : 'Assignment'} weightage/aggregation`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onConfigureCategory('Assignment');
+                    }}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
                   <span className="text-sm text-muted-foreground">{openGroup === 'assignment' ? 'Collapse' : 'Expand'}</span>
                   {openGroup === 'assignment' ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
                 </div>
@@ -267,6 +297,20 @@ export default function ExamsView({
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary">{course.projectWeightage ?? 0}%</Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    title={`Configure ${course.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} weightage`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onConfigureCategory('Project');
+                    }}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
                   <span className="text-sm text-muted-foreground">{openGroup === 'project' ? 'Collapse' : 'Expand'}</span>
                   {openGroup === 'project' ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
                 </div>

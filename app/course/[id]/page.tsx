@@ -201,6 +201,87 @@ export default function CoursePage() {
     }
     return null;
   };
+
+  // Configure Quiz/Assignment(CLA)/Project group settings (total weightage + aggregation
+  // method) from the exam-add flow (when it's still 0, i.e. never configured) or the
+  // gear icon on the Exams accordion.
+  const [categoryConfigDialog, setCategoryConfigDialog] = useState<{
+    category: 'Quiz' | 'Assignment' | 'Project';
+    thenOpenAddExam: boolean;
+  } | null>(null);
+  const [categoryConfigForm, setCategoryConfigForm] = useState({
+    weightage: '',
+    aggregation: 'average' as 'average' | 'best' | 'sum',
+  });
+  const [savingCategoryConfig, setSavingCategoryConfig] = useState(false);
+
+  const openCategoryConfigDialog = (category: 'Quiz' | 'Assignment' | 'Project', thenOpenAddExam = false) => {
+    const weightage = category === 'Quiz'
+      ? course?.quizWeightage
+      : category === 'Assignment'
+      ? course?.assignmentWeightage
+      : course?.projectWeightage;
+    const aggregation = category === 'Quiz'
+      ? course?.quizAggregation || 'average'
+      : category === 'Assignment'
+      ? course?.assignmentAggregation || 'average'
+      : 'sum';
+
+    setCategoryConfigForm({
+      weightage: weightage ? String(weightage) : '',
+      aggregation,
+    });
+    setCategoryConfigDialog({ category, thenOpenAddExam });
+  };
+
+  const handleSaveCategoryConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryConfigDialog) return;
+
+    const weightageNum = parseFloat(categoryConfigForm.weightage);
+    if (isNaN(weightageNum) || weightageNum <= 0) {
+      notify.error('Please enter a total weightage greater than 0');
+      return;
+    }
+
+    const { category, thenOpenAddExam } = categoryConfigDialog;
+    const updateData: any = {};
+    if (category === 'Quiz') {
+      updateData.quizWeightage = weightageNum;
+      updateData.quizAggregation = categoryConfigForm.aggregation === 'best' ? 'best' : 'average';
+    } else if (category === 'Assignment') {
+      updateData.assignmentWeightage = weightageNum;
+      updateData.assignmentAggregation = categoryConfigForm.aggregation;
+    } else {
+      updateData.projectWeightage = weightageNum;
+    }
+
+    setSavingCategoryConfig(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save settings');
+      }
+
+      setCourse(data.course);
+      notify.success(`${category === 'Assignment' && course?.courseType === 'Lab' ? 'CLA' : category} settings saved`);
+      setCategoryConfigDialog(null);
+
+      if (thenOpenAddExam) {
+        openExamModal(category);
+      }
+    } catch (err: any) {
+      notify.error(err.message || 'Failed to save settings');
+    } finally {
+      setSavingCategoryConfig(false);
+    }
+  };
+
   const [examSettings, setExamSettings] = useState({
     displayName: '',
     weightage: '',
@@ -534,6 +615,16 @@ export default function CoursePage() {
   };
 
   const openExamModal = (presetCategory?: Exam['examCategory']) => {
+    // First time adding a Quiz/Assignment(CLA) item with no group weightage configured yet --
+    // ask for the total weightage and aggregation method before letting them add the item.
+    if (
+      (presetCategory === 'Quiz' || presetCategory === 'Assignment') &&
+      !getInheritedExamWeightage(presetCategory)
+    ) {
+      openCategoryConfigDialog(presetCategory, true);
+      return;
+    }
+
     if (presetCategory === 'Quiz' || presetCategory === 'Assignment' || presetCategory === 'Project') {
       const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
       const categoryLabel = presetCategory === 'Assignment' && course?.courseType === 'Lab' ? 'Assessment' : presetCategory;
@@ -1690,6 +1781,7 @@ export default function CoursePage() {
                 onShowExamSettings={(examId) => setShowExamSettings(examId)}
                 onSetExamSettings={setExamSettings}
                 onDeleteExam={handleDeleteExam}
+                onConfigureCategory={(category) => openCategoryConfigDialog(category, false)}
               />
             )}
 
@@ -1912,6 +2004,18 @@ export default function CoursePage() {
                 value={examFormData.examCategory}
                 onChange={(e) => {
                   const nextCategory = e.target.value;
+
+                  // First time picking Quiz/Assignment(CLA) with no group weightage configured
+                  // yet -- ask for it now, then come back to this form.
+                  if (
+                    (nextCategory === 'Quiz' || nextCategory === 'Assignment') &&
+                    !getInheritedExamWeightage(nextCategory)
+                  ) {
+                    setExamFormData({ ...examFormData, examCategory: nextCategory });
+                    openCategoryConfigDialog(nextCategory as 'Quiz' | 'Assignment', false);
+                    return;
+                  }
+
                   const inheritedWeightage = getInheritedExamWeightage(nextCategory);
 
                   setExamFormData({
@@ -2030,6 +2134,75 @@ export default function CoursePage() {
               </Button>
               <Button type="submit">
                 Create Exam
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Configure Quiz / Assignment(CLA) / Project group settings */}
+      <Dialog open={!!categoryConfigDialog} onOpenChange={(open) => !open && setCategoryConfigDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Configure {categoryConfigDialog?.category === 'Assignment' && course?.courseType === 'Lab'
+                ? 'CLA'
+                : categoryConfigDialog?.category === 'Project' && course?.courseType === 'Lab'
+                ? 'OEL / CE Project'
+                : categoryConfigDialog?.category} Settings
+            </DialogTitle>
+            <DialogDescription>
+              {categoryConfigDialog?.thenOpenAddExam
+                ? 'Set the total weightage and aggregation method for this group before adding your first item.'
+                : 'Update the total weightage and aggregation method for this group.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveCategoryConfig} className="space-y-4">
+            <div>
+              <Label>Total Weightage (%)</Label>
+              <Input
+                type="number"
+                required
+                min="0.01"
+                max="100"
+                step="0.01"
+                value={categoryConfigForm.weightage}
+                onChange={(e) => setCategoryConfigForm({ ...categoryConfigForm, weightage: e.target.value })}
+                placeholder="e.g., 15"
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Shared across all {categoryConfigDialog?.category === 'Project' ? 'items in this group (summed)' : 'items in this group'}.
+              </p>
+            </div>
+
+            {categoryConfigDialog?.category !== 'Project' && (
+              <div>
+                <Label>Aggregation Method</Label>
+                <select
+                  value={categoryConfigForm.aggregation}
+                  onChange={(e) => setCategoryConfigForm({ ...categoryConfigForm, aggregation: e.target.value as 'average' | 'best' | 'sum' })}
+                  className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+                >
+                  <option value="average">Average of all items</option>
+                  {categoryConfigDialog?.category === 'Quiz' && <option value="best">Best item only</option>}
+                  {categoryConfigDialog?.category === 'Assignment' && course?.courseType === 'Lab' && (
+                    <option value="sum">Sum of all items</option>
+                  )}
+                  {categoryConfigDialog?.category === 'Assignment' && course?.courseType !== 'Lab' && (
+                    <option value="best">Best item only</option>
+                  )}
+                </select>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCategoryConfigDialog(null)} disabled={savingCategoryConfig}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingCategoryConfig}>
+                {savingCategoryConfig ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </form>
