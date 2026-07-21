@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Upload, Info, Copy, Check, FileText, Loader2, AlertTriangle, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { parseCSV } from '@/app/utils/csv';
-import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '../lib/pdfStudentImport';
+import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pdfStudentImport';
 import { toast } from 'sonner';
 
 const FORMAT_HELP_PROMPT = `I will paste a student roster copied from the URMS Attendance Sheet page (https://urms-awp.ulab.edu.bd/AttendanceSheet), which contains student IDs, names, and possibly other columns such as email, section, or program.
