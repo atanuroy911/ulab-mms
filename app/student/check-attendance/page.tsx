@@ -15,6 +15,7 @@ interface AttendanceStats {
   courseCode: string;
   totalSessions: number;
   attendedSessions: number;
+  absentSessions: number;
   percentage: number;
   sessions: Array<{
     id: string;
@@ -127,17 +128,21 @@ export default function CheckAttendancePage() {
                 <CardDescription className="text-base">{stats.courseCode}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-lg bg-blue-50 p-4 text-center">
-                    <div className="text-3xl font-bold text-blue-600">{stats.attendedSessions}</div>
-                    <div className="text-sm text-gray-600">Attended</div>
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+                  <div className="rounded-lg bg-green-50 p-4 text-center">
+                    <div className="text-3xl font-bold text-green-600">{stats.attendedSessions}</div>
+                    <div className="text-sm text-gray-600">Present</div>
+                  </div>
+                  <div className="rounded-lg bg-red-50 p-4 text-center">
+                    <div className="text-3xl font-bold text-red-600">{stats.absentSessions}</div>
+                    <div className="text-sm text-gray-600">Absent</div>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-4 text-center">
                     <div className="text-3xl font-bold text-gray-600">{stats.totalSessions}</div>
                     <div className="text-sm text-gray-600">Total Sessions</div>
                   </div>
-                  <div className="rounded-lg bg-green-50 p-4 text-center">
-                    <div className="text-3xl font-bold text-green-600">{stats.percentage}%</div>
+                  <div className="rounded-lg bg-blue-50 p-4 text-center">
+                    <div className="text-3xl font-bold text-blue-600">{stats.percentage}%</div>
                     <div className="text-sm text-gray-600">Percentage</div>
                   </div>
                 </div>

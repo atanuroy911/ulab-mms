@@ -4,6 +4,7 @@ import Student from '@/models/Student';
 import Mark from '@/models/Mark';
 import Exam from '@/models/Exam';
 import Course from '@/models/Course';
+import AttendanceSession from '@/models/AttendanceSession';
 
 // GET student marks by student ID
 export async function GET(request: NextRequest) {
@@ -85,11 +86,29 @@ export async function GET(request: NextRequest) {
           })
         );
 
+        // Attendance summary for this course: present only counts sessions where
+        // this student has a record explicitly marked present.
+        const attendanceSessions = await AttendanceSession.find({ courseId: course._id });
+        const totalSessions = attendanceSessions.length;
+        const presentSessions = attendanceSessions.filter((session) =>
+          session.records.some(
+            (record: any) => record.studentIdString === studentRecord.studentId && record.status === 'present'
+          )
+        ).length;
+        const absentSessions = totalSessions - presentSessions;
+        const attendancePercentage = totalSessions > 0 ? (presentSessions / totalSessions) * 100 : 0;
+
         return {
           student: {
             _id: studentRecord._id,
             studentId: studentRecord.studentId,
             name: studentRecord.name,
+          },
+          attendance: {
+            totalSessions,
+            presentSessions,
+            absentSessions,
+            percentage: Math.round(attendancePercentage * 100) / 100,
           },
           course: {
             _id: course._id,

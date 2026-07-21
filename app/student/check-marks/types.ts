@@ -48,12 +48,20 @@ export interface ClassStats {
   count: number;
 }
 
+export interface AttendanceSummary {
+  totalSessions: number;
+  presentSessions: number;
+  absentSessions: number;
+  percentage: number;
+}
+
 export interface CourseData {
   student: Student;
   course: Course;
   exams: Exam[];
   marks: Mark[];
   classStats: ClassStats[];
+  attendance: AttendanceSummary;
 }
 
 export interface GradeBreakdownItem {

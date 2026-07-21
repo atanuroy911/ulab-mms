@@ -50,29 +50,30 @@ async function getAttendanceStats(courseId: string, studentId: string, loaders: 
 
   const sessions = await AttendanceSession.find({ courseId }).sort({ date: 1 });
 
-  const attendedSessions = sessions.filter(session =>
-    session.records.some((record: any) => record.studentIdString === studentId)
-  );
+  // A session counts as "present" only if this student has a record marked
+  // present -- an explicit 'absent' record must not count as attended just
+  // because a record exists.
+  const isPresent = (session: any) =>
+    session.records.some((record: any) => record.studentIdString === studentId && record.status === 'present');
 
   const totalSessions = sessions.length;
-  const attendedCount = attendedSessions.length;
-  const percentage = totalSessions > 0 ? (attendedCount / totalSessions) * 100 : 0;
+  const presentCount = sessions.filter(isPresent).length;
+  const absentCount = totalSessions - presentCount;
+  const percentage = totalSessions > 0 ? (presentCount / totalSessions) * 100 : 0;
 
-  const sessionDetails = sessions.map(session => {
-    const attended = session.records.some((record: any) => record.studentIdString === studentId);
-    return {
-      id: session._id.toString(),
-      date: session.date.toISOString(),
-      attended,
-    };
-  });
+  const sessionDetails = sessions.map(session => ({
+    id: session._id.toString(),
+    date: session.date.toISOString(),
+    attended: isPresent(session),
+  }));
 
   return {
     courseId: course._id.toString(),
     courseName: course.name,
     courseCode: course.code,
     totalSessions,
-    attendedSessions: attendedCount,
+    attendedSessions: presentCount,
+    absentSessions: absentCount,
     percentage: Math.round(percentage * 100) / 100,
     sessions: sessionDetails,
   };
