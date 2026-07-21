@@ -24,6 +24,14 @@ const PLAUSIBLE_ID_PATTERN = /^\d[\d-]{4,}$/;
 // e.g. "CSE1201", "MAT1103", "BLL2101A" -- 2-5 letters then 3-4 digits, optional letter suffix.
 const COURSE_CODE_PATTERN = /\b([A-Z]{2,5}\d{3,4}[A-Z]?)\b/;
 
+// URMS attendance sheet rows are "SL StudentID Student Name" (a serial number column
+// before the actual ID), e.g. "1 231014169 Md. Rashed Asef" -- not just "ID Name".
+const SERIAL_ID_NAME_PATTERN = /^\d{1,3}\s+(\d[\d-]{4,})\s+(.+)$/;
+
+// Field labels that can follow the course code on a URMS "Course : XXX ... " header
+// line (e.g. "Course : CSE2201 Algorithms Class Time : 4:30:00PM - 5:50:00PM").
+const HEADER_FIELD_LABELS = /\b(Class Time|Class Room|Semester|Section|Instructor|Number of Students|Class Representative)\b/i;
+
 let workerConfigured = false;
 
 async function loadPdfjs() {
@@ -87,6 +95,23 @@ export function detectCourseInfo(lines: string[]): PdfCourseInfo {
   // Course headers are almost always near the top of the document.
   const searchLines = lines.slice(0, 40);
 
+  // Prefer a line that explicitly labels itself as the course line (URMS-style
+  // "Course : CSE2201 Algorithms Class Time : ..."), so we don't pick up an
+  // unrelated code-shaped token elsewhere in the header (e.g. a form ID).
+  const courseLine = searchLines.find((line) => /\bcourse\s*:/i.test(line));
+  if (courseLine) {
+    const match = courseLine.match(COURSE_CODE_PATTERN);
+    if (match) {
+      const code = match[1];
+      const afterCode = courseLine.slice(courseLine.indexOf(match[0]) + match[0].length);
+      const name = afterCode
+        .split(HEADER_FIELD_LABELS)[0]
+        .replace(/^[\s:.\-–—]+|[\s:.\-–—]+$/g, '')
+        .trim();
+      return { code, name: name || null };
+    }
+  }
+
   for (const line of searchLines) {
     const match = line.match(COURSE_CODE_PATTERN);
     if (!match) continue;
@@ -110,6 +135,15 @@ export function extractStudentLines(lines: string[]): string[] {
   const result: string[] = [];
 
   for (const line of lines) {
+    // URMS-style "SL ID Name" rows first (a leading serial number column).
+    const serialMatch = line.match(SERIAL_ID_NAME_PATTERN);
+    if (serialMatch) {
+      const id = serialMatch[1].trim();
+      const name = serialMatch[2].trim();
+      if (id && name) result.push(`${id}, ${name}`);
+      continue;
+    }
+
     const parsed = splitIdAndName(line);
     if (!parsed) continue;
 
