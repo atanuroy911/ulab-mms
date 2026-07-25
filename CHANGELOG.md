@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/atanuroy911/ulab-mms/compare/v1.6.0...v1.6.1) (2026-07-25)
+
+
+### Bug Fixes
+
+* sync package-lock with package.json for deploy workflow ([8fbb1db](https://github.com/atanuroy911/ulab-mms/commit/8fbb1db0fdf3289e94cee6a5ed080b1bcb75effc))
+
 # [1.6.0](https://github.com/atanuroy911/ulab-mms/compare/v1.5.0...v1.6.0) (2026-07-25)
 
 
