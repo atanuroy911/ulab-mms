@@ -1,3 +1,25 @@
+## [1.6.1](https://github.com/atanuroy911/ulab-mms/compare/v1.6.0...v1.6.1) (2026-07-25)
+
+
+### Bug Fixes
+
+* sync package-lock with package.json for deploy workflow ([8fbb1db](https://github.com/atanuroy911/ulab-mms/commit/8fbb1db0fdf3289e94cee6a5ed080b1bcb75effc))
+
+# [1.6.0](https://github.com/atanuroy911/ulab-mms/compare/v1.5.0...v1.6.0) (2026-07-25)
+
+
+### Bug Fixes
+
+* attendance auto-login bypass and student attendance count mismatch ([44f2d92](https://github.com/atanuroy911/ulab-mms/commit/44f2d9228335e010fc704f8e755568fd3226ce72))
+* close IDOR/auth gaps found in API security audit ([8dd0a16](https://github.com/atanuroy911/ulab-mms/commit/8dd0a162b6ea3b2978529189ed5f8bd71fdbcbc0))
+* link mobile GraphQL attendance to real Student records ([99bad98](https://github.com/atanuroy911/ulab-mms/commit/99bad9808149c9cb86b1d1c43b5a3692d8088f65))
+* make project page auto-refresh silent instead of full-page reload ([b128cbc](https://github.com/atanuroy911/ulab-mms/commit/b128cbc1cb604df156de4e54203d69a8f2a669cf))
+
+
+### Features
+
+* require Google sign-in (or admin password) before checking marks ([30c2fb2](https://github.com/atanuroy911/ulab-mms/commit/30c2fb2ce61e09e1d567c938d4763d34034c5474))
+
 # [1.5.0](https://github.com/atanuroy911/ulab-mms/compare/v1.4.0...v1.5.0) (2026-07-21)
 
 
