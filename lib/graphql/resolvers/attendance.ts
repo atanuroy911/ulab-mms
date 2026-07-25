@@ -1,7 +1,8 @@
 import dbConnect from '@/lib/mongodb';
 import AttendanceSession from '@/models/AttendanceSession';
 import Course from '@/models/Course';
-import mongoose from 'mongoose';
+import Student from '@/models/Student';
+import User from '@/models/User';
 import { requireAuth, type GraphQLContext } from '../auth';
 import type { Loaders } from '../dataloaders';
 
@@ -41,7 +42,41 @@ function generateSessionCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-async function getAttendanceStats(courseId: string, studentId: string, loaders: any) {
+// A Student document's userId is the course-owning *teacher's* User id, not the
+// student's own account (see app/api/courses/[id]/students/route.ts), so there is
+// no direct link from a logged-in student's User doc to their Student roster row.
+// Mirror the same resolution the QR check-in flow uses (app/api/attendance/checkin/route.ts):
+// parse the student ID out of a "Name (2021-1-60-123)"-style display name, falling
+// back to a unique name match.
+async function resolveStudentForUser(userId: string, courseId: string) {
+  const user = await User.findById(userId);
+  if (!user) return null;
+
+  const displayName = (user.name || '').trim();
+  const match = displayName.match(/\(([^)]+)\)/);
+  const parsedId = match ? match[1].trim() : null;
+
+  if (parsedId) {
+    const candidate = await Student.findOne({ studentId: parsedId, courseId });
+    if (candidate) return candidate;
+  }
+
+  if (!displayName) return null;
+
+  const normalizedName = displayName.toLowerCase();
+  const students = await Student.find({ courseId }).lean();
+  const exactMatches = students.filter((item) => item.name.trim().toLowerCase() === normalizedName);
+  const matches = exactMatches.length === 1
+    ? exactMatches
+    : students.filter((item) => {
+        const studentName = item.name.trim().toLowerCase();
+        return studentName.includes(normalizedName) || normalizedName.includes(studentName);
+      });
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function getAttendanceStats(courseId: string, studentObjectId: string, loaders: any) {
   const course = await loaders.courseLoader.load(courseId);
 
   if (!course) {
@@ -50,29 +85,32 @@ async function getAttendanceStats(courseId: string, studentId: string, loaders: 
 
   const sessions = await AttendanceSession.find({ courseId }).sort({ date: 1 });
 
-  const attendedSessions = sessions.filter(session =>
-    session.records.some((record: any) => record.studentIdString === studentId)
-  );
+  // A session counts as "present" only if this student has a record marked
+  // present -- an explicit 'absent' record must not count as attended just
+  // because a record exists. Match by the Student document's ObjectId (same
+  // as the teacher's attendance view and the student-facing REST endpoints),
+  // not the denormalized studentIdString snapshot.
+  const isPresent = (session: any) =>
+    session.records.some((record: any) => String(record.studentId) === String(studentObjectId) && record.status === 'present');
 
   const totalSessions = sessions.length;
-  const attendedCount = attendedSessions.length;
-  const percentage = totalSessions > 0 ? (attendedCount / totalSessions) * 100 : 0;
+  const presentCount = sessions.filter(isPresent).length;
+  const absentCount = totalSessions - presentCount;
+  const percentage = totalSessions > 0 ? (presentCount / totalSessions) * 100 : 0;
 
-  const sessionDetails = sessions.map(session => {
-    const attended = session.records.some((record: any) => record.studentIdString === studentId);
-    return {
-      id: session._id.toString(),
-      date: session.date.toISOString(),
-      attended,
-    };
-  });
+  const sessionDetails = sessions.map(session => ({
+    id: session._id.toString(),
+    date: session.date.toISOString(),
+    attended: isPresent(session),
+  }));
 
   return {
     courseId: course._id.toString(),
     courseName: course.name,
     courseCode: course.code,
     totalSessions,
-    attendedSessions: attendedCount,
+    attendedSessions: presentCount,
+    absentSessions: absentCount,
     percentage: Math.round(percentage * 100) / 100,
     sessions: sessionDetails,
   };
@@ -129,14 +167,24 @@ export const attendanceResolvers = {
       const user = requireAuth(context);
       await dbConnect();
 
-      return getAttendanceStats(courseId, user.userId, context.loaders);
+      const student = await resolveStudentForUser(user.userId, courseId);
+      if (!student) {
+        throw new Error('Student not registered for this course');
+      }
+
+      return getAttendanceStats(courseId, student._id.toString(), context.loaders);
     },
 
     studentAttendanceStats: async (_: any, { courseId, studentId }: StudentAttendanceStatsArgs, context: GraphQLContext & { loaders: Loaders }) => {
       requireAuth(context);
       await dbConnect();
 
-      return getAttendanceStats(courseId, studentId, context.loaders);
+      const student = await Student.findOne({ studentId, courseId });
+      if (!student) {
+        throw new Error('Student not registered for this course');
+      }
+
+      return getAttendanceStats(courseId, student._id.toString(), context.loaders);
     },
   },
 
@@ -229,10 +277,17 @@ export const attendanceResolvers = {
         };
       }
 
-      const studentId = user.userId;
+      const student = await resolveStudentForUser(user.userId, session.courseId.toString());
+      if (!student) {
+        return {
+          success: false,
+          message: 'Student not registered for this course',
+          session: null,
+        };
+      }
 
       const alreadyCheckedIn = session.records.some(
-        (record: any) => record.studentIdString === studentId
+        (record: any) => String(record.studentId) === String(student._id)
       );
 
       if (alreadyCheckedIn) {
@@ -251,8 +306,8 @@ export const attendanceResolvers = {
       }
 
       session.records.push({
-        studentId: new mongoose.Types.ObjectId(studentId),
-        studentIdString: studentId,
+        studentId: student._id,
+        studentIdString: student.studentId,
         status: 'present',
         recordedAt: new Date(),
         markedBy: 'manual',
@@ -262,7 +317,7 @@ export const attendanceResolvers = {
 
       const stats = await getAttendanceStats(
         session.courseId.toString(),
-        studentId,
+        student._id.toString(),
         context.loaders
       );
 

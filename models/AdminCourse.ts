@@ -6,6 +6,8 @@ export interface IAdminCourse extends Document {
   creditHour: number;
   prerequisite?: string;
   content?: string;
+  unescoCode?: string;
+  majors?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +40,15 @@ const AdminCourseSchema: Schema = new Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    unescoCode: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    majors: {
+      type: [String],
+      default: [],
     },
   },
   {

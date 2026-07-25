@@ -13,6 +13,8 @@ interface Course {
   _id: string;
   name: string;
   code: string;
+  alternateCode?: string;
+  aliasEnabled?: boolean;
   semester: string;
   year: number;
   courseType: 'Theory' | 'Lab';
@@ -191,7 +193,7 @@ export default function OverviewView({
                 className="w-full justify-start"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Import Students (CSV)
+                Import Students (CSV/PDF)
               </Button>
             </div>
 
@@ -300,6 +302,12 @@ export default function OverviewView({
               <div className="text-sm text-muted-foreground">Course Code</div>
               <div className="font-medium">{course.code}</div>
             </div>
+            {course.aliasEnabled && course.alternateCode && (
+              <div>
+                <div className="text-sm text-muted-foreground">New Code</div>
+                <div className="font-medium">{course.alternateCode}</div>
+              </div>
+            )}
             <div>
               <div className="text-sm text-muted-foreground">Course Type</div>
               <Badge variant={course.courseType === 'Theory' ? 'default' : 'secondary'}>

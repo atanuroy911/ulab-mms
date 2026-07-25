@@ -13,15 +13,19 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import { CourseCombobox } from '@/app/components/CourseCombobox';
+import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pdfStudentImport';
+import { parseCSV } from '@/app/utils/csv';
 
 interface Course {
   _id: string;
   name: string;
   code: string;
+  classTime?: string;
+  classRoom?: string;
   semester: string;
   year: number;
   section: string;
@@ -39,6 +43,33 @@ interface AdminCourse {
   creditHour: number;
   prerequisite?: string;
   content?: string;
+  unescoCode?: string;
+}
+
+interface PdfSlotState {
+  key: string;
+  expectedCode: string;
+  file: File | null;
+  parsing: boolean;
+  result: PdfParseResult | null;
+  mismatchConfirmed: boolean;
+}
+
+function makeImportPdfSlots(code: string, aliasEnabled: boolean, alternateCode: string): PdfSlotState[] {
+  const slots: PdfSlotState[] = [
+    { key: 'primary', expectedCode: code, file: null, parsing: false, result: null, mismatchConfirmed: false },
+  ];
+  if (aliasEnabled && alternateCode.trim()) {
+    slots.push({
+      key: 'alias',
+      expectedCode: alternateCode.trim(),
+      file: null,
+      parsing: false,
+      result: null,
+      mismatchConfirmed: false,
+    });
+  }
+  return slots;
 }
 
 export default function Dashboard() {
@@ -76,6 +107,11 @@ export default function Dashboard() {
   const [isCustomCourse, setIsCustomCourse] = useState(false);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [duplicateError, setDuplicateError] = useState('');
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [createdCourseForImport, setCreatedCourseForImport] = useState<Course | null>(null);
+  const [importPdfSlots, setImportPdfSlots] = useState<PdfSlotState[]>([]);
+  const [importingStudents, setImportingStudents] = useState(false);
+  const [studentsImported, setStudentsImported] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState({
     name: '',
     code: '',
@@ -114,16 +150,38 @@ export default function Dashboard() {
     }
   };
 
+  // Some catalogue/registry entries don't have a real UNESCO code on file yet and
+  // use the course code itself as a placeholder -- that's not an actual "New Code",
+  // so don't treat it as one (it would otherwise always force New Code on).
+  const isDistinctCode = (code: string, candidate?: string | null) =>
+    Boolean(candidate && candidate.trim() && candidate.trim().toUpperCase() !== code.trim().toUpperCase());
+
   const handleCourseSelect = (course: AdminCourse | null) => {
     if (course) {
       setSelectedAdminCourse(course);
       setIsCustomCourse(false);
+      const hasDistinctUnescoCode = isDistinctCode(course.courseCode, course.unescoCode);
       setFormData({
         ...formData,
         name: course.courseTitle,
         code: course.courseCode,
+        aliasEnabled: hasDistinctUnescoCode,
+        alternateCode: hasDistinctUnescoCode ? course.unescoCode! : '',
       });
       setDuplicateError('');
+
+      // Admin catalogue doesn't have a distinct UNESCO code for this course yet --
+      // fall back to the fixed registry so New Code is still auto-filled.
+      if (!hasDistinctUnescoCode) {
+        fetch(`/api/courses/catalogue-lookup?code=${encodeURIComponent(course.courseCode)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (isDistinctCode(course.courseCode, data.unescoCode)) {
+              setFormData((prev) => ({ ...prev, aliasEnabled: true, alternateCode: data.unescoCode }));
+            }
+          })
+          .catch(() => {});
+      }
     } else {
       // Custom course option selected
       setSelectedAdminCourse(null);
@@ -132,6 +190,8 @@ export default function Dashboard() {
         ...formData,
         name: '',
         code: '',
+        aliasEnabled: false,
+        alternateCode: '',
       });
       setDuplicateError('');
     }
@@ -171,7 +231,9 @@ export default function Dashboard() {
     }
   }, [formData.code, formData.semester, formData.year, formData.section, showAddModal]);
 
-  const ADD_WIZARD_STEPS = ['Course Identity', 'Details', 'New Code', 'Review'];
+  const ADD_WIZARD_STEPS = ['Course Identity', 'Details', 'New Code', 'Review', 'Import Students'];
+  const REVIEW_STEP = 3;
+  const IMPORT_STEP = 4;
 
   const isAddStepValid = (step: number) => {
     if (step === 0) return Boolean(formData.name.trim() && formData.code.trim());
@@ -180,17 +242,48 @@ export default function Dashboard() {
     return true;
   };
 
+  const resetAddCourseWizard = () => {
+    setShowAddModal(false);
+    setSelectedAdminCourse(null);
+    setIsCustomCourse(false);
+    setDuplicateError('');
+    setAddWizardStep(0);
+    setCreatedCourseForImport(null);
+    setImportPdfSlots([]);
+    setStudentsImported(null);
+    setFormData({
+      name: '',
+      code: '',
+      semester: 'Spring',
+      year: new Date().getFullYear(),
+      section: '1',
+      courseType: 'Theory',
+      aliasEnabled: false,
+      alternateCode: '',
+      classTime: '',
+      classRoom: '',
+    });
+  };
+
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (addWizardStep < ADD_WIZARD_STEPS.length - 1) {
+    if (addWizardStep < REVIEW_STEP) {
       if (isAddStepValid(addWizardStep)) {
         setAddWizardStep(addWizardStep + 1);
       }
       return;
     }
 
+    if (addWizardStep === IMPORT_STEP) {
+      // Optional step -- just finish, the course was already created on Review.
+      resetAddCourseWizard();
+      return;
+    }
+
+    // On Review: actually create the course, then move to the optional Import Students step.
+    setCreatingCourse(true);
     try {
       const response = await fetch('/api/courses', {
         method: 'POST',
@@ -208,25 +301,107 @@ export default function Dashboard() {
 
       notify.course.created(data.course.name);
       setCourses([data.course, ...courses]);
-      setShowAddModal(false);
-      setSelectedAdminCourse(null);
-      setIsCustomCourse(false);
-      setDuplicateError('');
-      setAddWizardStep(0);
-      setFormData({
-        name: '',
-        code: '',
-        semester: 'Spring',
-        year: new Date().getFullYear(),
-        section: '1',
-        courseType: 'Theory',
-        aliasEnabled: false,
-        alternateCode: '',
-        classTime: '',
-        classRoom: '',
-      });
+      setCreatedCourseForImport(data.course);
+      setImportPdfSlots(makeImportPdfSlots(data.course.code, Boolean(data.course.aliasEnabled), data.course.alternateCode || ''));
+      setAddWizardStep(IMPORT_STEP);
     } catch (err) {
       setError('An error occurred. Please try again.');
+    } finally {
+      setCreatingCourse(false);
+    }
+  };
+
+  const applyImportPdfSlotsPreview = (slots: PdfSlotState[]) =>
+    slots
+      .filter((slot) => slot.result && (courseCodeMatches(slot.result.courseInfo.code, slot.expectedCode) || slot.mismatchConfirmed))
+      .flatMap((slot) => slot.result!.studentLines);
+
+  // If the newly created course doesn't have a class time/room yet, fill them in from a
+  // trustworthy (matched or confirmed) PDF's detected schedule -- one-shot per wizard run.
+  const maybeFillScheduleForNewCourse = async (result: PdfParseResult) => {
+    if (!createdCourseForImport) return;
+    const { classTime, classRoom } = result.courseInfo;
+    const update: { classTime?: string; classRoom?: string } = {};
+    if (!createdCourseForImport.classTime?.trim() && classTime) update.classTime = classTime;
+    if (!createdCourseForImport.classRoom?.trim() && classRoom) update.classRoom = classRoom;
+    if (Object.keys(update).length === 0) return;
+
+    try {
+      const res = await fetch(`/api/courses/${createdCourseForImport._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCreatedCourseForImport(data.course);
+        setCourses((prev) => prev.map((c) => (c._id === data.course._id ? data.course : c)));
+        notify.success('Filled in class time/room from the PDF');
+      }
+    } catch (err) {
+      console.error('Failed to auto-fill class time/room', err);
+    }
+  };
+
+  const handleImportPdfFileSelect = async (slotKey: string, file: File) => {
+    setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, file, parsing: true, result: null, mismatchConfirmed: false } : s)));
+    try {
+      const result = await parsePdfRoster(file);
+      setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, parsing: false, result } : s)));
+      const slot = importPdfSlots.find((s) => s.key === slotKey);
+      if (courseCodeMatches(result.courseInfo.code, slot?.expectedCode || createdCourseForImport?.code || '')) {
+        maybeFillScheduleForNewCourse(result);
+      }
+    } catch (err) {
+      console.error('Failed to parse PDF', err);
+      notify.error('Failed to read this PDF. Make sure it is a text-based (not scanned-image) PDF.');
+      setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, parsing: false } : s)));
+    }
+  };
+
+  const handleImportPdfRemove = (slotKey: string) => {
+    setImportPdfSlots((prev) => prev.map((s) => (s.key === slotKey ? { ...s, file: null, result: null, mismatchConfirmed: false } : s)));
+  };
+
+  const confirmImportPdfMismatch = (slotKey: string) => {
+    setImportPdfSlots((prev) => {
+      const next = prev.map((s) => (s.key === slotKey ? { ...s, mismatchConfirmed: true } : s));
+      const confirmedSlot = next.find((s) => s.key === slotKey);
+      if (confirmedSlot?.result) maybeFillScheduleForNewCourse(confirmedSlot.result);
+      return next;
+    });
+  };
+
+  const handleImportStudentsForNewCourse = async () => {
+    if (!createdCourseForImport) return;
+    const lines = applyImportPdfSlotsPreview(importPdfSlots);
+    const parsedStudents = parseCSV(lines.join('\n'));
+    if (parsedStudents.length === 0) {
+      notify.error('No student rows found to import yet.');
+      return;
+    }
+
+    setImportingStudents(true);
+    try {
+      const response = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseId: createdCourseForImport._id,
+          students: parsedStudents.map((s) => ({ studentId: s.id, name: s.name })),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import students');
+      }
+      const addedCount = data.students?.length || 0;
+      setStudentsImported(addedCount);
+      notify.success(`Imported ${addedCount} student${addedCount !== 1 ? 's' : ''}.`);
+    } catch (err: any) {
+      notify.error(err.message || 'Failed to import students');
+    } finally {
+      setImportingStudents(false);
     }
   };
 
@@ -661,13 +836,11 @@ export default function Dashboard() {
 
       {/* Add Course Modal */}
       <Dialog open={showAddModal} onOpenChange={(open) => {
-        setShowAddModal(open);
         if (!open) {
-          setSelectedAdminCourse(null);
-          setIsCustomCourse(false);
-          setDuplicateError('');
           setError('');
-          setAddWizardStep(0);
+          resetAddCourseWizard();
+        } else {
+          setShowAddModal(true);
         }
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -927,6 +1100,11 @@ export default function Dashboard() {
                       onChange={(e) => setFormData({ ...formData, alternateCode: e.target.value })}
                       placeholder="e.g., CSE470B"
                     />
+                    {selectedAdminCourse && formData.alternateCode && (
+                      <p className="text-xs text-muted-foreground">
+                        Auto-filled from the course catalogue&apos;s UNESCO code. You can edit it.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -963,43 +1141,175 @@ export default function Dashboard() {
               </div>
             )}
 
+            {addWizardStep === IMPORT_STEP && createdCourseForImport && (
+              <div className="space-y-3">
+                <Alert>
+                  <AlertDescription className="text-xs">
+                    Optional: upload the attendance/roster PDF now to add your students right away.{' '}
+                    <span className="font-medium">
+                      You can re-upload again inside the course after the Add/Drop week finishes.
+                    </span>
+                  </AlertDescription>
+                </Alert>
+
+                {importPdfSlots.map((slot) => (
+                  <div key={slot.key} className="rounded-lg border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">PDF for {slot.expectedCode}</Label>
+                      {slot.file && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-1.5 text-xs text-muted-foreground"
+                          onClick={() => handleImportPdfRemove(slot.key)}
+                        >
+                          <X className="w-3 h-3 mr-1" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+
+                    {!slot.file ? (
+                      <label className="flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed p-4 text-center text-xs text-muted-foreground cursor-pointer hover:border-primary/50">
+                        <FileText className="w-5 h-5" />
+                        Click to select a PDF
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImportPdfFileSelect(slot.key, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    ) : slot.parsing ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Reading {slot.file.name}...
+                      </div>
+                    ) : slot.result ? (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          {slot.file.name} &middot; {slot.result.studentLines.length} student row(s) found
+                        </div>
+
+                        {slot.result.courseInfo.code && courseCodeMatches(slot.result.courseInfo.code, slot.expectedCode) ? (
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                            <Check className="w-3.5 h-3.5" />
+                            Detected course {slot.result.courseInfo.code} matches {slot.expectedCode}
+                          </div>
+                        ) : slot.result.courseInfo.code ? (
+                          <Alert variant="destructive" className="py-2">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <AlertDescription className="text-xs space-y-1.5">
+                              <div>
+                                This PDF looks like it&apos;s for course <strong>{slot.result.courseInfo.code}</strong>
+                                {slot.result.courseInfo.name ? <> ({slot.result.courseInfo.name})</> : null}, not{' '}
+                                <strong>{slot.expectedCode}</strong>.
+                              </div>
+                              {!slot.mismatchConfirmed ? (
+                                <Button type="button" size="sm" variant="destructive" className="h-6 text-xs" onClick={() => confirmImportPdfMismatch(slot.key)}>
+                                  Use it anyway
+                                </Button>
+                              ) : (
+                                <div className="text-xs italic">Using this PDF anyway.</div>
+                              )}
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <Alert className="py-2">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <AlertDescription className="text-xs space-y-1.5">
+                              <div>Couldn&apos;t detect a course code in this PDF -- please confirm it&apos;s the right file for {slot.expectedCode}.</div>
+                              {!slot.mismatchConfirmed ? (
+                                <Button type="button" size="sm" variant="outline" className="h-6 text-xs" onClick={() => confirmImportPdfMismatch(slot.key)}>
+                                  Confirm and use
+                                </Button>
+                              ) : (
+                                <div className="text-xs italic">Confirmed.</div>
+                              )}
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+
+                {applyImportPdfSlotsPreview(importPdfSlots).length > 0 && studentsImported === null && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={handleImportStudentsForNewCourse}
+                    disabled={importingStudents}
+                  >
+                    {importingStudents ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      `Import ${applyImportPdfSlotsPreview(importPdfSlots).length} Student(s)`
+                    )}
+                  </Button>
+                )}
+
+                {studentsImported !== null && (
+                  <div className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+                    <Check className="w-4 h-4" />
+                    Imported {studentsImported} student{studentsImported !== 1 ? 's' : ''}.
+                  </div>
+                )}
+              </div>
+            )}
+
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setShowAddModal(false);
                   setError('');
-                  setDuplicateError('');
-                  setSelectedAdminCourse(null);
-                  setIsCustomCourse(false);
-                  setAddWizardStep(0);
+                  resetAddCourseWizard();
                 }}
               >
-                Cancel
+                {addWizardStep === IMPORT_STEP ? 'Close' : 'Cancel'}
               </Button>
-              {addWizardStep > 0 && (
+              {addWizardStep > 0 && addWizardStep !== IMPORT_STEP && (
                 <Button type="button" variant="outline" onClick={() => setAddWizardStep(addWizardStep - 1)}>
                   Back
                 </Button>
               )}
-              {addWizardStep < ADD_WIZARD_STEPS.length - 1 ? (
+              {addWizardStep < REVIEW_STEP ? (
                 <Button type="submit" disabled={!isAddStepValid(addWizardStep)}>
                   Next
                 </Button>
-              ) : (
+              ) : addWizardStep === REVIEW_STEP ? (
                 <Button
                   type="submit"
-                  disabled={!!duplicateError || checkingDuplicate}
+                  disabled={!!duplicateError || checkingDuplicate || creatingCourse}
                 >
                   {checkingDuplicate ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Checking...
                     </>
+                  ) : creatingCourse ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
                   ) : (
                     'Create Course'
                   )}
+                </Button>
+              ) : (
+                <Button type="submit">
+                  <SkipForward className="h-4 w-4 mr-2" />
+                  Finish
                 </Button>
               )}
             </DialogFooter>

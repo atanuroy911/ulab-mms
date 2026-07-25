@@ -1,20 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
+import { isUlabSessionOrAdminAuthorized } from '@/lib/studentAuth';
 import Student from '@/models/Student';
 import Mark from '@/models/Mark';
 import Exam from '@/models/Exam';
 import Course from '@/models/Course';
+import AttendanceSession from '@/models/AttendanceSession';
 
-// GET student marks by student ID
-export async function GET(request: NextRequest) {
+// POST student marks by student ID (POST so the admin-password override never lands in a
+// URL / server access log the way a query string would). Marks are only released after the
+// visitor either signs in with a real @ulab.edu.bd Google account (via the 'google-marks'
+// provider, see app/api/auth/[...nextauth]/route.ts - this never creates a User document)
+// or a teacher/admin supplies the admin password as an override. Without this, anyone could
+// enumerate every student's marks by guessing IDs.
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get('studentId');
+    const body = await request.json().catch(() => ({}));
+    const studentId = typeof body?.studentId === 'string' ? body.studentId.trim() : '';
+    const adminPassword = typeof body?.adminPassword === 'string' ? body.adminPassword : undefined;
 
     if (!studentId) {
       return NextResponse.json(
         { error: 'Student ID is required' },
         { status: 400 }
+      );
+    }
+
+    if (!(await isUlabSessionOrAdminAuthorized(adminPassword))) {
+      return NextResponse.json(
+        { error: adminPassword ? 'Invalid admin password' : 'Please sign in with your ULAB Google account to check marks' },
+        { status: 401 }
       );
     }
 
@@ -85,11 +100,32 @@ export async function GET(request: NextRequest) {
           })
         );
 
+        // Attendance summary for this course: present only counts sessions where
+        // this student has a record explicitly marked present.
+        const attendanceSessions = await AttendanceSession.find({ courseId: course._id });
+        const totalSessions = attendanceSessions.length;
+        // Match by the Student document's ObjectId (same as the teacher's attendance
+        // view), not the denormalized studentIdString snapshot, which goes stale if
+        // the student's roll number is ever edited after attendance was recorded.
+        const presentSessions = attendanceSessions.filter((session) =>
+          session.records.some(
+            (record: any) => String(record.studentId) === String(studentRecord._id) && record.status === 'present'
+          )
+        ).length;
+        const absentSessions = totalSessions - presentSessions;
+        const attendancePercentage = totalSessions > 0 ? (presentSessions / totalSessions) * 100 : 0;
+
         return {
           student: {
             _id: studentRecord._id,
             studentId: studentRecord.studentId,
             name: studentRecord.name,
+          },
+          attendance: {
+            totalSessions,
+            presentSessions,
+            absentSessions,
+            percentage: Math.round(attendancePercentage * 100) / 100,
           },
           course: {
             _id: course._id,

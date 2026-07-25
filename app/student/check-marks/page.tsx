@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
+import { AuthGate } from './components/AuthGate';
 import { SearchForm } from './components/SearchForm';
 import { StudentSummary } from './components/StudentSummary';
 import { CourseCard } from './components/CourseCard';
@@ -18,6 +20,7 @@ import { InstructionsPanel } from './components/InstructionsPanel';
 import type { CourseData } from './types';
 
 export default function StudentCheckMarks() {
+  const { data: session, status } = useSession();
   const [studentId, setStudentId] = useState('');
   const [studentName, setStudentName] = useState('');
   const [courses, setCourses] = useState<CourseData[]>([]);
@@ -26,29 +29,44 @@ export default function StudentCheckMarks() {
   const [searched, setSearched] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(null);
   const [showCourseModal, setShowCourseModal] = useState(false);
+  const [adminOverride, setAdminOverride] = useState(false);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
+  const canSearch = isGoogleVerified || adminOverride;
+
+  const fetchMarks = async (id: string, adminPassword?: string) => {
     setError('');
     setLoading(true);
     setSearched(false);
     setCourses([]);
 
     try {
-      const response = await fetch(`/api/student/marks?studentId=${encodeURIComponent(studentId)}`);
+      const response = await fetch('/api/student/marks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id, adminPassword }),
+      });
       const data = await response.json();
 
       if (response.ok) {
         setCourses(data.courses);
         setStudentName(data.studentName);
+        setStudentId(id);
         setSearched(true);
+        if (adminPassword) {
+          setAdminOverride(true);
+        }
         if (data.courses.length > 0) {
           notify.success(`Found ${data.courses.length} course${data.courses.length !== 1 ? 's' : ''} for ${data.studentName}`);
         }
       } else {
-        notify.student.notFound(studentId);
-        setError(data.error || 'Student ID not found');
-        setSearched(true);
+        if (response.status === 401) {
+          setError(data.error || 'Not authorized');
+        } else {
+          notify.student.notFound(id);
+          setError(data.error || 'Student ID not found');
+          setSearched(true);
+        }
       }
     } catch {
       setError('An error occurred while fetching marks');
@@ -56,6 +74,15 @@ export default function StudentCheckMarks() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetchMarks(studentId);
+  };
+
+  const handleAdminOverride = async (id: string, adminPassword: string) => {
+    await fetchMarks(id, adminPassword);
   };
 
   return (
@@ -88,13 +115,17 @@ export default function StudentCheckMarks() {
       </nav>
 
       <div className="max-w-6xl mx-auto p-4 pt-8">
-        <SearchForm
-          studentId={studentId}
-          onStudentIdChange={setStudentId}
-          onSubmit={handleSearch}
-          loading={loading}
-          error={error}
-        />
+        {!canSearch ? (
+          <AuthGate onAdminOverride={handleAdminOverride} loading={loading} error={error} />
+        ) : (
+          <SearchForm
+            studentId={studentId}
+            onStudentIdChange={setStudentId}
+            onSubmit={handleSearch}
+            loading={loading}
+            error={error}
+          />
+        )}
 
         {searched && courses.length > 0 && (
           <>

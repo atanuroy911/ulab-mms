@@ -12,7 +12,8 @@ const studentIdCollation = { locale: 'en', numericOrdering: true } as const;
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id && !(await verifyAdminToken(request))) {
+    const isAdmin = await verifyAdminToken(request);
+    if (!session?.user?.id && !isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -26,13 +27,27 @@ export async function GET(request: NextRequest) {
 
     let query: any = {};
 
-    // If courseId is specified, filter by that course
+    // If courseId is specified, filter by that course - but only if the caller owns it (or
+    // is an admin). Without this, any signed-in teacher could pass an arbitrary courseId and
+    // read another teacher's full roster.
     if (courseId) {
+      const courseFilter: any = { _id: courseId };
+      if (!isAdmin) {
+        courseFilter.userId = session!.user.id;
+      }
+      const course = await Course.findOne(courseFilter);
+      if (!course) {
+        return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      }
       query.courseId = courseId;
     } else if (semester || year) {
-      // Filter by semester/year - need to find courses first
+      // Filter by semester/year - need to find courses first, scoped to the caller's own
+      // courses unless they're an admin.
       let courseQuery: any = {};
-      
+
+      if (!isAdmin) {
+        courseQuery.userId = session!.user.id;
+      }
       if (semester) {
         courseQuery.semester = semester;
       }
@@ -45,13 +60,17 @@ export async function GET(request: NextRequest) {
 
       const courses = await Course.find(courseQuery);
       const courseIds = courses.map(c => c._id);
-      
+
       if (courseIds.length > 0) {
         query.courseId = { $in: courseIds };
       } else {
         // No courses found for the given criteria
         return NextResponse.json([], { status: 200 });
       }
+    } else if (!isAdmin) {
+      // No courseId/semester/year filter and not an admin - don't hand back every student
+      // across every teacher's courses.
+      query.userId = session!.user.id;
     }
 
     // Fetch students with course details

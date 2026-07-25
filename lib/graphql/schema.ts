@@ -112,6 +112,7 @@ export const typeDefs = `#graphql
     courseCode: String!
     totalSessions: Int!
     attendedSessions: Int!
+    absentSessions: Int!
     percentage: Float!
     sessions: [AttendanceSessionDetail!]!
   }

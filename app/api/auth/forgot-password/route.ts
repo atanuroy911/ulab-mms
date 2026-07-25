@@ -26,39 +26,27 @@ export async function POST(request: NextRequest) {
 
     await dbConnect();
 
-    // Check if user with this email exists in the system
+    // Always respond with the same generic message regardless of whether the email is
+    // registered - returning a distinct 404 for unknown emails lets an attacker enumerate
+    // every registered account by trying addresses one at a time.
+    const genericResponse = NextResponse.json(
+      { message: 'If an account exists with this email, a reset link has been sent.' },
+      { status: 200 }
+    );
+
     const user = await User.findOne({ email: email.toLowerCase().trim() });
-
     if (!user) {
-      console.log('Password reset requested for non-existent email:', email.toLowerCase());
-      return NextResponse.json(
-        { error: 'User with this email does not exist in the records' },
-        { status: 404 }
-      );
+      return genericResponse;
     }
-
-    console.log('Password reset requested for registered user:', user.email);
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
     const resetTokenExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-    console.log('=== Generating Reset Token ===');
-    console.log('Plain token:', resetToken);
-    console.log('Token hash:', resetTokenHash);
-    console.log('Expiry:', resetTokenExpiry);
-
-    // Save reset token to user
     user.passwordResetToken = resetTokenHash;
     user.passwordResetTokenExpiry = resetTokenExpiry;
     await user.save();
-
-    console.log('Token saved to database');
-    console.log('Verifying save...');
-    const savedUser = await User.findOne({ email: user.email.toLowerCase() });
-    console.log('Saved token hash in DB:', savedUser?.passwordResetToken?.substring(0, 20) + '...');
-    console.log('Match?', savedUser?.passwordResetToken === resetTokenHash);
 
     // Create reset link - use user.email from database to ensure consistency
     const resetLink = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
@@ -75,10 +63,6 @@ export async function POST(request: NextRequest) {
           },
           connectionUrl: 'smtps://smtp.gmail.com',
         });
-
-        // Verify connection
-        await transporter.verify();
-        console.log('SMTP connection verified successfully');
 
         const mailOptions = {
           from: process.env.EMAIL_USER,
@@ -99,22 +83,17 @@ export async function POST(request: NextRequest) {
           `,
         };
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully:', info.response);
+        await transporter.sendMail(mailOptions);
       } catch (emailError: any) {
         console.error('Email sending failed:', emailError.message || emailError);
-        console.error('Full error:', emailError);
         // Still return success even if email fails, as the token is saved
       }
-    } else {
-      // Log the reset link if email is not configured (for development)
+    } else if (process.env.NODE_ENV !== 'production') {
+      // Log the reset link if email is not configured, dev-only convenience.
       console.log('Reset Link (email not configured):', resetLink);
     }
 
-    return NextResponse.json(
-      { message: 'If an account exists with this email, a reset link has been sent.' },
-      { status: 200 }
-    );
+    return genericResponse;
   } catch (error: any) {
     console.error('Forgot password error:', error);
     return NextResponse.json(

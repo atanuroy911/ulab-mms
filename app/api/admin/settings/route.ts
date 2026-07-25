@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
 import { verifyAdminToken } from '@/lib/adminAuth';
+import { invalidateAuthSettingsCache } from '@/lib/authSettings';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,9 +12,14 @@ export async function GET(request: NextRequest) {
     }
 
     await dbConnect();
-    const settings = await AdminSettings.findOne().select('credentialsLoginEnabled').lean();
+    const settings = await AdminSettings.findOne()
+      .select('credentialsLoginEnabled courseCodeEditableByTeacher')
+      .lean();
 
-    return NextResponse.json({ credentialsLoginEnabled: settings?.credentialsLoginEnabled !== false });
+    return NextResponse.json({
+      credentialsLoginEnabled: settings?.credentialsLoginEnabled !== false,
+      courseCodeEditableByTeacher: settings?.courseCodeEditableByTeacher !== false,
+    });
   } catch (error) {
     console.error('Get admin settings error:', error);
     return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
@@ -30,17 +36,38 @@ export async function PUT(request: NextRequest) {
     await dbConnect();
     const body = await request.json().catch(() => ({}));
 
-    if (typeof body?.credentialsLoginEnabled !== 'boolean') {
-      return NextResponse.json({ error: 'credentialsLoginEnabled must be a boolean' }, { status: 400 });
+    if (body?.credentialsLoginEnabled === undefined && body?.courseCodeEditableByTeacher === undefined) {
+      return NextResponse.json(
+        { error: 'credentialsLoginEnabled or courseCodeEditableByTeacher must be provided' },
+        { status: 400 }
+      );
     }
 
-    const settings = await AdminSettings.findOneAndUpdate(
-      {},
-      { credentialsLoginEnabled: body.credentialsLoginEnabled },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
+    const update: Record<string, boolean> = {};
+    if (body?.credentialsLoginEnabled !== undefined) {
+      if (typeof body.credentialsLoginEnabled !== 'boolean') {
+        return NextResponse.json({ error: 'credentialsLoginEnabled must be a boolean' }, { status: 400 });
+      }
+      update.credentialsLoginEnabled = body.credentialsLoginEnabled;
+    }
+    if (body?.courseCodeEditableByTeacher !== undefined) {
+      if (typeof body.courseCodeEditableByTeacher !== 'boolean') {
+        return NextResponse.json({ error: 'courseCodeEditableByTeacher must be a boolean' }, { status: 400 });
+      }
+      update.courseCodeEditableByTeacher = body.courseCodeEditableByTeacher;
+    }
 
-    return NextResponse.json({ credentialsLoginEnabled: settings.credentialsLoginEnabled });
+    const settings = await AdminSettings.findOneAndUpdate({}, update, {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    });
+    invalidateAuthSettingsCache();
+
+    return NextResponse.json({
+      credentialsLoginEnabled: settings.credentialsLoginEnabled,
+      courseCodeEditableByTeacher: settings.courseCodeEditableByTeacher,
+    });
   } catch (error) {
     console.error('Update admin settings error:', error);
     return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });

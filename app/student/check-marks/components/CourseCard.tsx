@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, FlaskConical, ChevronRight, Archive } from 'lucide-react';
+import { BookOpen, FlaskConical, ChevronRight, Archive, CalendarCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { calculateFinalGrade, calculateTotalWeightage } from '../lib/grade-calculations';
@@ -56,6 +56,12 @@ export function CourseCard({ courseData, onSelect }: CourseCardProps) {
           {courseData.course.showFinalGrade && marksCount > 0 && (
             <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
               {totalWeightage > 0 ? `${((gradeData.total / totalWeightage) * 100).toFixed(1)}%` : 'N/A'}
+            </Badge>
+          )}
+          {courseData.attendance.totalSessions > 0 && (
+            <Badge variant="outline" className="gap-1 text-blue-600 dark:text-blue-400 border-blue-500/30 bg-blue-500/10">
+              <CalendarCheck className="h-3 w-3" />
+              {courseData.attendance.percentage.toFixed(0)}% attendance
             </Badge>
           )}
         </div>

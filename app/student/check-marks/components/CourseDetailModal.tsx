@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { BookOpen, FlaskConical, Info, Inbox, ClipboardList } from 'lucide-react';
+import { BookOpen, FlaskConical, Info, Inbox, ClipboardList, CalendarCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { GradeSummaryCard } from './GradeSummaryCard';
 import { GradeBreakdownList } from './GradeBreakdownList';
 import { ExamCard } from './ExamCard';
@@ -54,6 +55,51 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
               <GradeBreakdownList gradeData={gradeData} />
             </div>
           </div>
+        )}
+
+        {courseData.attendance.totalSessions > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarCheck className="h-5 w-5 text-primary" />
+                Attendance
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
+                <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {courseData.attendance.presentSessions}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Present</div>
+                </div>
+                <div className="rounded-lg bg-red-50 p-3 dark:bg-red-950">
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                    {courseData.attendance.absentSessions}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Absent</div>
+                </div>
+                <div className="rounded-lg bg-muted p-3">
+                  <div className="text-2xl font-bold text-muted-foreground">
+                    {courseData.attendance.totalSessions}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Total</div>
+                </div>
+                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {courseData.attendance.percentage.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-muted-foreground">Rate</div>
+                </div>
+              </div>
+              <Progress value={courseData.attendance.percentage} className="h-2" />
+              {courseData.attendance.percentage < 75 && (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  ⚠️ Your attendance is below 75%.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <div>

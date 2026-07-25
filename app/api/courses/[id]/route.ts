@@ -7,6 +7,7 @@ import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
 import { cascadeDeleteCourseData } from '@/lib/courseCascadeDelete';
+import { isCourseCodeEditableByTeacher } from '@/lib/authSettings';
 
 // GET a specific course
 export async function GET(
@@ -96,7 +97,7 @@ export async function PUT(
     await dbConnect();
 
     const updateData: any = {};
-    
+
     // Update basic fields if provided
     if (name !== undefined) updateData.name = name;
     if (code !== undefined) updateData.code = code;
@@ -167,6 +168,15 @@ export async function PUT(
 
     if (classRepresentativeId !== undefined) {
       updateData.classRepresentativeId = classRepresentativeId;
+    }
+
+    if (aliasEnabled !== undefined || alternateCode !== undefined) {
+      if (!(await isCourseCodeEditableByTeacher())) {
+        return NextResponse.json(
+          { error: 'Editing the New/UNESCO code is disabled by the admin' },
+          { status: 403 }
+        );
+      }
     }
 
     if (aliasEnabled !== undefined) {

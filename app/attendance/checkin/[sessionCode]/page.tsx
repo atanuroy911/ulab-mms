@@ -32,6 +32,7 @@ interface ConfirmationCandidate {
 interface AttendanceStats {
   totalSessions: number;
   attendedSessions: number;
+  absentSessions: number;
   percentage: number;
 }
 
@@ -75,12 +76,17 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
 
   const fetchAttendanceStats = async (studentId: string) => {
     try {
-      const res = await fetch(`/api/student/attendance/${courseId}?studentId=${studentId}`);
+      const res = await fetch(`/api/student/attendance/${courseId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
+      });
       if (res.ok) {
         const data = await res.json();
         setAttendanceStats({
           totalSessions: data.totalSessions,
           attendedSessions: data.attendedSessions,
+          absentSessions: data.absentSessions,
           percentage: data.percentage,
         });
       }
@@ -236,12 +242,18 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
                         Your Attendance for This Course
                       </h3>
 
-                      <div className="mb-4 grid grid-cols-3 gap-3 text-center">
-                        <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">
-                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      <div className="mb-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
+                        <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950">
+                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                             {attendanceStats.attendedSessions}
                           </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Attended</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">Present</div>
+                        </div>
+                        <div className="rounded-lg bg-red-50 p-3 dark:bg-red-950">
+                          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                            {attendanceStats.absentSessions}
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">Absent</div>
                         </div>
                         <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
                           <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">
@@ -249,8 +261,8 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">Total</div>
                         </div>
-                        <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950">
-                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">
+                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                             {attendanceStats.percentage.toFixed(1)}%
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">Rate</div>

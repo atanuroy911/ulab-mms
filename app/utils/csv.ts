@@ -5,7 +5,7 @@ import { Student } from '../types';
 // from a spreadsheet, or reformatted by an LLM). Tries the least ambiguous
 // separator first so IDs that themselves contain hyphens (e.g. "2021-1-60-001")
 // aren't split on their own internal hyphens.
-function splitIdAndName(line: string): [string, string] | null {
+export function splitIdAndName(line: string): [string, string] | null {
   const stripQuotes = (part: string) => part.trim().replace(/^["']|["']$/g, '');
 
   if (line.includes(',')) {

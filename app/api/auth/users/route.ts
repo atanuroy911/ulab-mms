@@ -8,8 +8,11 @@ import { verifyAdminToken } from '@/lib/adminAuth';
 // GET all users for dropdown selection (supervisors, evaluators)
 export async function GET(request: NextRequest) {
   try {
+    // Only used by the admin dashboard (capstone supervisor/evaluator pickers) - restricted to
+    // admins, not just any signed-in teacher, since it lists every user's name/email.
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id && !(await verifyAdminToken(request))) {
+    const isAdmin = (session?.user as any)?.role === 'admin' || (await verifyAdminToken(request));
+    if (!isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

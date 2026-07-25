@@ -9,6 +9,9 @@ declare module 'next-auth' {
       role?: string;
       googleLinked?: boolean;
       hasPassword?: boolean;
+      checkinOnly?: boolean;
+      marksOnly?: boolean;
+      projectOnly?: boolean;
     };
   }
 
@@ -26,5 +29,6 @@ declare module 'next-auth/jwt' {
     role?: string;
     googleLinked?: boolean;
     hasPassword?: boolean;
+    checkinOnly?: boolean;
   }
 }
