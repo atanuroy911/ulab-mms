@@ -11,6 +11,7 @@ declare module 'next-auth' {
       hasPassword?: boolean;
       checkinOnly?: boolean;
       marksOnly?: boolean;
+      projectOnly?: boolean;
     };
   }
 

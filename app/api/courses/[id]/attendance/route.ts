@@ -19,7 +19,19 @@ function getUtcDateKey(value: Date) {
 
 export async function GET(_req: NextRequest, { params }: { params: any }) {
   await dbConnect();
+
+  const session = (await getServerSession(authOptions as any)) as any;
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const courseId = await resolveParams(params);
+
+  const course = await Course.findById(courseId);
+  if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+  if ((course.userId as any).toString() !== session.user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const [sessions, activeSession] = await Promise.all([

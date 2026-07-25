@@ -1,6 +1,10 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret-change-in-production';
+if (!process.env.JWT_SECRET && !process.env.NEXTAUTH_SECRET) {
+  throw new Error('JWT_SECRET or NEXTAUTH_SECRET must be set - GraphQL auth cannot fall back to a hardcoded secret');
+}
+
+const JWT_SECRET = (process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET) as string;
 const JWT_EXPIRES_IN = '7d';
 
 export interface JWTPayload {

@@ -20,7 +20,8 @@ import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 // with a login-capable User document they never asked for.
 const CHECKIN_GOOGLE_PROVIDER_ID = 'google-checkin';
 const MARKS_GOOGLE_PROVIDER_ID = 'google-marks';
-const STUDENT_ONLY_GOOGLE_PROVIDER_IDS = [CHECKIN_GOOGLE_PROVIDER_ID, MARKS_GOOGLE_PROVIDER_ID];
+const PROJECT_GOOGLE_PROVIDER_ID = 'google-project';
+const STUDENT_ONLY_GOOGLE_PROVIDER_IDS = [CHECKIN_GOOGLE_PROVIDER_ID, MARKS_GOOGLE_PROVIDER_ID, PROJECT_GOOGLE_PROVIDER_ID];
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -112,6 +113,21 @@ export const authOptions: NextAuthOptions = {
               },
             },
           }),
+          // Same Google app again, for the project-grouping check-in page - proves the
+          // visitor owns a real @ulab.edu.bd Google account so group actions can be bound to
+          // the actual signed-in student instead of a client-supplied studentId.
+          GoogleProvider({
+            id: PROJECT_GOOGLE_PROVIDER_ID,
+            name: 'Google (Project Check-in)',
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                prompt: 'select_account consent',
+                hd: 'ulab.edu.bd',
+              },
+            },
+          }),
         ]
       : []),
   ],
@@ -172,6 +188,7 @@ export const authOptions: NextAuthOptions = {
         // routes (see middleware.ts).
         token.checkinOnly = account.provider === CHECKIN_GOOGLE_PROVIDER_ID;
         token.marksOnly = account.provider === MARKS_GOOGLE_PROVIDER_ID;
+        token.projectOnly = account.provider === PROJECT_GOOGLE_PROVIDER_ID;
       }
 
       if (user) {
@@ -208,6 +225,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).hasPassword = !!token.hasPassword;
         (session.user as any).checkinOnly = !!token.checkinOnly;
         (session.user as any).marksOnly = !!token.marksOnly;
+        (session.user as any).projectOnly = !!token.projectOnly;
       }
       return session;
     },

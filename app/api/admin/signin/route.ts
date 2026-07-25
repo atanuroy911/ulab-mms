@@ -5,9 +5,21 @@ import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 
 import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
+import { checkRateLimit, getRequestIp } from '@/lib/rateLimit';
+
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimit = checkRateLimit(`admin-signin:${getRequestIp(request)}`, MAX_ATTEMPTS, WINDOW_MS);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many sign-in attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+
     await dbConnect();
 
     const { password } = await request.json();

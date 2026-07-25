@@ -1,6 +1,7 @@
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
+import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 import { generateToken, requireAuth, type GraphQLContext } from '../auth';
 import type { Loaders } from '../dataloaders';
 
@@ -40,6 +41,13 @@ export const userResolvers = {
 
       if (!email || !password) {
         throw new Error('Email and password are required');
+      }
+
+      // This is a second, independent credentials-login path (the primary one is NextAuth's
+      // CredentialsProvider) - it must respect the same admin-controlled kill switch, or an
+      // admin disabling password sign-in site-wide wouldn't actually stop it.
+      if (!(await isCredentialsLoginEnabled())) {
+        throw new Error('Email/password sign-in is currently disabled. Please use Google sign-in instead.');
       }
 
       const user = await User.findOne({ email });

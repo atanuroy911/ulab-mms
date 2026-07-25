@@ -100,7 +100,8 @@ export const courseResolvers = {
       };
     },
 
-    studentCourses: async (_: any, { studentId }: StudentCoursesArgs) => {
+    studentCourses: async (_: any, { studentId }: StudentCoursesArgs, context: GraphQLContext) => {
+      requireAuth(context);
       await dbConnect();
 
       const studentRecords = await Student.find({

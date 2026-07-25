@@ -76,7 +76,11 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
 
   const fetchAttendanceStats = async (studentId: string) => {
     try {
-      const res = await fetch(`/api/student/attendance/${courseId}?studentId=${studentId}`);
+      const res = await fetch(`/api/student/attendance/${courseId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
+      });
       if (res.ok) {
         const data = await res.json();
         setAttendanceStats({

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { signIn, useSession } from 'next-auth/react';
 
 interface StudentInfo {
   _id: string;
@@ -26,6 +27,7 @@ interface CourseInfo {
 
 export default function ProjectCheckinPage() {
   const { courseId } = useParams<{ courseId: string }>();
+  const { data: session, status } = useSession();
 
   const [course, setCourse] = useState<CourseInfo | null>(null);
   const [students, setStudents] = useState<StudentInfo[]>([]);
@@ -34,11 +36,12 @@ export default function ProjectCheckinPage() {
   const [maxMembers, setMaxMembers] = useState(4);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
 
-  // Student identification
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<StudentInfo | null>(null);
-  const [showDropdown, setShowDropdown] = useState(false);
+  // Identity is resolved server-side from the signed-in Google account, never chosen by the
+  // client - `me` is null if the session's Google name couldn't be matched to exactly one
+  // student on this course's roster.
+  const [me, setMe] = useState<StudentInfo | null>(null);
 
   // Title editing
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -48,6 +51,8 @@ export default function ProjectCheckinPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
+
+  const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,6 +64,7 @@ export default function ProjectCheckinPage() {
       setGroups(data.groups || []);
       setIsActive(data.isActive);
       setMaxMembers(data.maxMembersPerGroup ?? 4);
+      setMe(data.me || null);
     } catch {
       setError('Failed to connect to server');
     } finally {
@@ -66,26 +72,29 @@ export default function ProjectCheckinPage() {
     }
   }, [courseId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (!isGoogleVerified) { setLoading(false); return; }
+    fetchData();
+  }, [isGoogleVerified, fetchData]);
 
   // Auto-refresh every 15s when active
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || !isGoogleVerified) return;
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, [isActive, fetchData]);
+  }, [isActive, isGoogleVerified, fetchData]);
 
-  const myGroup = selectedStudent
-    ? groups.find(g => g.studentIds.some(s => s._id === selectedStudent._id))
+  const myGroup = me
+    ? groups.find(g => g.studentIds.some(s => s._id === me._id))
     : null;
-
-  const filteredStudents = students.filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.studentId.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const assignedStudentIds = new Set(groups.flatMap(g => g.studentIds.map(s => s._id)));
   const unassignedStudents = students.filter(s => !assignedStudentIds.has(s._id));
+
+  const handleGoogleSignIn = async () => {
+    setSigningIn(true);
+    await signIn('google-project', { callbackUrl: window.location.href });
+  };
 
   const doAction = async (action: string, extra?: object) => {
     setActionLoading(true);
@@ -95,11 +104,7 @@ export default function ProjectCheckinPage() {
       const res = await fetch(`/api/project/${courseId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          studentId: selectedStudent?._id,
-          ...extra,
-        }),
+        body: JSON.stringify({ action, ...extra }),
       });
       const data = await res.json();
       if (!res.ok) { setActionError(data.error || 'Action failed'); return; }
@@ -116,13 +121,37 @@ export default function ProjectCheckinPage() {
   };
 
   // ─── Loading ───────────────────────────────────────────────────────────────
-  if (loading) {
+  if (status === 'loading' || (loading && isGoogleVerified)) {
     return (
       <div className="min-h-screen flex items-center justify-center"
         style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-violet-300 text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isGoogleVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4"
+        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
+        <div className="rounded-2xl border border-white/10 p-8 text-center max-w-sm"
+          style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(12px)' }}>
+          <div className="text-4xl mb-3">🔐</div>
+          <p className="text-white font-semibold mb-1">Sign in to continue</p>
+          <p className="text-white/50 text-sm mb-5">
+            Sign in with your ULAB Google account so we can confirm it&apos;s really you before joining a group.
+          </p>
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={signingIn}
+            className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: '#fff' }}
+          >
+            {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
+          </button>
         </div>
       </div>
     );
@@ -175,64 +204,32 @@ export default function ProjectCheckinPage() {
           </div>
         )}
 
-        {/* Step 1: Identify yourself */}
+        {/* Step 1: Identity, resolved from your signed-in Google account */}
         <div className="rounded-2xl border border-white/10 p-5" style={cardStyle}>
           <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-3">
             👤 Step 1 — Who are you?
           </h2>
-          {selectedStudent ? (
+          {me ? (
             <div className="flex items-center justify-between bg-violet-500/20 border border-violet-500/30 rounded-xl px-4 py-3">
               <div>
-                <p className="font-semibold text-white">{selectedStudent.name}</p>
-                <p className="text-sm text-violet-300">{selectedStudent.studentId}</p>
+                <p className="font-semibold text-white">{me.name}</p>
+                <p className="text-sm text-violet-300">{me.studentId}</p>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedStudent(null);
-                  setSearchQuery('');
-                  setActionSuccess('');
-                  setActionError('');
-                }}
-                className="text-xs text-violet-400 hover:text-white border border-violet-500/40 hover:border-white/40 px-3 py-1.5 rounded-lg transition-all"
-              >
-                Change
-              </button>
+              <span className="text-xs text-violet-300 bg-violet-500/20 border border-violet-500/30 px-3 py-1.5 rounded-lg">
+                Verified via Google
+              </span>
             </div>
           ) : (
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setShowDropdown(true); }}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="Search your name or student ID..."
-                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20 transition-all"
-              />
-              {showDropdown && searchQuery && (
-                <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-white/10 overflow-hidden z-50 max-h-56 overflow-y-auto shadow-2xl"
-                  style={{ background: '#1e2a3a' }}>
-                  {filteredStudents.length === 0 ? (
-                    <div className="px-4 py-3 text-white/50 text-sm">No students found</div>
-                  ) : (
-                    filteredStudents.slice(0, 10).map(s => (
-                      <button
-                        key={s._id}
-                        onClick={() => { setSelectedStudent(s); setSearchQuery(''); setShowDropdown(false); }}
-                        className="w-full px-4 py-3 text-left hover:bg-violet-500/20 transition-colors border-b border-white/5 last:border-b-0"
-                      >
-                        <div className="font-medium text-white">{s.name}</div>
-                        <div className="text-xs text-violet-300">{s.studentId}</div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-300 text-sm">
+              We couldn&apos;t match your Google account ({session?.user?.name}) to a student on this course&apos;s
+              roster. Ask your instructor to confirm your name/ID in the roster, or make sure your Google
+              display name includes your student ID in parentheses.
             </div>
           )}
         </div>
 
         {/* Step 2: Group actions — only shown once identified */}
-        {selectedStudent && isActive && (
+        {me && isActive && (
           <div className="rounded-2xl border border-white/10 p-5" style={cardStyle}>
             <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">
               🏷️ Step 2 — Your Group
@@ -310,12 +307,40 @@ export default function ProjectCheckinPage() {
                           <p className="text-sm font-medium text-white">{s.name}</p>
                           <p className="text-xs text-violet-300">{s.studentId}</p>
                         </div>
-                        {s._id === selectedStudent._id && (
+                        {s._id === me._id ? (
                           <span className="ml-auto text-xs bg-violet-500/30 text-violet-300 px-2 py-0.5 rounded-full">You</span>
+                        ) : (
+                          <button
+                            onClick={() => doAction('leave', { groupId: myGroup._id, studentId: s._id })}
+                            disabled={actionLoading}
+                            className="ml-auto text-xs text-red-400/70 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 px-2 py-0.5 rounded-full transition-all disabled:opacity-50"
+                          >
+                            Remove
+                          </button>
                         )}
                       </div>
                     ))}
                   </div>
+
+                  {/* Add teammate — only the person who signed in needs to; teammates are
+                      added without them logging in themselves. */}
+                  {unassignedStudents.length > 0 && myGroup.studentIds.length < maxMembers && (
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <p className="text-xs text-white/40 mb-2">Add a teammate (they don&apos;t need to sign in):</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {unassignedStudents.map(s => (
+                          <button
+                            key={s._id}
+                            onClick={() => doAction('join', { groupId: myGroup._id, studentId: s._id })}
+                            disabled={actionLoading}
+                            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-white/15 bg-white/5 text-white/60 hover:border-violet-400/50 hover:text-violet-300 hover:bg-violet-500/10 transition-all disabled:opacity-50"
+                          >
+                            + {s.name} <span className="opacity-50">({s.studentId})</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -365,7 +390,7 @@ export default function ProjectCheckinPage() {
             <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
               <div className="text-4xl mb-3">📋</div>
               <p className="text-white/40 text-sm">
-                {isActive && selectedStudent
+                {isActive && me
                   ? 'No groups yet — be the first to create one!'
                   : 'No groups yet.'}
               </p>
@@ -375,7 +400,7 @@ export default function ProjectCheckinPage() {
           {groups.map(group => {
             const isFull = group.studentIds.length >= maxMembers;
             const isMine = myGroup?._id === group._id;
-            const canJoin = isActive && selectedStudent && !myGroup && !isFull;
+            const canJoin = isActive && me && !myGroup && !isFull;
 
             return (
               <div
@@ -418,7 +443,7 @@ export default function ProjectCheckinPage() {
                     : group.studentIds.map(s => (
                       <span key={s._id}
                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
-                          s._id === selectedStudent?._id
+                          s._id === me?._id
                             ? 'bg-violet-500/30 text-violet-200 border border-violet-500/40'
                             : 'bg-white/10 text-white/70'
                         }`}>
@@ -441,7 +466,7 @@ export default function ProjectCheckinPage() {
                     Join Group {group.groupNumber}
                   </button>
                 )}
-                {isActive && selectedStudent && !myGroup && isFull && (
+                {isActive && me && !myGroup && isFull && (
                   <div className="w-full py-2 text-center text-white/25 text-xs rounded-xl bg-white/5">
                     Group is full
                   </div>
@@ -462,7 +487,7 @@ export default function ProjectCheckinPage() {
               {unassignedStudents.map(s => (
                 <span key={s._id}
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs border ${
-                    s._id === selectedStudent?._id
+                    s._id === me?._id
                       ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
                       : 'bg-white/5 border-white/10 text-white/50'
                   }`}>

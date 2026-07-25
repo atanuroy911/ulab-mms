@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, XCircle, Loader2, Calendar } from 'lucide-react';
+import { AuthGate } from './components/AuthGate';
 
 interface AttendanceStats {
   courseId: string;
@@ -25,20 +27,28 @@ interface AttendanceStats {
 }
 
 export default function CheckAttendancePage() {
+  const { data: session, status } = useSession();
   const [studentId, setStudentId] = useState('');
   const [courseId, setCourseId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<AttendanceStats | null>(null);
+  const [adminOverride, setAdminOverride] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
+  const canSearch = isGoogleVerified || adminOverride;
+
+  const fetchAttendance = async (id: string, course: string, adminPassword?: string) => {
     setLoading(true);
     setError('');
     setStats(null);
 
     try {
-      const response = await fetch(`/api/student/attendance/${courseId}?studentId=${studentId}`);
+      const response = await fetch(`/api/student/attendance/${course}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id, adminPassword }),
+      });
 
       if (!response.ok) {
         const data = await response.json();
@@ -47,11 +57,25 @@ export default function CheckAttendancePage() {
 
       const data = await response.json();
       setStats(data);
+      setStudentId(id);
+      setCourseId(course);
+      if (adminPassword) {
+        setAdminOverride(true);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetchAttendance(studentId, courseId);
+  };
+
+  const handleAdminOverride = async (id: string, course: string, adminPassword: string) => {
+    await fetchAttendance(id, course, adminPassword);
   };
 
   return (
@@ -62,63 +86,67 @@ export default function CheckAttendancePage() {
           <p className="mt-2 text-gray-600">View your attendance record for any course</p>
         </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Enter Your Details</CardTitle>
-            <CardDescription>
-              Enter your student ID and course ID to view your attendance statistics
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="studentId">Student ID</Label>
-                <Input
-                  id="studentId"
-                  type="text"
-                  placeholder="e.g., 2021-1-60-001"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
-                  required
-                  className="text-lg"
-                />
-              </div>
+        {!canSearch ? (
+          <AuthGate onAdminOverride={handleAdminOverride} loading={loading} error={error} />
+        ) : (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Enter Your Details</CardTitle>
+              <CardDescription>
+                Enter your student ID and course ID to view your attendance statistics
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="studentId">Student ID</Label>
+                  <Input
+                    id="studentId"
+                    type="text"
+                    placeholder="e.g., 2021-1-60-001"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    required
+                    className="text-lg"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="courseId">Course ID</Label>
-                <Input
-                  id="courseId"
-                  type="text"
-                  placeholder="Enter course ID"
-                  value={courseId}
-                  onChange={(e) => setCourseId(e.target.value)}
-                  required
-                  className="text-lg"
-                />
-                <p className="text-sm text-gray-500">
-                  Tip: You can find the course ID in the course URL or ask your instructor
-                </p>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="courseId">Course ID</Label>
+                  <Input
+                    id="courseId"
+                    type="text"
+                    placeholder="Enter course ID"
+                    value={courseId}
+                    onChange={(e) => setCourseId(e.target.value)}
+                    required
+                    className="text-lg"
+                  />
+                  <p className="text-sm text-gray-500">
+                    Tip: You can find the course ID in the course URL or ask your instructor
+                  </p>
+                </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Checking...
-                  </>
-                ) : (
-                  'Check Attendance'
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+
+                <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    'Check Attendance'
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         {stats && (
           <div className="space-y-6">

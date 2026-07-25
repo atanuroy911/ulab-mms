@@ -1,23 +1,37 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
+import { isUlabSessionOrAdminAuthorized } from '@/lib/studentAuth';
 import AttendanceSession from '@/models/AttendanceSession';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
 
-export async function GET(
+// POST (not GET) so an admin-password override never lands in a URL / server access log.
+// Attendance is only released after the visitor either signs in with a real @ulab.edu.bd
+// Google account (dashboard, attendance check-in, or check-marks sessions all qualify) or a
+// teacher/admin supplies the admin password. Without this, anyone who knows/guesses a
+// courseId + roll number could pull a student's full attendance history anonymously.
+export async function POST(
   request: Request,
   { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
     await dbConnect();
 
-    const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get('studentId');
+    const body = await request.json().catch(() => ({}));
+    const studentId = typeof body?.studentId === 'string' ? body.studentId.trim() : '';
+    const adminPassword = typeof body?.adminPassword === 'string' ? body.adminPassword : undefined;
 
     if (!studentId) {
       return NextResponse.json(
         { error: 'Student ID is required' },
         { status: 400 }
+      );
+    }
+
+    if (!(await isUlabSessionOrAdminAuthorized(adminPassword))) {
+      return NextResponse.json(
+        { error: adminPassword ? 'Invalid admin password' : 'Please sign in with your ULAB Google account to check attendance' },
+        { status: 401 }
       );
     }
 
