@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Redirect authenticated users away from sign-in pages
-  if (pathname === '/auth/signin' && token) {
+  if (pathname === '/auth/signin' && token && !token.checkinOnly) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
@@ -21,7 +21,10 @@ export async function middleware(request: NextRequest) {
 
   // Protect dashboard and course routes
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/course')) {
-    if (!token) {
+    // Tokens minted via the attendance check-in Google provider are scoped to that flow only
+    // (see app/api/auth/[...nextauth]/route.ts) and must never grant dashboard/course access,
+    // otherwise scanning an attendance QR code would auto-login into the full teacher app.
+    if (!token || token.checkinOnly) {
       const signInUrl = new URL('/auth/signin', request.url);
       signInUrl.searchParams.set('callbackUrl', pathname);
       return NextResponse.redirect(signInUrl);

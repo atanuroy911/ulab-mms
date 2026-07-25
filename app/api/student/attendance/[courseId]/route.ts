@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import AttendanceSession from '@/models/AttendanceSession';
 import Course from '@/models/Course';
+import Student from '@/models/Student';
 
 export async function GET(
   request: Request,
@@ -31,13 +32,26 @@ export async function GET(
       );
     }
 
+    // studentId here is the roll number (e.g. "2021-1-60-123"), not the Student
+    // document's ObjectId -- resolve it so records can be matched by the
+    // authoritative studentId ObjectId ref, the same way the teacher's
+    // attendance view does. studentIdString is only a denormalized snapshot
+    // taken at write time and goes stale if the roll number is ever edited.
+    const studentDoc = await Student.findOne({
+      courseId,
+      studentId: { $regex: new RegExp(`^${studentId}$`, 'i') },
+    });
+
     const sessions = await AttendanceSession.find({ courseId }).sort({ date: 1 });
 
     // A session counts as "present" only if this student has a record marked
     // present -- an explicit 'absent' record (e.g. from bulk marking) must
     // not count as attended just because a record exists.
     const isPresent = (session: any) =>
-      session.records.some((record: any) => record.studentIdString === studentId && record.status === 'present');
+      session.records.some((record: any) =>
+        (studentDoc ? String(record.studentId) === String(studentDoc._id) : record.studentIdString === studentId)
+        && record.status === 'present'
+      );
 
     const totalSessions = sessions.length;
     const presentCount = sessions.filter(isPresent).length;

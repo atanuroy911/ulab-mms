@@ -15,6 +15,7 @@ import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import BulkPasteMarkModal from '@/app/components/BulkPasteMarkModal';
+import DictationMarkModal from '@/app/components/dictation/DictationMarkModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
 import ProjectView from './components/ProjectView';
@@ -172,6 +173,7 @@ export default function CoursePage() {
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
   const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
+  const [showDictationModal, setShowDictationModal] = useState(false);
   const [aliasCandidates, setAliasCandidates] = useState<Array<{ _id: string; studentId: string; name: string }>>([]);
   const [showAliasCategorizeModal, setShowAliasCategorizeModal] = useState(false);
   const [aliasCategorizing, setAliasCategorizing] = useState(false);
@@ -1845,6 +1847,7 @@ export default function CoursePage() {
                 }}
                 onShowBulkMarkModal={() => setShowBulkMarkModal(true)}
                 onShowBulkPasteModal={() => setShowBulkPasteModal(true)}
+                onShowDictationModal={() => setShowDictationModal(true)}
                 onShowSetZeroModal={() => {
                   setSelectedExamsForAction([]);
                   setConfirmationStep(0);
@@ -2255,6 +2258,17 @@ export default function CoursePage() {
         courseId={courseId}
         onMarksSaved={fetchCourseData}
         coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
+      />
+
+      {/* Dictation Mark Modal */}
+      <DictationMarkModal
+        isOpen={showDictationModal}
+        onClose={() => setShowDictationModal(false)}
+        students={students}
+        exams={exams}
+        marks={marks}
+        courseId={courseId}
+        onMarkSaved={fetchCourseData}
       />
 
       {/* Exam Settings Modal */}

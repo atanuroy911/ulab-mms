@@ -40,6 +40,7 @@ interface MarksViewProps {
   onShowMarkModal: (examId: string | undefined, studentId: string | undefined) => void;
   onShowBulkMarkModal: () => void;
   onShowBulkPasteModal: () => void;
+  onShowDictationModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: () => void;
   onAutoAttendanceMarks: (examId: string) => void;
@@ -61,6 +62,7 @@ export default function MarksView({
   onShowMarkModal,
   onShowBulkMarkModal,
   onShowBulkPasteModal,
+  onShowDictationModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
   onAutoAttendanceMarks,
@@ -175,13 +177,28 @@ export default function MarksView({
                   setShowDropdown(false);
                   onShowBulkPasteModal();
                 }}
-                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3 border-b"
               >
                 <span className="text-xl">📋</span>
                 <div>
                   <div className="font-medium">Bulk Paste (ID + Marks)</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     Paste rows exported from Google Classroom
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowDropdown(false);
+                  onShowDictationModal();
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
+              >
+                <span className="flex items-center justify-center w-6 h-6 rounded bg-purple-600 text-white font-bold text-sm shrink-0">α</span>
+                <div>
+                  <div className="font-medium">Add Marks via Dictation</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Speak student ID and marks, one at a time
                   </div>
                 </div>
               </button>

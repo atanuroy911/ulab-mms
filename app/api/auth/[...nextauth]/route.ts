@@ -135,7 +135,13 @@ export const authOptions: NextAuthOptions = {
 
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
+      if (account) {
+        // Tokens minted via the attendance check-in provider are scoped to that flow only -
+        // they must never grant access to the teacher dashboard/course routes (see middleware.ts).
+        token.checkinOnly = account.provider === CHECKIN_GOOGLE_PROVIDER_ID;
+      }
+
       if (user) {
         const email = user.email?.toLowerCase();
 
@@ -165,6 +171,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role as string;
         (session.user as any).googleLinked = !!token.googleLinked;
         (session.user as any).hasPassword = !!token.hasPassword;
+        (session.user as any).checkinOnly = !!token.checkinOnly;
       }
       return session;
     },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
 import { verifyAdminToken } from '@/lib/adminAuth';
+import { invalidateAuthSettingsCache } from '@/lib/authSettings';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,6 +62,7 @@ export async function PUT(request: NextRequest) {
       upsert: true,
       setDefaultsOnInsert: true,
     });
+    invalidateAuthSettingsCache();
 
     return NextResponse.json({
       credentialsLoginEnabled: settings.credentialsLoginEnabled,

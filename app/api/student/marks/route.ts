@@ -90,9 +90,12 @@ export async function GET(request: NextRequest) {
         // this student has a record explicitly marked present.
         const attendanceSessions = await AttendanceSession.find({ courseId: course._id });
         const totalSessions = attendanceSessions.length;
+        // Match by the Student document's ObjectId (same as the teacher's attendance
+        // view), not the denormalized studentIdString snapshot, which goes stale if
+        // the student's roll number is ever edited after attendance was recorded.
         const presentSessions = attendanceSessions.filter((session) =>
           session.records.some(
-            (record: any) => record.studentIdString === studentRecord.studentId && record.status === 'present'
+            (record: any) => String(record.studentId) === String(studentRecord._id) && record.status === 'present'
           )
         ).length;
         const absentSessions = totalSessions - presentSessions;
