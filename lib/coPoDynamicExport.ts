@@ -17,6 +17,7 @@ import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
 import { calculateLetterGrade, getGradeDisplay } from '@/app/utils/grading';
+import { reinjectTemplateCharts } from '@/lib/xlsxChartReinject';
 
 const TEMPLATE_STUDENT_COUNT = 50;
 const GRADE_SHEET_FIRST_ROW = 10; // GradeSheet student rows start here (ends at 59 in the template)
@@ -266,9 +267,11 @@ export async function buildDynamicCoPoWorkbook(params: {
   students: any[];
   exams: any[];
   marks: any[];
+  attendanceSessions?: any[];
   instructorName: string;
 }): Promise<Buffer> {
   const { course, students, exams, marks, instructorName } = params;
+  const attendanceSessions = params.attendanceSessions || [];
 
   const templatePath = path.join(process.cwd(), 'public', 'templates', 'Sample CO PO.xlsx');
   if (!fs.existsSync(templatePath)) {
@@ -450,9 +453,67 @@ export async function buildDynamicCoPoWorkbook(params: {
     copoSheet.getCell(`${col}${copoAvgRow}`).value = rows.reduce((sum, r) => sum + r.poAttained[i], 0);
   });
 
-  // ── CourseSummary sheet: a handful of cells reference fixed GradeSheet cells that just
-  //    moved - write the same computed values in directly rather than relying on formula
-  //    text that now points at the wrong row. ──
+  // ── CO_PO_AttainmentAnalysis "Mapping of COs to POs" grid (rows 2-9, fixed - not part of
+  //    the resized student block). The course's configured CO-PO mapping/max-marks were only
+  //    ever used internally for the attainment math above; the visible grid itself was never
+  //    written, so it always showed the template's all-zero placeholder regardless of what
+  //    the teacher actually configured. ──
+  const midtermExam = findMidtermExam(exams);
+  const finalExam = findFinalExam(exams);
+  const projectExam = findProjectExam(exams);
+  const maxMarksObj: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
+  const coPoMatrix: boolean[][] = course?.coPoMapping?.mapping || [];
+  const assessmentMaxRows = [
+    { row: 3, exam: midtermExam },
+    { row: 4, exam: finalExam },
+    { row: 5, exam: projectExam },
+  ];
+  const coCols6 = ['D', 'E', 'F', 'G', 'H', 'I'];
+  assessmentMaxRows.forEach(({ row, exam }) => {
+    const max = exam ? maxMarksObj[exam._id.toString()] : undefined;
+    coCols6.forEach((col, i) => {
+      copoSheet.getCell(`${col}${row}`).value = max?.[i] || 0;
+    });
+  });
+  const poColsAll = ['AT', 'AU', 'AV', 'AW', 'AX', 'AY', 'AZ', 'BA', 'BB', 'BC', 'BD', 'BE'];
+  for (let co = 0; co < 6; co++) {
+    const row = co + 3;
+    poColsAll.forEach((col, po) => {
+      copoSheet.getCell(`${col}${row}`).value = coPoMatrix[co]?.[po] ? 1 : 0;
+    });
+  }
+
+  // ── GradeSheet footer: add an explicit signature line above the instructor's name (the
+  //    template only ever printed the name/title/department with nothing indicating where to
+  //    actually sign, unlike CourseSummary/ContinuousQualityImprovement which both have a
+  //    "Signature of the..." caption). ──
+  const signatureRow = 74 + gradeShift;
+  gradeSheet.mergeCells(`B${signatureRow}:C${signatureRow}`);
+  const signatureCell = gradeSheet.getCell(`B${signatureRow}`);
+  signatureCell.value = 'Signature: ____________________';
+  signatureCell.font = { name: 'Times New Roman', size: 12, italic: true };
+  signatureCell.alignment = { horizontal: 'left', vertical: 'middle' };
+
+  // ── Attendance-derived numbers ──
+  const sessionCount = attendanceSessions.length;
+  const attendanceByStudent = new Map<string, { present: number; total: number }>();
+  students.forEach((s) => attendanceByStudent.set(String(s._id), { present: 0, total: sessionCount }));
+  attendanceSessions.forEach((session: any) => {
+    (session.records || []).forEach((record: any) => {
+      const key = String(record.studentId);
+      const stat = attendanceByStudent.get(key);
+      if (stat && record.status === 'present') stat.present += 1;
+    });
+  });
+  const absentStudentCount = students.filter((s) => {
+    const stat = attendanceByStudent.get(String(s._id));
+    if (!stat || stat.total === 0) return false;
+    return stat.present / stat.total < 0.75; // matches the <75% "at risk" threshold used elsewhere in the app
+  }).length;
+
+  // ── CourseSummary sheet: a handful of cells reference fixed GradeSheet/CO_PO_
+  //    AttainmentAnalysis cells that just moved - write the same computed values in directly
+  //    rather than relying on formula text that now points at the wrong row. ──
   if (courseSummarySheet) {
     courseSummarySheet.getCell('O3').value = `${n} students`;
     courseSummarySheet.getCell('G30').value = n;
@@ -470,6 +531,21 @@ export async function buildDynamicCoPoWorkbook(params: {
     });
     courseSummarySheet.getCell('N24').value = n;
     courseSummarySheet.getCell('N25').value = n > 0 ? 1 : 0;
+
+    // Real attendance-session numbers instead of the template's static sample values.
+    courseSummarySheet.getCell('P30').value = sessionCount; // "Session Planned" -> sessions actually conducted
+    courseSummarySheet.getCell('G39').value = absentStudentCount; // "Absent Students" (<75% attendance)
+    courseSummarySheet.getCell('G38').value = 0; // "Tardy Students" - not tracked by this system
+
+    // "Summary of COs" mini-table (rows 58-60) - was driven by formulas anchored to
+    // CO_PO_AttainmentAnalysis!AN67 etc, which is now wherever the class-average row shifted to.
+    const coSummaryCols = ['H', 'I', 'J', 'K', 'L', 'M'];
+    coSummaryCols.forEach((col, i) => {
+      courseSummarySheet.getCell(`${col}59`).value = coAttainedCounts[i];
+      courseSummarySheet.getCell(`${col}60`).value = rows.length
+        ? rows.reduce((sum, r) => sum + r.coPercentage[i], 0) / rows.length
+        : 0;
+    });
   }
 
   // ── ContinuousQualityImprovement sheet: CO attainment percentages ──
@@ -480,9 +556,15 @@ export async function buildDynamicCoPoWorkbook(params: {
     });
   }
 
-  // ── Withdrawn markers already folded into the "M" column grade text above; nothing else
-  //    needs a separate pass. ──
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
-  const buffer = await workbook.xlsx.writeBuffer();
-  return Buffer.from(buffer);
+  try {
+    return await reinjectTemplateCharts(buffer, templatePath, gradeShift);
+  } catch (err) {
+    // Charts are a visual enhancement, not core data - if the template ever changes shape and
+    // this surgery no longer lines up, fall back to the (chart-less) ExcelJS output rather
+    // than failing the whole export.
+    console.error('Failed to reinject template charts, exporting without them:', err);
+    return buffer;
+  }
 }

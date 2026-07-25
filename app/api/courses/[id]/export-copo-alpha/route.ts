@@ -6,6 +6,7 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import AttendanceSession from '@/models/AttendanceSession';
 import { buildDynamicCoPoWorkbook } from '@/lib/coPoDynamicExport';
 
 // Alpha export: same CO-PO course file as the Beta export, but the student table grows or
@@ -41,6 +42,7 @@ export async function POST(
       : allStudents;
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
+    const attendanceSessions = await AttendanceSession.find({ courseId });
 
     const courseForExport = useSplit && group === 'alias'
       ? { ...course.toObject(), code: course.alternateCode }
@@ -51,6 +53,7 @@ export async function POST(
       students,
       exams,
       marks,
+      attendanceSessions,
       instructorName: session.user?.name || '',
     });
 
