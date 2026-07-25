@@ -9,230 +9,27 @@
 // uses) can't insert/shift rows at all.
 //
 // This module instead: (1) computes every student-count-dependent value in JS from the DB
-// (marks, CO/PO attainment, class averages, distribution counts) exactly like the beta
-// export's inline resolvers do, then (2) uses ExcelJS to physically grow/shrink the
-// template's two dynamic sheets to the real student count and writes the computed values
-// in as plain literals - never as formulas - so there is nothing left to "shift".
+// (see lib/coPoCalculations.ts - shared with the Alpha PDF export so the two never
+// disagree), then (2) uses ExcelJS to physically grow/shrink the template's two dynamic
+// sheets to the real student count and writes the computed values in as plain literals -
+// never as formulas - so there is nothing left to "shift".
 import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
-import { calculateLetterGrade, getGradeDisplay } from '@/app/utils/grading';
 import { reinjectTemplateCharts } from '@/lib/xlsxChartReinject';
+import {
+  GRADE_DISTRIBUTION,
+  computeStudentRows,
+  computeCoPoSummary,
+  findMidtermExam,
+  findFinalExam,
+  findProjectExam,
+  type StudentRow,
+} from '@/lib/coPoCalculations';
 
 const TEMPLATE_STUDENT_COUNT = 50;
 const GRADE_SHEET_FIRST_ROW = 10; // GradeSheet student rows start here (ends at 59 in the template)
 const COPO_SHEET_FIRST_ROW = 15; // CO_PO_AttainmentAnalysis student rows start here (ends at 64)
-const CO_ATTAINMENT_THRESHOLD = 0.55;
-const PO_ATTAINMENT_THRESHOLD = 0.65;
-const WITHDRAWN_GRADE_LABEL = 'W (Withdrawn)';
-
-// ─── Mark computation (mirrors export-file/route.ts's resolvers) ─────────────────────────
-
-function getMark(studentId: string, examId: string, marks: any[]) {
-  return marks.find((m) => String(m.studentId) === String(studentId) && String(m.examId) === String(examId));
-}
-
-function getExamPercentage(rawMark: number, totalMarks: number) {
-  if (!totalMarks || totalMarks <= 0) return 0;
-  return (rawMark / totalMarks) * 100;
-}
-
-function getWeightedContribution(rawMark: number, totalMarks: number, weightage: number) {
-  return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
-}
-
-function findMidtermExam(exams: any[]) {
-  return exams.find((e) => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
-}
-
-function findFinalExam(exams: any[]) {
-  return exams.find((e) => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
-}
-
-function findProjectExam(exams: any[]) {
-  return exams.find((e) => e.examCategory === 'Project');
-}
-
-function getMarkValue(student: any, exams: any[], marks: any[], category: string) {
-  const exam = exams.find((e) => e.examCategory === category);
-  if (!exam) return 0;
-  const mark = getMark(student._id, exam._id, marks);
-  if (!mark) return 0;
-  return Math.round(getWeightedContribution(mark.rawMark, exam.totalMarks, exam.weightage || 0) * 100) / 100;
-}
-
-function getAggregatedMarkValue(student: any, exams: any[], marks: any[], category: 'Quiz' | 'Assignment', course: any) {
-  const categoryExams = exams.filter((e) => e.examCategory === category);
-  if (categoryExams.length === 0) return 0;
-
-  const categoryMarks = categoryExams
-    .map((exam) => getMark(student._id, exam._id, marks))
-    .filter((mark) => mark !== undefined);
-
-  if (categoryMarks.length === 0) return 0;
-
-  const aggregationMethod = category === 'Quiz' ? course?.quizAggregation || 'average' : course?.assignmentAggregation || 'average';
-  const categoryWeightage = category === 'Quiz' ? Number(course?.quizWeightage || 0) : Number(course?.assignmentWeightage || 0);
-
-  if (aggregationMethod === 'best') {
-    let bestMark = categoryMarks[0];
-    let bestValue = -1;
-    categoryMarks.forEach((mark) => {
-      const exam = categoryExams.find((e) => String(e._id) === String(mark.examId));
-      if (exam) {
-        const percentage = getExamPercentage(mark.rawMark, exam.totalMarks);
-        if (percentage > bestValue) {
-          bestValue = percentage;
-          bestMark = mark;
-        }
-      }
-    });
-    const bestExam = categoryExams.find((e) => String(e._id) === String(bestMark.examId));
-    return bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
-  }
-
-  if (aggregationMethod === 'sum') {
-    const sumRaw = categoryMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
-    const sumTotal = categoryMarks.reduce((sum, mark) => {
-      const exam = categoryExams.find((e) => String(e._id) === String(mark.examId));
-      return exam ? sum + exam.totalMarks : sum;
-    }, 0);
-    return sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * categoryWeightage) / 100 : 0;
-  }
-
-  const averagePercentage =
-    categoryMarks.reduce((sum, mark) => {
-      const exam = categoryExams.find((e) => String(e._id) === String(mark.examId));
-      if (!exam) return sum;
-      return sum + getExamPercentage(mark.rawMark, exam.totalMarks);
-    }, 0) / categoryMarks.length;
-
-  return (averagePercentage * categoryWeightage) / 100;
-}
-
-function getProjectAggregatedMarkValue(student: any, exams: any[], marks: any[], course: any) {
-  const projectExams = exams.filter((e) => e.examCategory === 'Project');
-  if (projectExams.length === 0) return 0;
-
-  const projectMarks = projectExams
-    .map((e) => ({ exam: e, mark: getMark(student._id, e._id, marks) }))
-    .filter((x) => x.mark !== undefined);
-  if (projectMarks.length === 0) return 0;
-
-  const sumRaw = projectMarks.reduce((s, x) => s + Number(x.mark!.rawMark || 0), 0);
-  const sumTotal = projectExams.reduce((s, e) => s + Number(e.totalMarks || 0), 0);
-  const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * Number(course?.projectWeightage || 0) : 0;
-  return Math.round(weighted * 100) / 100;
-}
-
-function getMarkValueForExam(student: any, exam: any, marks: any[]) {
-  if (!exam) return 0;
-  const mark = getMark(student._id, exam._id, marks);
-  return mark ? mark.rawMark : 0;
-}
-
-function getExamWeight(exams: any[], category: string) {
-  const exam = exams.find((e) => e.examCategory === category);
-  return exam ? exam.weightage || 0 : 0;
-}
-
-function getCOMarkValue(student: any, exam: any, marks: any[], coIndex: number) {
-  if (!exam) return 0;
-  const mark = getMark(student._id, exam._id, marks);
-  return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
-}
-
-// ─── Per-student computed row ─────────────────────────────────────────────────────────────
-
-interface StudentRow {
-  student: any;
-  attendance: number;
-  classPerformance: number;
-  quiz: number;
-  assignment: number;
-  midterm: number;
-  project: number;
-  final: number;
-  total: number;
-  percent: number;
-  gradeDisplay: string; // e.g. "A+ (Plus)", or the withdrawn label
-  isWithdrawn: boolean;
-  // CO raw marks per assessment (index 0-5 = CO1-CO6)
-  coMidterm: number[];
-  coFinal: number[];
-  coProject: number[];
-  // Derived CO/PO attainment
-  coPercentage: number[]; // 0-1
-  coAttained: number[]; // 0/1
-  poPercentage: number[]; // 0-1, 12 entries
-  poAttained: number[]; // 0/1, 12 entries
-}
-
-function computeStudentRows(
-  course: any,
-  students: any[],
-  exams: any[],
-  marks: any[],
-): StudentRow[] {
-  const midtermExam = findMidtermExam(exams);
-  const finalExam = findFinalExam(exams);
-  const projectExam = findProjectExam(exams);
-
-  const coPoMapping: boolean[][] = course?.coPoMapping?.mapping || [];
-  const maxMarks: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
-  const midMax = midtermExam ? maxMarks[midtermExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const finalMax = finalExam ? maxMarks[finalExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const projectMax = projectExam ? maxMarks[projectExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  // "Total" max marks per CO across the three assessment types (mirrors CO_PO_AttainmentAnalysis!D7:I7)
-  const coMaxTotal = [0, 1, 2, 3, 4, 5].map((i) => (midMax[i] || 0) + (finalMax[i] || 0) + (projectMax[i] || 0));
-  // Number of COs mapped to each PO (mirrors AT9:BE9)
-  const poMappedCoCount = Array.from({ length: 12 }, (_, po) =>
-    coPoMapping.reduce((sum, coRow) => sum + (coRow?.[po] ? 1 : 0), 0)
-  );
-
-  return students.map((student) => {
-    const attendance = getMarkValue(student, exams, marks, 'Attendance');
-    const classPerformance = getMarkValue(student, exams, marks, 'ClassPerformance');
-    const quiz = getAggregatedMarkValue(student, exams, marks, 'Quiz', course);
-    const assignment = getAggregatedMarkValue(student, exams, marks, 'Assignment', course);
-    const midterm = getMarkValueForExam(student, midtermExam, marks);
-    const project = getProjectAggregatedMarkValue(student, exams, marks, course);
-    const final = getMarkValueForExam(student, finalExam, marks);
-
-    const total = Math.round(attendance + classPerformance + quiz + assignment + midterm + project + final);
-    const percent = total / 100;
-    const isWithdrawn = !!student.withdrawn;
-    const gradeDisplay = isWithdrawn
-      ? WITHDRAWN_GRADE_LABEL
-      : getGradeDisplay(calculateLetterGrade(total, course?.gradingScale).letter, calculateLetterGrade(total, course?.gradingScale).modifier);
-
-    const coMidterm = [0, 1, 2, 3, 4, 5].map((i) => getCOMarkValue(student, midtermExam, marks, i));
-    const coFinal = [0, 1, 2, 3, 4, 5].map((i) => getCOMarkValue(student, finalExam, marks, i));
-    const coProject = [0, 1, 2, 3, 4, 5].map((i) => getCOMarkValue(student, projectExam, marks, i));
-
-    const coPercentage = [0, 1, 2, 3, 4, 5].map((i) => {
-      const raw = coMidterm[i] + coFinal[i] + coProject[i];
-      return coMaxTotal[i] > 0 ? raw / coMaxTotal[i] : 0;
-    });
-    const coAttained = coPercentage.map((pct) => (isWithdrawn ? 0 : pct >= CO_ATTAINMENT_THRESHOLD ? 1 : 0));
-
-    const poPercentage = Array.from({ length: 12 }, (_, po) => {
-      const denom = poMappedCoCount[po];
-      if (!denom) return 0;
-      const numerator = coPercentage.reduce((sum, pct, co) => sum + (coPoMapping[co]?.[po] ? pct : 0), 0);
-      return numerator / denom;
-    });
-    const poAttained = poPercentage.map((pct) => (isWithdrawn ? 0 : pct >= PO_ATTAINMENT_THRESHOLD ? 1 : 0));
-
-    return {
-      student, attendance, classPerformance, quiz, assignment, midterm, project, final,
-      total, percent, gradeDisplay, isWithdrawn,
-      coMidterm, coFinal, coProject, coPercentage, coAttained, poPercentage, poAttained,
-    };
-  });
-}
-
-// ─── Workbook assembly ─────────────────────────────────────────────────────────────────────
 
 async function resizeStudentBlock(worksheet: ExcelJS.Worksheet, firstRow: number, count: number) {
   const lastTemplateRow = firstRow + TEMPLATE_STUDENT_COUNT - 1;
@@ -291,6 +88,7 @@ export async function buildDynamicCoPoWorkbook(params: {
 
   const n = students.length;
   const rows = computeStudentRows(course, students, exams, marks);
+  const summary = computeCoPoSummary(course, students, exams, marks, attendanceSessions, rows);
 
   const gradeShift = await resizeStudentBlock(gradeSheet, GRADE_SHEET_FIRST_ROW, n);
   const copoShift = await resizeStudentBlock(copoSheet, COPO_SHEET_FIRST_ROW, n);
@@ -342,7 +140,6 @@ export async function buildDynamicCoPoWorkbook(params: {
     ['D', 'E', 'F', 'G', 'H', 'I'].forEach((col, i) => { copoSheet.getCell(`${col}${cr}`).value = row.coMidterm[i]; });
     ['J', 'K', 'L', 'M', 'N', 'O'].forEach((col, i) => { copoSheet.getCell(`${col}${cr}`).value = row.coFinal[i]; });
     ['P', 'Q', 'R', 'S', 'T', 'U'].forEach((col, i) => { copoSheet.getCell(`${col}${cr}`).value = row.coProject[i]; });
-    ['V', 'W', 'X', 'Y', 'Z', 'AA'].forEach(() => { /* Presentation - no data source, left at template default (0) */ });
     ['AB', 'AC', 'AD', 'AE', 'AF', 'AG'].forEach((col, i) => {
       copoSheet.getCell(`${col}${cr}`).value = row.coMidterm[i] + row.coFinal[i] + row.coProject[i];
     });
@@ -355,62 +152,31 @@ export async function buildDynamicCoPoWorkbook(params: {
   });
 
   // ── GradeSheet summary block (originally rows 64-77, now shifted by gradeShift) ──
-  const withdrawnCount = rows.filter((r) => r.isWithdrawn).length;
-  const incompleteCount = 0; // no "incomplete" concept tracked in our data model
-  const gradedCount = n - withdrawnCount - incompleteCount;
-
-  const distribution: Array<{ label: string; grade: string }> = [
-    { label: 'A+ (Plus)', grade: 'A+ (Plus)' },
-    { label: 'A (Plain)', grade: 'A (Plain)' },
-    { label: 'A- (Minus)', grade: 'A- (Minus)' },
-    { label: 'B+ (Plus)', grade: 'B+ (Plus)' },
-    { label: 'B (Plain)', grade: 'B (Plain)' },
-    { label: 'B- (Minus)', grade: 'B- (Minus)' },
-    { label: 'C+ (Plus)', grade: 'C+ (Plus)' },
-    { label: 'C (Plain)', grade: 'C (Plain)' },
-    { label: 'D (Plain)', grade: 'D (Plain)' },
-    { label: 'F (Fail)', grade: 'F (Fail)' },
-    { label: 'I (Incomplete)', grade: 'I (Incomplete)' },
-    { label: 'W (Withdrawn)', grade: WITHDRAWN_GRADE_LABEL },
+  const weightRows: Array<[number, number]> = [
+    [64, summary.assessmentWeights.attendance],
+    [65, summary.assessmentWeights.classPerformance],
+    [66, summary.assessmentWeights.quiz],
+    [67, summary.assessmentWeights.assignment],
+    [68, summary.assessmentWeights.midterm],
+    [69, summary.assessmentWeights.project],
+    [70, summary.assessmentWeights.final],
   ];
-
-  const assessmentWeights = [
-    { row: 64, weight: getExamWeight(exams, 'Attendance') },
-    { row: 65, weight: getExamWeight(exams, 'ClassPerformance') },
-    { row: 66, weight: exams.some((e) => e.examCategory === 'Quiz') ? Number(course.quizWeightage || 0) : 0 },
-    { row: 67, weight: exams.some((e) => e.examCategory === 'Assignment') ? Number(course.assignmentWeightage || 0) : 0 },
-    { row: 68, weight: findMidtermExam(exams)?.weightage || 0 },
-    { row: 69, weight: exams.some((e) => e.examCategory === 'Project') ? Number(course.projectWeightage || 0) : 0 },
-    { row: 70, weight: findFinalExam(exams)?.weightage || 0 },
-  ];
-  let totalWeight = 0;
-  assessmentWeights.forEach(({ row, weight }) => {
+  weightRows.forEach(([row, weight]) => {
     gradeSheet.getCell(`C${row + gradeShift}`).value = weight;
-    totalWeight += Number(weight) || 0;
   });
-  gradeSheet.getCell(`C${71 + gradeShift}`).value = totalWeight;
+  gradeSheet.getCell(`C${71 + gradeShift}`).value = summary.totalWeight;
 
-  distribution.forEach(({ grade }, i) => {
-    const count = rows.filter((r) => r.gradeDisplay === grade).length;
+  summary.distributionCounts.forEach((count, i) => {
     gradeSheet.getCell(`H${64 + i + gradeShift}`).value = count;
   });
   gradeSheet.getCell(`H${76 + gradeShift}`).value = n;
 
-  const assessmentCols = ['P', 'Q', 'R', 'S', 'T', 'U', 'V'] as const;
-  const assessmentValues: Record<string, number[]> = {
-    P: rows.map((r) => r.attendance),
-    Q: rows.map((r) => r.classPerformance),
-    R: rows.map((r) => r.quiz),
-    S: rows.map((r) => r.assignment),
-    T: rows.map((r) => r.midterm),
-    U: rows.map((r) => r.project),
-    V: rows.map((r) => r.final),
-  };
-  assessmentCols.forEach((col) => {
-    const values = assessmentValues[col];
-    const max = values.length ? Math.max(...values) : 0;
-    const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-    const min = values.length ? Math.min(...values) : 0;
+  const assessmentCols: Array<[string, keyof typeof summary.assessmentStats]> = [
+    ['P', 'attendance'], ['Q', 'classPerformance'], ['R', 'quiz'], ['S', 'assignment'],
+    ['T', 'midterm'], ['U', 'project'], ['V', 'final'],
+  ];
+  assessmentCols.forEach(([col, key]) => {
+    const { max, avg, min } = summary.assessmentStats[key];
     gradeSheet.getCell(`${col}${64 + gradeShift}`).value = max;
     gradeSheet.getCell(`${col}${65 + gradeShift}`).value = avg;
     gradeSheet.getCell(`${col}${66 + gradeShift}`).value = min;
@@ -419,12 +185,15 @@ export async function buildDynamicCoPoWorkbook(params: {
   // ── CO_PO_AttainmentAnalysis class-average row (originally row 67, shifted with the sheet) ──
   const TEMPLATE_COPO_AVG_ROW = 67; // fixed position of the class-average row in the original 50-row template
   const copoAvgRow = TEMPLATE_COPO_AVG_ROW + copoShift;
-  const coCols = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA'];
   const coValueGetters: Record<string, (r: StudentRow, i: number) => number> = {};
   ['D', 'E', 'F', 'G', 'H', 'I'].forEach((col, i) => { coValueGetters[col] = (r) => r.coMidterm[i]; });
   ['J', 'K', 'L', 'M', 'N', 'O'].forEach((col, i) => { coValueGetters[col] = (r) => r.coFinal[i]; });
   ['P', 'Q', 'R', 'S', 'T', 'U'].forEach((col, i) => { coValueGetters[col] = (r) => r.coProject[i]; });
-  ['V', 'W', 'X', 'Y', 'Z', 'AA'].forEach(() => { /* Presentation columns always 0 */ });
+  // D67:AA67 are one shared-formula group in the template (all "=AVERAGE(X15:X64)"), so every
+  // column in that range must be overwritten - including V-AA ("Presentation", no data source,
+  // defaults to 0) - or the ones left untouched still reference a master cell (D67) that no
+  // longer has a formula, which corrupts the workbook on save.
+  const coCols = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA'];
   coCols.forEach((col) => {
     const getter = coValueGetters[col];
     const values = getter ? rows.map((r, i) => getter(r, i)) : rows.map(() => 0);
@@ -435,22 +204,19 @@ export async function buildDynamicCoPoWorkbook(params: {
     copoSheet.getCell(`${col}${copoAvgRow}`).value = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   });
   ['AH', 'AI', 'AJ', 'AK', 'AL', 'AM'].forEach((col, i) => {
-    const values = rows.map((r) => r.coPercentage[i]);
-    copoSheet.getCell(`${col}${copoAvgRow}`).value = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+    copoSheet.getCell(`${col}${copoAvgRow}`).value = summary.coPercentageAvg[i];
   });
   const coAttainedCols = ['AN', 'AO', 'AP', 'AQ', 'AR', 'AS'];
-  const coAttainedCounts = coAttainedCols.map((_, i) => rows.reduce((sum, r) => sum + r.coAttained[i], 0));
   coAttainedCols.forEach((col, i) => {
-    copoSheet.getCell(`${col}${copoAvgRow}`).value = gradedCount > 0 ? coAttainedCounts[i] / gradedCount : 0;
+    copoSheet.getCell(`${col}${copoAvgRow}`).value = summary.gradedCount > 0 ? summary.coAttainedCounts[i] / summary.gradedCount : 0;
   });
   const poPercentCols = ['AU', 'AV', 'AW', 'AX', 'AY', 'AZ', 'BA', 'BB', 'BC', 'BD', 'BE', 'BF'];
   poPercentCols.forEach((col, i) => {
-    const sum = rows.filter((r) => !r.isWithdrawn).reduce((s, r) => s + r.poPercentage[i], 0);
-    copoSheet.getCell(`${col}${copoAvgRow}`).value = gradedCount > 0 ? sum / gradedCount : 0;
+    copoSheet.getCell(`${col}${copoAvgRow}`).value = summary.poPercentageAvg[i];
   });
   const poAttainedSumCols = ['BG', 'BH', 'BI', 'BJ', 'BK', 'BL', 'BM', 'BN', 'BO', 'BP', 'BQ', 'BR'];
   poAttainedSumCols.forEach((col, i) => {
-    copoSheet.getCell(`${col}${copoAvgRow}`).value = rows.reduce((sum, r) => sum + r.poAttained[i], 0);
+    copoSheet.getCell(`${col}${copoAvgRow}`).value = summary.poAttainedCounts[i];
   });
 
   // ── CO_PO_AttainmentAnalysis "Mapping of COs to POs" grid (rows 2-9, fixed - not part of
@@ -494,57 +260,34 @@ export async function buildDynamicCoPoWorkbook(params: {
   signatureCell.font = { name: 'Times New Roman', size: 12, italic: true };
   signatureCell.alignment = { horizontal: 'left', vertical: 'middle' };
 
-  // ── Attendance-derived numbers ──
-  const sessionCount = attendanceSessions.length;
-  const attendanceByStudent = new Map<string, { present: number; total: number }>();
-  students.forEach((s) => attendanceByStudent.set(String(s._id), { present: 0, total: sessionCount }));
-  attendanceSessions.forEach((session: any) => {
-    (session.records || []).forEach((record: any) => {
-      const key = String(record.studentId);
-      const stat = attendanceByStudent.get(key);
-      if (stat && record.status === 'present') stat.present += 1;
-    });
-  });
-  const absentStudentCount = students.filter((s) => {
-    const stat = attendanceByStudent.get(String(s._id));
-    if (!stat || stat.total === 0) return false;
-    return stat.present / stat.total < 0.75; // matches the <75% "at risk" threshold used elsewhere in the app
-  }).length;
-
   // ── CourseSummary sheet: a handful of cells reference fixed GradeSheet/CO_PO_
   //    AttainmentAnalysis cells that just moved - write the same computed values in directly
   //    rather than relying on formula text that now points at the wrong row. ──
   if (courseSummarySheet) {
     courseSummarySheet.getCell('O3').value = `${n} students`;
     courseSummarySheet.getCell('G30').value = n;
-    courseSummarySheet.getCell('G31').value = withdrawnCount;
-    const finalTakenCount = findFinalExam(exams)
-      ? rows.filter((r) => getMark(r.student._id, findFinalExam(exams)!._id, marks) !== undefined).length
-      : 0;
-    courseSummarySheet.getCell('G32').value = finalTakenCount;
-    courseSummarySheet.getCell('G33').value = n - (withdrawnCount + incompleteCount + rows.filter((r) => r.gradeDisplay === 'F (Fail)').length);
-    distribution.slice(0, 12).forEach(({ grade }, i) => {
+    courseSummarySheet.getCell('G31').value = summary.withdrawnCount;
+    courseSummarySheet.getCell('G32').value = summary.finalTakenCount;
+    courseSummarySheet.getCell('G33').value = n - (summary.withdrawnCount + summary.incompleteCount + rows.filter((r) => r.gradeDisplay === 'F (Fail)').length);
+    GRADE_DISTRIBUTION.forEach((_, i) => {
       const col = String.fromCharCode('B'.charCodeAt(0) + i);
-      const count = rows.filter((r) => r.gradeDisplay === grade).length;
-      courseSummarySheet.getCell(`${col}24`).value = count;
-      courseSummarySheet.getCell(`${col}25`).value = n > 0 ? count / n : 0;
+      courseSummarySheet.getCell(`${col}24`).value = summary.distributionCounts[i];
+      courseSummarySheet.getCell(`${col}25`).value = n > 0 ? summary.distributionCounts[i] / n : 0;
     });
     courseSummarySheet.getCell('N24').value = n;
     courseSummarySheet.getCell('N25').value = n > 0 ? 1 : 0;
 
     // Real attendance-session numbers instead of the template's static sample values.
-    courseSummarySheet.getCell('P30').value = sessionCount; // "Session Planned" -> sessions actually conducted
-    courseSummarySheet.getCell('G39').value = absentStudentCount; // "Absent Students" (<75% attendance)
+    courseSummarySheet.getCell('P30').value = summary.sessionCount; // "Session Planned" -> sessions actually conducted
+    courseSummarySheet.getCell('G39').value = summary.absentStudentCount; // "Absent Students" (<75% attendance)
     courseSummarySheet.getCell('G38').value = 0; // "Tardy Students" - not tracked by this system
 
     // "Summary of COs" mini-table (rows 58-60) - was driven by formulas anchored to
     // CO_PO_AttainmentAnalysis!AN67 etc, which is now wherever the class-average row shifted to.
     const coSummaryCols = ['H', 'I', 'J', 'K', 'L', 'M'];
     coSummaryCols.forEach((col, i) => {
-      courseSummarySheet.getCell(`${col}59`).value = coAttainedCounts[i];
-      courseSummarySheet.getCell(`${col}60`).value = rows.length
-        ? rows.reduce((sum, r) => sum + r.coPercentage[i], 0) / rows.length
-        : 0;
+      courseSummarySheet.getCell(`${col}59`).value = summary.coAttainedCounts[i];
+      courseSummarySheet.getCell(`${col}60`).value = summary.coPercentageAvg[i];
     });
   }
 
@@ -552,7 +295,7 @@ export async function buildDynamicCoPoWorkbook(params: {
   if (cqiSheet) {
     cqiSheet.getCell('D4').value = n;
     ['D7', 'D8', 'D9', 'D10', 'D11', 'D12'].forEach((cell, i) => {
-      cqiSheet.getCell(cell).value = gradedCount > 0 ? coAttainedCounts[i] / gradedCount : 0;
+      cqiSheet.getCell(cell).value = summary.gradedCount > 0 ? summary.coAttainedCounts[i] / summary.gradedCount : 0;
     });
   }
 
