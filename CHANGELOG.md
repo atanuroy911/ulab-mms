@@ -1,3 +1,19 @@
+# [1.7.0](https://github.com/atanuroy911/ulab-mms/compare/v1.6.1...v1.7.0) (2026-07-25)
+
+
+### Bug Fixes
+
+* Excel-corrupting bugs in alpha Excel export (charts + merges) ([5f040f8](https://github.com/atanuroy911/ulab-mms/commit/5f040f8cf74b05cfb9d078d8f31bd7beb9e5d03d))
+* restore charts, CO-PO mapping grid, signature line, real attendance ([f689a74](https://github.com/atanuroy911/ulab-mms/commit/f689a74b599950843a087ca0166915db8921afc2))
+
+
+### Features
+
+* add Export Course File PDF (Alpha) with Excel/Modern style picker ([6c0a27a](https://github.com/atanuroy911/ulab-mms/commit/6c0a27a2de1abc41df66c908d5bfc8c38ad0fa78))
+* add student-count-independent CO-PO course file export (Alpha) ([687aad9](https://github.com/atanuroy911/ulab-mms/commit/687aad94f2d5e8ecccfc9bf8f539d1ba40297b20))
+* allow viewing project groups/titles without signing in ([5dc369b](https://github.com/atanuroy911/ulab-mms/commit/5dc369baadd062a74247dac0ebafc8965c418490))
+* move alpha exports to their own right-column section + alpha disclaimer ([f53c740](https://github.com/atanuroy911/ulab-mms/commit/f53c7404167492684282c2447ac2d49be9a640d2))
+
 ## [1.6.1](https://github.com/atanuroy911/ulab-mms/compare/v1.6.0...v1.6.1) (2026-07-25)
 
 
