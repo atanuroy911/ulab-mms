@@ -64,6 +64,17 @@ export default function OverviewView({
   const [showChecklist, setShowChecklist] = useState(false);
   const [showUrmsModal, setShowUrmsModal] = useState(false);
   const [showPdfStyleDialog, setShowPdfStyleDialog] = useState(false);
+  const [alphaDisclaimerTarget, setAlphaDisclaimerTarget] = useState<'excel' | 'pdf' | null>(null);
+
+  const confirmAlphaDisclaimer = () => {
+    const target = alphaDisclaimerTarget;
+    setAlphaDisclaimerTarget(null);
+    if (target === 'excel') {
+      onExportCourseFileAlpha?.();
+    } else if (target === 'pdf') {
+      setShowPdfStyleDialog(true);
+    }
+  };
 
   const openPdfExport = (style: 'excel' | 'modern') => {
     setShowPdfStyleDialog(false);
@@ -201,120 +212,132 @@ export default function OverviewView({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Student Management</h3>
-              <Button
-                onClick={onImportStudents}
-                variant="outline"
-                className="w-full justify-start"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Import Students (CSV/PDF)
-              </Button>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Exam Management</h3>
-              <Button
-                onClick={onAddExam}
-                variant="outline"
-                className="w-full justify-start"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add New Exam
-              </Button>
-            </div>
-
-
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Course Data</h3>
-              <div className="flex flex-col gap-2">
+            {/* Left column */}
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Student Management</h3>
                 <Button
-                  onClick={onImportCourse}
+                  onClick={onImportStudents}
                   variant="outline"
                   className="w-full justify-start"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Import Course Data
+                  Import Students (CSV/PDF)
                 </Button>
-                <Button
-                  onClick={onExportCSV}
-                  disabled={exportingCSV}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  {exportingCSV ? 'Exporting...' : 'Export CSV'}
-                </Button>
-                <Button
-                  onClick={() => setShowExportDisclaimer(true)}
-                  disabled={exportingCourseFile}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  {exportingCourseFile ? 'Exporting...' : 'Export course file'}
-                  <span className="ml-2 text-xs text-muted-foreground">Beta</span>
-                </Button>
-                {onExportCourseFileAlpha && (
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Course Data</h3>
+                <div className="flex flex-col gap-2">
                   <Button
-                    onClick={onExportCourseFileAlpha}
-                    disabled={exportingCourseFileAlpha}
+                    onClick={onImportCourse}
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Course Data
+                  </Button>
+                  <Button
+                    onClick={onExportCSV}
+                    disabled={exportingCSV}
                     variant="outline"
                     className="w-full justify-start"
                   >
                     <Download className="w-4 h-4 mr-2" />
-                    {exportingCourseFileAlpha ? 'Exporting...' : 'Export course file (unlimited students)'}
-                    <span className="ml-2 text-xs text-muted-foreground">Alpha</span>
+                    {exportingCSV ? 'Exporting...' : 'Export CSV'}
                   </Button>
-                )}
-                <Button
-                  onClick={() => setShowPdfStyleDialog(true)}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Export course file PDF
-                  <span className="ml-2 text-xs text-muted-foreground">Alpha</span>
-                </Button>
-                <Button
-                  onClick={() => setShowChecklist(true)}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  Course File Checklist
-                </Button>
-                <Button
-                  onClick={() => {
-                    const a = document.createElement('a');
-                    a.href = '/templates/Sample CO PO.xlsx';
-                    a.download = 'Empty_CO_PO_File.xlsx';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                  }}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download empty CO PO File
-                </Button>
+                  <Button
+                    onClick={() => setShowExportDisclaimer(true)}
+                    disabled={exportingCourseFile}
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {exportingCourseFile ? 'Exporting...' : 'Export course file'}
+                    <span className="ml-2 text-xs text-muted-foreground">Beta</span>
+                  </Button>
+                  <Button
+                    onClick={() => setShowChecklist(true)}
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    Course File Checklist
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = '/templates/Sample CO PO.xlsx';
+                      a.download = 'Empty_CO_PO_File.xlsx';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                    }}
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download empty CO PO File
+                  </Button>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">External Systems</h3>
-              <div className="flex flex-col gap-2">
+            {/* Right column */}
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Exam Management</h3>
                 <Button
-                  onClick={handleSideBySideUrms}
-                  variant="default"
-                  className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={onAddExam}
+                  variant="outline"
+                  className="w-full justify-start"
                 >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Side-by-Side URMS Entry
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New Exam
                 </Button>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">External Systems</h3>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={handleSideBySideUrms}
+                    variant="default"
+                    className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Side-by-Side URMS Entry
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                  Experimental Exports
+                  <span className="text-xs font-normal text-muted-foreground">Alpha</span>
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {onExportCourseFileAlpha && (
+                    <Button
+                      onClick={() => setAlphaDisclaimerTarget('excel')}
+                      disabled={exportingCourseFileAlpha}
+                      variant="outline"
+                      className="w-full justify-start"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {exportingCourseFileAlpha ? 'Exporting...' : 'Export course file (unlimited students)'}
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => setAlphaDisclaimerTarget('pdf')}
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export course file PDF
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -362,6 +385,41 @@ export default function OverviewView({
           </div>
         </CardContent>
       </Card>
+
+      {/* Alpha Disclaimer Modal - shown before either experimental export */}
+      <Dialog open={alphaDisclaimerTarget !== null} onOpenChange={(open) => !open && setAlphaDisclaimerTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center text-amber-500">
+              <AlertTriangle className="w-5 h-5 mr-2" />
+              {alphaDisclaimerTarget === 'pdf' ? 'Export Course File PDF (Alpha)' : 'Export Course File (Alpha)'}
+            </DialogTitle>
+            <DialogDescription>
+              Please read the following before exporting:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
+              <li><strong>This feature is experimental (Alpha).</strong> It&apos;s newer and less battle-tested than the Beta export - please double-check the generated file.</li>
+              <li>Unlike the Beta export, it supports <strong>any number of students</strong> (not capped at 50).</li>
+              <li>
+                {alphaDisclaimerTarget === 'pdf'
+                  ? 'It is generated entirely from calculations - no Excel template involved - and opens as a print-ready page in a new tab.'
+                  : 'It dynamically resizes the spreadsheet template to fit your roster instead of relying on a fixed 50-row layout.'}
+              </li>
+              <li>It may malfunction for <strong>Lab</strong> courses or unusual exam configurations that haven&apos;t been tested yet.</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlphaDisclaimerTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmAlphaDisclaimer} disabled={alphaDisclaimerTarget === 'excel' && exportingCourseFileAlpha}>
+              {alphaDisclaimerTarget === 'excel' && exportingCourseFileAlpha ? 'Exporting...' : 'I Understand, Export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* PDF style picker */}
       <Dialog open={showPdfStyleDialog} onOpenChange={setShowPdfStyleDialog}>
