@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink } from 'lucide-react';
+import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles, Grid3x3 } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 
 interface Course {
@@ -63,6 +63,18 @@ export default function OverviewView({
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [showUrmsModal, setShowUrmsModal] = useState(false);
+  const [showPdfStyleDialog, setShowPdfStyleDialog] = useState(false);
+
+  const openPdfExport = (style: 'excel' | 'modern') => {
+    setShowPdfStyleDialog(false);
+    const useSplit = Boolean(course.aliasEnabled && course.alternateCode);
+    if (useSplit) {
+      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?style=${style}&group=main`, '_blank');
+      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?style=${style}&group=alias`, '_blank');
+    } else {
+      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?style=${style}`, '_blank');
+    }
+  };
 
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
@@ -258,6 +270,15 @@ export default function OverviewView({
                   </Button>
                 )}
                 <Button
+                  onClick={() => setShowPdfStyleDialog(true)}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Export course file PDF
+                  <span className="ml-2 text-xs text-muted-foreground">Alpha</span>
+                </Button>
+                <Button
                   onClick={() => setShowChecklist(true)}
                   variant="outline"
                   className="w-full justify-start"
@@ -341,6 +362,41 @@ export default function OverviewView({
           </div>
         </CardContent>
       </Card>
+
+      {/* PDF style picker */}
+      <Dialog open={showPdfStyleDialog} onOpenChange={setShowPdfStyleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a PDF Style</DialogTitle>
+            <DialogDescription>
+              Pick how the course file (grade sheet, CO-PO attainment, course summary, and CQI) should look.
+              It opens in a new tab - use your browser&apos;s Print → Save as PDF to save it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+            <button
+              onClick={() => openPdfExport('excel')}
+              className="flex flex-col items-start gap-2 rounded-lg border p-4 text-left hover:border-primary hover:bg-accent transition-colors"
+            >
+              <Grid3x3 className="w-5 h-5 text-primary" />
+              <div className="font-semibold text-sm">Excel-style</div>
+              <div className="text-xs text-muted-foreground">
+                A plain grid replica of the spreadsheet - dense tables, gridlines, landscape layout.
+              </div>
+            </button>
+            <button
+              onClick={() => openPdfExport('modern')}
+              className="flex flex-col items-start gap-2 rounded-lg border p-4 text-left hover:border-primary hover:bg-accent transition-colors"
+            >
+              <Sparkles className="w-5 h-5 text-primary" />
+              <div className="font-semibold text-sm">Modern</div>
+              <div className="text-xs text-muted-foreground">
+                A redesigned report with stat cards and attainment bar charts, portrait layout.
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Export Disclaimer Modal */}
       <Dialog open={showExportDisclaimer} onOpenChange={setShowExportDisclaimer}>
