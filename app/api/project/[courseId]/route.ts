@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import { resolveSessionStudent } from '@/lib/studentAuth';
 import ProjectGroup from '@/models/ProjectGroup';
@@ -8,7 +6,9 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 
 /**
- * Requires a verified @ulab.edu.bd Google session (dashboard, attendance check-in, marks
+ * GET is intentionally public (no sign-in required) - anyone with the course link can view
+ * the roster, groups, and project titles read-only. Write actions (PATCH below) still
+ * require a verified @ulab.edu.bd Google session (dashboard, attendance check-in, marks
  * check, or the 'google-project' provider all qualify - see
  * app/api/auth/[...nextauth]/route.ts). The caller is always the student resolved from that
  * session (`me`), never a client-supplied identity claim. `me` can act on themselves freely,
@@ -25,12 +25,6 @@ export async function GET(
   try {
     const { courseId } = await params;
     await dbConnect();
-
-    const session = (await getServerSession(authOptions as any)) as any;
-    const email = session?.user?.email?.toLowerCase();
-    if (!email || !email.endsWith('@ulab.edu.bd')) {
-      return NextResponse.json({ error: 'Please sign in with your ULAB Google account' }, { status: 401 });
-    }
 
     const course = await Course.findById(courseId).select('name code semester year');
     if (!course) {

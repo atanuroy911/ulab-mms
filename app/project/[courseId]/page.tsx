@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
@@ -93,17 +93,18 @@ export default function ProjectCheckinPage() {
     }
   }, [courseId]);
 
+  // Viewing groups/titles is public - only joining/leaving/editing requires sign-in - so the
+  // initial fetch and the auto-refresh below run regardless of auth status.
   useEffect(() => {
-    if (!isGoogleVerified) return;
     fetchData();
-  }, [isGoogleVerified, fetchData]);
+  }, [fetchData]);
 
   // Auto-refresh every 15s when active - silent, so it never flashes the loading screen.
   useEffect(() => {
-    if (!isActive || !isGoogleVerified) return;
+    if (!isActive) return;
     const interval = setInterval(() => fetchData(true), 15000);
     return () => clearInterval(interval);
-  }, [isActive, isGoogleVerified, fetchData]);
+  }, [isActive, fetchData]);
 
   const myGroup = me
     ? groups.find(g => g.studentIds.some(s => s._id === me._id))
@@ -142,51 +143,13 @@ export default function ProjectCheckinPage() {
   };
 
   // ─── Loading ───────────────────────────────────────────────────────────────
-  if (status === 'loading' || (loading && isGoogleVerified)) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-muted-foreground text-sm">Loading...</p>
         </div>
-      </div>
-    );
-  }
-
-  // ─── Sign-in gate ──────────────────────────────────────────────────────────
-  if (!isGoogleVerified) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="fixed top-4 right-4">
-          <ThemeToggle />
-        </div>
-        <Card className="w-full max-w-sm">
-          <CardHeader className="items-center text-center">
-            <Image src="/ulab.svg" alt="ULAB Logo" width={56} height={56} className="mb-2 drop-shadow" />
-            <CardTitle>Sign in to Join a Group</CardTitle>
-            <CardDescription>
-              Sign in with your ULAB Google account so we can confirm it&apos;s really you before joining a project group.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleGoogleSignIn} disabled={signingIn} className="w-full">
-              {signingIn ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Redirecting to Google...
-                </>
-              ) : (
-                <>
-                  <ChromeIcon className="h-4 w-4" />
-                  Sign in with Google
-                </>
-              )}
-            </Button>
-            <p className="mt-3 text-xs text-muted-foreground text-center">
-              Once you&apos;re in, you can add teammates yourself — they don&apos;t need to sign in too.
-            </p>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -240,7 +203,8 @@ export default function ProjectCheckinPage() {
           </Card>
         )}
 
-        {/* Identity strip */}
+        {/* Identity strip - viewing groups/titles below is public; this is only about
+            whether *you* can join/leave/edit a group. */}
         <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
           {me ? (
             <>
@@ -258,7 +222,7 @@ export default function ProjectCheckinPage() {
                 Verified
               </Badge>
             </>
-          ) : (
+          ) : isGoogleVerified ? (
             <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
               <CircleAlert className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
@@ -266,6 +230,21 @@ export default function ProjectCheckinPage() {
                 Ask your instructor to check your name/ID, or make sure your Google display name includes your student ID in parentheses.
               </span>
             </div>
+          ) : (
+            <>
+              <div className="flex items-start gap-2 text-sm text-muted-foreground min-w-0">
+                <CircleAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>You&apos;re viewing groups and project titles. Sign in to join a group or add teammates.</span>
+              </div>
+              <Button size="sm" onClick={handleGoogleSignIn} disabled={signingIn} className="shrink-0">
+                {signingIn ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ChromeIcon className="h-3.5 w-3.5" />
+                )}
+                Sign in
+              </Button>
+            </>
           )}
         </div>
 
