@@ -282,7 +282,7 @@ export async function buildDynamicCoPoWorkbook(params: {
   const signatureRow = 74 + gradeShift;
   gradeSheet.mergeCells(`B${signatureRow}:C${signatureRow}`);
   const signatureCell = gradeSheet.getCell(`B${signatureRow}`);
-  signatureCell.value = 'Signature: ____________________';
+  signatureCell.value = '____________________';
   signatureCell.font = { name: 'Times New Roman', size: 12, italic: true };
   signatureCell.alignment = { horizontal: 'left', vertical: 'middle' };
 

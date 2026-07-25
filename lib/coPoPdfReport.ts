@@ -168,7 +168,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
         ${excelTable(['Assessment', 'Max', 'Avg', 'Min'], statsRows)}
       </div>
     </div>
-    <p style="margin-top:24px;">Signature: ____________________</p>
+    <p style="margin-top:24px;">____________________</p>
     <p><strong>${esc(instructorName)}</strong><br/>Senior Lecturer<br/>Department of CSE, ULAB</p>
   </div>
 
