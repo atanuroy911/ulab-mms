@@ -3,6 +3,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
+import Image from 'next/image';
+import {
+  Users, Plus, LogOut, Pencil, Check, X, RefreshCw, Lock,
+  ShieldCheck, ChromeIcon, Loader2, FolderOpen, CircleAlert, PartyPopper,
+} from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 interface StudentInfo {
   _id: string;
@@ -25,6 +37,10 @@ interface CourseInfo {
   year: number;
 }
 
+function initials(name: string) {
+  return name.trim().charAt(0).toUpperCase() || '?';
+}
+
 export default function ProjectCheckinPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const { data: session, status } = useSession();
@@ -34,7 +50,7 @@ export default function ProjectCheckinPage() {
   const [groups, setGroups] = useState<GroupEntry[]>([]);
   const [isActive, setIsActive] = useState(false);
   const [maxMembers, setMaxMembers] = useState(4);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
@@ -55,6 +71,7 @@ export default function ProjectCheckinPage() {
   const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/project/${courseId}`);
       const data = await res.json();
@@ -73,7 +90,7 @@ export default function ProjectCheckinPage() {
   }, [courseId]);
 
   useEffect(() => {
-    if (!isGoogleVerified) { setLoading(false); return; }
+    if (!isGoogleVerified) return;
     fetchData();
   }, [isGoogleVerified, fetchData]);
 
@@ -111,7 +128,7 @@ export default function ProjectCheckinPage() {
       setGroups(data.groups || []);
       if (action === 'createGroup') setActionSuccess('Group created! You\'ve been added as the first member.');
       if (action === 'join') setActionSuccess('Successfully joined the group!');
-      if (action === 'leave') setActionSuccess('You have left the group.');
+      if (action === 'leave') setActionSuccess('Updated your group.');
       if (action === 'setTitle') { setActionSuccess('Project title updated!'); setEditingGroupId(null); }
     } catch {
       setActionError('Network error. Please try again.');
@@ -123,389 +140,421 @@ export default function ProjectCheckinPage() {
   // ─── Loading ───────────────────────────────────────────────────────────────
   if (status === 'loading' || (loading && isGoogleVerified)) {
     return (
-      <div className="min-h-screen flex items-center justify-center"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-violet-300 text-lg">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground text-sm">Loading...</p>
         </div>
       </div>
     );
   }
 
+  // ─── Sign-in gate ──────────────────────────────────────────────────────────
   if (!isGoogleVerified) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
-        <div className="rounded-2xl border border-white/10 p-8 text-center max-w-sm"
-          style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(12px)' }}>
-          <div className="text-4xl mb-3">🔐</div>
-          <p className="text-white font-semibold mb-1">Sign in to continue</p>
-          <p className="text-white/50 text-sm mb-5">
-            Sign in with your ULAB Google account so we can confirm it&apos;s really you before joining a group.
-          </p>
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={signingIn}
-            className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: '#fff' }}
-          >
-            {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
-          </button>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="fixed top-4 right-4">
+          <ThemeToggle />
         </div>
+        <Card className="w-full max-w-sm">
+          <CardHeader className="items-center text-center">
+            <Image src="/ulab.svg" alt="ULAB Logo" width={56} height={56} className="mb-2 drop-shadow" />
+            <CardTitle>Sign in to Join a Group</CardTitle>
+            <CardDescription>
+              Sign in with your ULAB Google account so we can confirm it&apos;s really you before joining a project group.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleGoogleSignIn} disabled={signingIn} className="w-full">
+              {signingIn ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Redirecting to Google...
+                </>
+              ) : (
+                <>
+                  <ChromeIcon className="h-4 w-4" />
+                  Sign in with Google
+                </>
+              )}
+            </Button>
+            <p className="mt-3 text-xs text-muted-foreground text-center">
+              Once you&apos;re in, you can add teammates yourself — they don&apos;t need to sign in too.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
-        <div className="bg-red-900/30 border border-red-500/40 rounded-2xl p-8 text-center max-w-md">
-          <div className="text-5xl mb-4">⚠️</div>
-          <p className="text-red-300 text-lg">{error}</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-sm">
+          <CardContent className="pt-6 text-center space-y-3">
+            <CircleAlert className="h-10 w-10 text-destructive mx-auto" />
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  const pageStyle = { background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' };
-  const cardStyle = { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(12px)' };
-
   return (
-    <div className="min-h-screen" style={pageStyle}>
+    <div className="min-h-screen bg-background pb-10">
       {/* Header */}
-      <div className="sticky top-0 z-40 border-b border-white/10"
-        style={{ background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(20px)' }}>
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-lg font-bold text-white">{course?.name}</h1>
-            <p className="text-xs text-violet-300">{course?.code} • {course?.semester} {course?.year}</p>
+      <nav className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Image src="/ulab.svg" alt="ULAB Logo" width={36} height={36} className="shrink-0 drop-shadow" />
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold leading-tight truncate">{course?.name}</h1>
+              <p className="text-xs text-muted-foreground truncate">
+                {course?.code} • {course?.semester} {course?.year}
+              </p>
+            </div>
           </div>
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
-            isActive
-              ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-              : 'bg-red-500/20 text-red-300 border border-red-500/30'
-          }`}>
-            <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-            {isActive ? 'Open' : 'Closed'}
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant={isActive ? 'default' : 'secondary'} className="gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-muted-foreground'}`} />
+              {isActive ? 'Open' : 'Closed'}
+            </Badge>
+            <ThemeToggle />
           </div>
         </div>
-      </div>
+      </nav>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-
+      <div className="max-w-3xl mx-auto px-4 py-5 space-y-4">
         {/* Session closed banner */}
         {!isActive && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
-            <div className="text-4xl mb-3">🔒</div>
-            <p className="text-amber-300 font-medium">Project session is not active</p>
-            <p className="text-amber-400/60 text-sm mt-1">Wait for your instructor to open the session.</p>
-          </div>
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="py-6 text-center">
+              <Lock className="h-8 w-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="font-medium text-amber-700 dark:text-amber-300">Project session is not active</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Wait for your instructor to open the session.</p>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Step 1: Identity, resolved from your signed-in Google account */}
-        <div className="rounded-2xl border border-white/10 p-5" style={cardStyle}>
-          <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-3">
-            👤 Step 1 — Who are you?
-          </h2>
+        {/* Identity strip */}
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
           {me ? (
-            <div className="flex items-center justify-between bg-violet-500/20 border border-violet-500/30 rounded-xl px-4 py-3">
-              <div>
-                <p className="font-semibold text-white">{me.name}</p>
-                <p className="text-sm text-violet-300">{me.studentId}</p>
+            <>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                  {initials(me.name)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{me.name}</p>
+                  <p className="text-xs text-muted-foreground">{me.studentId}</p>
+                </div>
               </div>
-              <span className="text-xs text-violet-300 bg-violet-500/20 border border-violet-500/30 px-3 py-1.5 rounded-lg">
-                Verified via Google
-              </span>
-            </div>
+              <Badge variant="outline" className="gap-1 text-xs shrink-0">
+                <ShieldCheck className="h-3 w-3" />
+                Verified
+              </Badge>
+            </>
           ) : (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-300 text-sm">
-              We couldn&apos;t match your Google account ({session?.user?.name}) to a student on this course&apos;s
-              roster. Ask your instructor to confirm your name/ID in the roster, or make sure your Google
-              display name includes your student ID in parentheses.
+            <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+              <CircleAlert className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                We couldn&apos;t match your Google account ({session?.user?.name}) to this course&apos;s roster.
+                Ask your instructor to check your name/ID, or make sure your Google display name includes your student ID in parentheses.
+              </span>
             </div>
           )}
         </div>
 
-        {/* Step 2: Group actions — only shown once identified */}
+        {/* Your group */}
         {me && isActive && (
-          <div className="rounded-2xl border border-white/10 p-5" style={cardStyle}>
-            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">
-              🏷️ Step 2 — Your Group
-            </h2>
-
-            {/* Feedback */}
-            {actionError && (
-              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-300 text-sm">
-                {actionError}
-              </div>
-            )}
-            {actionSuccess && (
-              <div className="mb-3 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-green-300 text-sm flex items-center gap-2">
-                <span>✓</span> {actionSuccess}
-              </div>
-            )}
-
-            {myGroup ? (
-              /* ── Already in a group ── */
-              <div className="space-y-4">
-                <div className="rounded-xl bg-violet-500/10 border border-violet-500/30 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-bold text-white text-lg">Group {myGroup.groupNumber}</span>
-                    <span className="text-xs text-white/50 bg-white/10 px-2.5 py-1 rounded-full">
-                      {myGroup.studentIds.length}/{maxMembers} members
-                    </span>
-                  </div>
-
-                  {/* Project title */}
-                  {editingGroupId === myGroup._id ? (
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        type="text"
-                        value={titleInput}
-                        onChange={e => setTitleInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && doAction('setTitle', { groupId: myGroup._id, projectTitle: titleInput })}
-                        placeholder="Enter project title..."
-                        className="flex-1 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-white placeholder-white/40 focus:outline-none focus:border-violet-400 text-sm"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => doAction('setTitle', { groupId: myGroup._id, projectTitle: titleInput })}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        Save
-                      </button>
-                      <button onClick={() => setEditingGroupId(null)}
-                        className="px-3 py-2 border border-white/20 text-white/70 rounded-xl text-sm hover:bg-white/10">✕</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-sm flex-1">
-                        {myGroup.projectTitle
-                          ? <span className="text-white font-medium">📁 {myGroup.projectTitle}</span>
-                          : <span className="text-white/30 italic">No project title yet</span>}
-                      </span>
-                      <button
-                        onClick={() => { setEditingGroupId(myGroup._id); setTitleInput(myGroup.projectTitle || ''); }}
-                        className="text-xs text-violet-400 hover:text-white border border-violet-500/40 px-2.5 py-1 rounded-lg transition-all"
-                      >
-                        ✏️ {myGroup.projectTitle ? 'Edit' : 'Set Title'}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Members */}
-                  <div className="space-y-1.5">
-                    {myGroup.studentIds.map(s => (
-                      <div key={s._id} className="flex items-center gap-2.5 bg-white/5 rounded-lg px-3 py-2">
-                        <div className="w-7 h-7 rounded-full bg-violet-500/30 flex items-center justify-center text-xs font-bold text-violet-300">
-                          {s.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">{s.name}</p>
-                          <p className="text-xs text-violet-300">{s.studentId}</p>
-                        </div>
-                        {s._id === me._id ? (
-                          <span className="ml-auto text-xs bg-violet-500/30 text-violet-300 px-2 py-0.5 rounded-full">You</span>
-                        ) : (
-                          <button
-                            onClick={() => doAction('leave', { groupId: myGroup._id, studentId: s._id })}
-                            disabled={actionLoading}
-                            className="ml-auto text-xs text-red-400/70 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 px-2 py-0.5 rounded-full transition-all disabled:opacity-50"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Add teammate — only the person who signed in needs to; teammates are
-                      added without them logging in themselves. */}
-                  {unassignedStudents.length > 0 && myGroup.studentIds.length < maxMembers && (
-                    <div className="mt-3 pt-3 border-t border-white/10">
-                      <p className="text-xs text-white/40 mb-2">Add a teammate (they don&apos;t need to sign in):</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {unassignedStudents.map(s => (
-                          <button
-                            key={s._id}
-                            onClick={() => doAction('join', { groupId: myGroup._id, studentId: s._id })}
-                            disabled={actionLoading}
-                            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-white/15 bg-white/5 text-white/60 hover:border-violet-400/50 hover:text-violet-300 hover:bg-violet-500/10 transition-all disabled:opacity-50"
-                          >
-                            + {s.name} <span className="opacity-50">({s.studentId})</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                Your Group
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {actionError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {actionError}
                 </div>
+              )}
+              {actionSuccess && (
+                <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                  <Check className="h-4 w-4" /> {actionSuccess}
+                </div>
+              )}
 
-                <button
-                  onClick={() => doAction('leave', { groupId: myGroup._id })}
-                  disabled={actionLoading}
-                  className="w-full py-2.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
-                >
-                  {actionLoading ? 'Processing...' : '🚪 Leave Group'}
-                </button>
-              </div>
-            ) : (
-              /* ── Not in a group yet ── */
-              <div className="space-y-3">
-                <p className="text-white/50 text-sm">You are not in a group yet. Create a new one or join an existing group below.</p>
-                <button
-                  onClick={() => doAction('createGroup')}
-                  disabled={actionLoading}
-                  className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: '#fff' }}
-                >
-                  {actionLoading
-                    ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    : '✨'}
-                  Create a New Group
-                </button>
-                <p className="text-center text-white/30 text-xs">— or scroll down to join an existing group —</p>
-              </div>
-            )}
-          </div>
+              {myGroup ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border bg-primary/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-lg">Group {myGroup.groupNumber}</span>
+                      <Badge variant="secondary">{myGroup.studentIds.length}/{maxMembers} members</Badge>
+                    </div>
+
+                    {/* Project title */}
+                    {editingGroupId === myGroup._id ? (
+                      <div className="flex gap-2">
+                        <Input
+                          value={titleInput}
+                          onChange={e => setTitleInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && doAction('setTitle', { groupId: myGroup._id, projectTitle: titleInput })}
+                          placeholder="Enter project title..."
+                          autoFocus
+                          className="flex-1"
+                        />
+                        <Button
+                          size="icon"
+                          onClick={() => doAction('setTitle', { groupId: myGroup._id, projectTitle: titleInput })}
+                          disabled={actionLoading}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button size="icon" variant="outline" onClick={() => setEditingGroupId(null)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm flex-1 min-w-0">
+                          {myGroup.projectTitle ? (
+                            <span className="font-medium flex items-center gap-1.5">
+                              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate">{myGroup.projectTitle}</span>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">No project title yet</span>
+                          )}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => { setEditingGroupId(myGroup._id); setTitleInput(myGroup.projectTitle || ''); }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          {myGroup.projectTitle ? 'Edit' : 'Set Title'}
+                        </Button>
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    {/* Members */}
+                    <div className="space-y-1.5">
+                      {myGroup.studentIds.map(s => (
+                        <div key={s._id} className="flex items-center gap-2.5 rounded-md bg-background px-3 py-2">
+                          <div className="h-7 w-7 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                            {initials(s.name)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{s.name}</p>
+                            <p className="text-xs text-muted-foreground">{s.studentId}</p>
+                          </div>
+                          {s._id === me._id ? (
+                            <Badge variant="secondary" className="shrink-0">You</Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="shrink-0 h-7 px-2 text-destructive hover:text-destructive"
+                              onClick={() => doAction('leave', { groupId: myGroup._id, studentId: s._id })}
+                              disabled={actionLoading}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add teammate — only the person who signed in needs to; teammates are
+                        added without them logging in themselves. */}
+                    {unassignedStudents.length > 0 && myGroup.studentIds.length < maxMembers && (
+                      <div className="pt-1 space-y-2">
+                        <p className="text-xs text-muted-foreground">Add a teammate (they don&apos;t need to sign in):</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {unassignedStudents.map(s => (
+                            <button
+                              key={s._id}
+                              onClick={() => doAction('join', { groupId: myGroup._id, studentId: s._id })}
+                              disabled={actionLoading}
+                              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+                            >
+                              <Plus className="h-3 w-3" />
+                              {s.name} <span className="opacity-60">({s.studentId})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={() => doAction('leave', { groupId: myGroup._id })}
+                    disabled={actionLoading}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {actionLoading ? 'Processing...' : 'Leave Group'}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    You are not in a group yet. Create a new one or join an existing group below.
+                  </p>
+                  <Button className="w-full" onClick={() => doAction('createGroup')} disabled={actionLoading}>
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Create a New Group
+                  </Button>
+                  <p className="text-center text-xs text-muted-foreground">— or scroll down to join an existing group —</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Groups list */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
               All Groups
-              <span className="ml-2 text-sm font-normal text-white/40">
+              <span className="font-normal text-muted-foreground">
                 ({groups.length} group{groups.length !== 1 ? 's' : ''} • max {maxMembers}/group)
               </span>
             </h2>
-            <button onClick={fetchData} className="text-xs text-violet-400 hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-white/5">
-              ↻ Refresh
-            </button>
+            <Button size="sm" variant="ghost" onClick={fetchData} className="h-7 px-2 text-xs text-muted-foreground">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </Button>
           </div>
 
           {groups.length === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
-              <div className="text-4xl mb-3">📋</div>
-              <p className="text-white/40 text-sm">
-                {isActive && me
-                  ? 'No groups yet — be the first to create one!'
-                  : 'No groups yet.'}
-              </p>
-            </div>
+            <Card>
+              <CardContent className="py-10 text-center">
+                <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {isActive && me ? 'No groups yet — be the first to create one!' : 'No groups yet.'}
+                </p>
+              </CardContent>
+            </Card>
           )}
 
-          {groups.map(group => {
-            const isFull = group.studentIds.length >= maxMembers;
-            const isMine = myGroup?._id === group._id;
-            const canJoin = isActive && me && !myGroup && !isFull;
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {groups.map(group => {
+              const isFull = group.studentIds.length >= maxMembers;
+              const isMine = myGroup?._id === group._id;
+              const canJoin = isActive && me && !myGroup && !isFull;
 
-            return (
-              <div
-                key={group._id}
-                className={`rounded-2xl border p-4 transition-all ${
-                  isMine
-                    ? 'border-violet-500/50 bg-violet-500/10'
-                    : 'border-white/10 bg-white/5'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base ${
-                      isMine ? 'bg-violet-500/30 text-violet-200' : 'bg-white/10 text-white/70'
-                    }`}>
-                      {group.groupNumber}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-white text-sm">Group {group.groupNumber}</span>
-                        {isMine && <span className="text-xs bg-violet-500/30 text-violet-300 px-2 py-0.5 rounded-full">Yours</span>}
-                        {isFull && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">Full</span>}
-                      </div>
-                      <p className="text-xs mt-0.5">
-                        {group.projectTitle
-                          ? <span className="text-white/70">📁 {group.projectTitle}</span>
-                          : <span className="text-white/25 italic">No title</span>}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-white/40 bg-white/5 px-2.5 py-1 rounded-full whitespace-nowrap">
-                    {group.studentIds.length}/{maxMembers}
-                  </span>
-                </div>
-
-                {/* Members */}
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {group.studentIds.length === 0
-                    ? <span className="text-xs text-white/25 italic">No members</span>
-                    : group.studentIds.map(s => (
-                      <span key={s._id}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
-                          s._id === me?._id
-                            ? 'bg-violet-500/30 text-violet-200 border border-violet-500/40'
-                            : 'bg-white/10 text-white/70'
+              return (
+                <Card key={group._id} className={isMine ? 'border-primary/50 bg-primary/5' : ''}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`h-9 w-9 shrink-0 rounded-lg flex items-center justify-center font-bold text-sm ${
+                          isMine ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
                         }`}>
-                        <span className="font-semibold">{s.name}</span>
-                        <span className="opacity-50">({s.studentId})</span>
-                      </span>
-                    ))}
-                </div>
+                          {group.groupNumber}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-sm">Group {group.groupNumber}</span>
+                            {isMine && <Badge className="text-xs">Yours</Badge>}
+                            {isFull && <Badge variant="secondary" className="text-xs">Full</Badge>}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {group.projectTitle || <span className="italic">No title</span>}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 text-xs">
+                        {group.studentIds.length}/{maxMembers}
+                      </Badge>
+                    </div>
 
-                {/* Join button */}
-                {canJoin && (
-                  <button
-                    onClick={() => doAction('join', { groupId: group._id })}
-                    disabled={actionLoading}
-                    className="w-full py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 border border-violet-500/40 text-violet-300 hover:bg-violet-500/20 flex items-center justify-center gap-2"
-                  >
-                    {actionLoading
-                      ? <span className="w-3.5 h-3.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
-                      : '➕'}
-                    Join Group {group.groupNumber}
-                  </button>
-                )}
-                {isActive && me && !myGroup && isFull && (
-                  <div className="w-full py-2 text-center text-white/25 text-xs rounded-xl bg-white/5">
-                    Group is full
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.studentIds.length === 0 ? (
+                        <span className="text-xs text-muted-foreground italic">No members</span>
+                      ) : (
+                        group.studentIds.map(s => (
+                          <span
+                            key={s._id}
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+                              s._id === me?._id
+                                ? 'bg-primary/15 text-primary border border-primary/30'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            <span className="font-medium">{s.name}</span>
+                            <span className="opacity-60">({s.studentId})</span>
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    {canJoin && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => doAction('join', { groupId: group._id })}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                        Join Group {group.groupNumber}
+                      </Button>
+                    )}
+                    {isActive && me && !myGroup && isFull && (
+                      <div className="text-center text-xs text-muted-foreground py-1.5 rounded-md bg-muted">
+                        Group is full
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
 
         {/* Unassigned students */}
         {unassignedStudents.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h3 className="text-sm font-semibold text-white/60 mb-3 flex items-center gap-2">
-              ⏳ Not yet in a group
-              <span className="text-white/30">({unassignedStudents.length})</span>
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {unassignedStudents.map(s => (
-                <span key={s._id}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs border ${
-                    s._id === me?._id
-                      ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
-                      : 'bg-white/5 border-white/10 text-white/50'
-                  }`}>
-                  {s.name}
-                  <span className="opacity-50">({s.studentId})</span>
-                </span>
-              ))}
-            </div>
-          </div>
+          <Card>
+            <CardContent className="p-4 space-y-2.5">
+              <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                Not yet in a group
+                <span className="font-normal">({unassignedStudents.length})</span>
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {unassignedStudents.map(s => (
+                  <span
+                    key={s._id}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                      s._id === me?._id
+                        ? 'bg-primary/10 border-primary/30 text-primary'
+                        : 'bg-muted/50 text-muted-foreground'
+                    }`}
+                  >
+                    {s.name}
+                    <span className="opacity-60">({s.studentId})</span>
+                  </span>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {unassignedStudents.length === 0 && groups.length > 0 && (
-          <div className="rounded-xl border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-400 flex items-center gap-2 text-center justify-center">
-            🎉 All {students.length} students are in groups!
+          <div className="flex items-center justify-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+            <PartyPopper className="h-4 w-4" />
+            All {students.length} students are in groups!
           </div>
         )}
 
-        <p className="text-center text-xs text-white/15 pb-4">
+        <p className="text-center text-xs text-muted-foreground/60 pb-2">
           Auto-refreshes every 15 seconds • {course?.code}
         </p>
       </div>
