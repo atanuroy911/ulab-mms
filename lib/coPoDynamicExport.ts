@@ -31,6 +31,30 @@ const TEMPLATE_STUDENT_COUNT = 50;
 const GRADE_SHEET_FIRST_ROW = 10; // GradeSheet student rows start here (ends at 59 in the template)
 const COPO_SHEET_FIRST_ROW = 15; // CO_PO_AttainmentAnalysis student rows start here (ends at 64)
 
+const MERGE_RANGE_RE = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/;
+
+// ExcelJS's spliceRows() moves cell values/styles but does NOT shift pre-existing merged-cell
+// ranges - a merge below the splice point keeps referencing its original row numbers even
+// though the actual content moved. That leaves the workbook with a merge that no longer lines
+// up with anything (or collides with a merge we add later at the same address), which is
+// exactly the kind of structural defect that makes real Excel throw the file into "removed
+// part" repair mode - it doesn't just affect the rows we can see stale content in, it can
+// take drawings/charts down with it during recovery. Every merge whose top row is below the
+// template's fixed last row needs to move by the same delta as the rows themselves.
+function shiftMergesBelow(worksheet: ExcelJS.Worksheet, templateLastRow: number, delta: number) {
+  if (!delta) return;
+  const affected = worksheet.model.merges.filter((range) => {
+    const match = MERGE_RANGE_RE.exec(range);
+    return match && Number(match[2]) > templateLastRow;
+  });
+  affected.forEach((range) => {
+    const match = MERGE_RANGE_RE.exec(range)!;
+    const [, col1, row1, col2, row2] = match;
+    worksheet.unMergeCells(range);
+    worksheet.mergeCells(`${col1}${Number(row1) + delta}:${col2}${Number(row2) + delta}`);
+  });
+}
+
 async function resizeStudentBlock(worksheet: ExcelJS.Worksheet, firstRow: number, count: number) {
   const lastTemplateRow = firstRow + TEMPLATE_STUDENT_COUNT - 1;
   const delta = count - TEMPLATE_STUDENT_COUNT;
@@ -53,8 +77,10 @@ async function resizeStudentBlock(worksheet: ExcelJS.Worksheet, firstRow: number
         if (style) newRow.getCell(c).style = { ...style };
       }
     }
+    shiftMergesBelow(worksheet, lastTemplateRow, delta);
   } else if (delta < 0) {
     worksheet.spliceRows(firstRow + count, -delta);
+    shiftMergesBelow(worksheet, lastTemplateRow, delta);
   }
   return delta; // rows below the (old) template block shift down/up by this amount
 }

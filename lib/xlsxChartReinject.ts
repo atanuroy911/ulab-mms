@@ -68,12 +68,14 @@ export async function reinjectTemplateCharts(
     return file.async('string');
   };
 
-  const [chart1, chart2, chart3, drawing1, drawing2] = await Promise.all([
+  const [chart1, chart2, chart3, drawing1, drawing2, drawing1Rels, drawing2Rels] = await Promise.all([
     readTemplatePart(CHART1_PATH),
     readTemplatePart(CHART2_PATH),
     readTemplatePart(CHART3_PATH),
     readTemplatePart(DRAWING1_PATH),
     readTemplatePart(DRAWING2_PATH),
+    readTemplatePart(DRAWING1_RELS_PATH),
+    readTemplatePart(DRAWING2_RELS_PATH),
   ]);
 
   outZip.file(CHART1_PATH, shiftAbsoluteRowRefs(chart1, gradeSheetRowShift));
@@ -81,8 +83,12 @@ export async function reinjectTemplateCharts(
   outZip.file(CHART3_PATH, chart3);
   outZip.file(DRAWING1_PATH, shiftDrawingAnchorRow(drawing1, gradeSheetRowShift));
   outZip.file(DRAWING2_PATH, drawing2);
-  outZip.file(DRAWING1_RELS_PATH, DRAWING_RELS_XML('drawing1.xml'));
-  outZip.file(DRAWING2_RELS_PATH, DRAWING_RELS_XML('drawing2.xml'));
+  // These are the drawings' *own* relationships to their charts (rId1 -> ../charts/chart1.xml,
+  // etc) - copied verbatim from the template, since the chart <-> drawing wiring itself never
+  // changes. This must not be confused with the *worksheet's* relationship to its drawing
+  // (sheet1.xml.rels / sheet3.xml.rels below), which is a different relationship entirely.
+  outZip.file(DRAWING1_RELS_PATH, drawing1Rels);
+  outZip.file(DRAWING2_RELS_PATH, drawing2Rels);
 
   const gradeSheetXml = await outZip.file(GRADE_SHEET_PART)?.async('string');
   const courseSummaryXml = await outZip.file(COURSE_SUMMARY_PART)?.async('string');
