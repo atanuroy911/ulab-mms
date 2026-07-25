@@ -36,6 +36,8 @@ interface OverviewViewProps {
   exportingCSV: boolean;
   onExportCourseFile?: () => void;
   exportingCourseFile?: boolean;
+  onExportCourseFileAlpha?: () => void;
+  exportingCourseFileAlpha?: boolean;
   /** CO-PO mapping status for export warning */
   coPoStatus?: 'no-mapping' | 'no-max-marks' | 'ok';
   onGoToCoPo?: () => void;
@@ -53,6 +55,8 @@ export default function OverviewView({
   exportingCSV,
   onExportCourseFile,
   exportingCourseFile,
+  onExportCourseFileAlpha,
+  exportingCourseFileAlpha,
   coPoStatus = 'ok',
   onGoToCoPo,
 }: OverviewViewProps) {
@@ -241,6 +245,18 @@ export default function OverviewView({
                   {exportingCourseFile ? 'Exporting...' : 'Export course file'}
                   <span className="ml-2 text-xs text-muted-foreground">Beta</span>
                 </Button>
+                {onExportCourseFileAlpha && (
+                  <Button
+                    onClick={onExportCourseFileAlpha}
+                    disabled={exportingCourseFileAlpha}
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {exportingCourseFileAlpha ? 'Exporting...' : 'Export course file (unlimited students)'}
+                    <span className="ml-2 text-xs text-muted-foreground">Alpha</span>
+                  </Button>
+                )}
                 <Button
                   onClick={() => setShowChecklist(true)}
                   variant="outline"

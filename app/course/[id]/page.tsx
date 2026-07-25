@@ -149,6 +149,7 @@ export default function CoursePage() {
   const [exportingJSON, setExportingJSON] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
+  const [exportingCourseFileAlpha, setExportingCourseFileAlpha] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias'>('aggregation');
@@ -983,8 +984,8 @@ export default function CoursePage() {
     }
   };
 
-  const downloadCourseFile = async (group: 'main' | 'alias', codeForFilename: string) => {
-    const response = await fetch(`/api/courses/${courseId}/export-file`, {
+  const downloadCourseFile = async (group: 'main' | 'alias', codeForFilename: string, endpoint = 'export-file', filenameTag = '') => {
+    const response = await fetch(`/api/courses/${courseId}/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ group }),
@@ -1000,7 +1001,7 @@ export default function CoursePage() {
     const a = document.createElement('a');
     a.href = url;
     const suffix = course?.aliasEnabled ? (group === 'alias' ? '_newcode' : '_oldcode') : '';
-    a.download = `${codeForFilename}_${course?.name}_course_file${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    a.download = `${codeForFilename}_${course?.name}_course_file${filenameTag}${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
@@ -1023,6 +1024,25 @@ export default function CoursePage() {
       notify.exportImport.exportError(err instanceof Error ? err.message : undefined);
     } finally {
       setExportingCourseFile(false);
+    }
+  };
+
+  const handleExportCourseFileAlpha = async () => {
+    setExportingCourseFileAlpha(true);
+    try {
+      if (course?.aliasEnabled && course.alternateCode) {
+        await downloadCourseFile('main', course.code, 'export-copo-alpha', '_alpha');
+        await downloadCourseFile('alias', course.alternateCode, 'export-copo-alpha', '_alpha');
+        notify.exportImport.exportSuccess('Excel', `${course.code} + ${course.alternateCode}`);
+      } else {
+        await downloadCourseFile('main', course?.code || '', 'export-copo-alpha', '_alpha');
+        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      notify.exportImport.exportError(err instanceof Error ? err.message : undefined);
+    } finally {
+      setExportingCourseFileAlpha(false);
     }
   };
 
@@ -1768,6 +1788,8 @@ export default function CoursePage() {
                 exportingCSV={exportingCSV}
                 onExportCourseFile={handleExportCourseFile}
                 exportingCourseFile={exportingCourseFile}
+                onExportCourseFileAlpha={handleExportCourseFileAlpha}
+                exportingCourseFileAlpha={exportingCourseFileAlpha}
                 calculateFinalGrade={calculateFinalGrade}
                 coPoStatus={getCoPoStatus()}
                 onGoToCoPo={() => setActiveView('copo')}
