@@ -7,13 +7,20 @@ import User from '@/models/User';
 import { isUlabEmail, looksLikeStudentName } from '@/lib/googleAccount';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 
-// The student attendance QR check-in page also signs people in with Google, but that is a
-// separate, purpose-built entry point (see app/attendance/checkin/[sessionCode]/page.tsx,
-// which calls signIn('google-checkin', ...)) - not the teacher dashboard sign-in. Students'
-// Google accounts are set up with their ID in the display name, e.g. "John Doe
-// (2021-1-60-123)", which the teacher-account guard below rejects, so the guard is scoped to
-// the 'google' provider (dashboard) only and does not run for 'google-checkin'.
+// The student attendance QR check-in page and the "check marks" page also sign people in
+// with Google, but those are separate, purpose-built entry points (see
+// app/attendance/checkin/[sessionCode]/page.tsx, which calls signIn('google-checkin', ...),
+// and app/student/check-marks/page.tsx, which calls signIn('google-marks', ...)) - not the
+// teacher dashboard sign-in. Students' Google accounts are set up with their ID in the
+// display name, e.g. "John Doe (2021-1-60-123)", which the teacher-account guard below
+// rejects, so the guard is scoped to the 'google' provider (dashboard) only. These two
+// student-facing providers also deliberately skip User.create entirely (see the signIn
+// callback below) - they only need to prove "this is a real @ulab.edu.bd Google account",
+// not persist an account, so a student checking their attendance or marks never ends up
+// with a login-capable User document they never asked for.
 const CHECKIN_GOOGLE_PROVIDER_ID = 'google-checkin';
+const MARKS_GOOGLE_PROVIDER_ID = 'google-marks';
+const STUDENT_ONLY_GOOGLE_PROVIDER_IDS = [CHECKIN_GOOGLE_PROVIDER_ID, MARKS_GOOGLE_PROVIDER_ID];
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -91,13 +98,28 @@ export const authOptions: NextAuthOptions = {
               },
             },
           }),
+          // Same Google app again, for the "check marks" page - proves the visitor owns a
+          // real @ulab.edu.bd Google account without creating a User document.
+          GoogleProvider({
+            id: MARKS_GOOGLE_PROVIDER_ID,
+            name: 'Google (Check Marks)',
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                prompt: 'select_account consent',
+                hd: 'ulab.edu.bd',
+              },
+            },
+          }),
         ]
       : []),
   ],
   callbacks: {
     async signIn({ user, account }) {
-      const isGoogle = account?.provider === 'google' || account?.provider === CHECKIN_GOOGLE_PROVIDER_ID;
-      if (!isGoogle) {
+      const isStudentOnlyProvider = STUDENT_ONLY_GOOGLE_PROVIDER_IDS.includes(account?.provider || '');
+      const isGoogle = account?.provider === 'google' || isStudentOnlyProvider;
+      if (!isGoogle || !account) {
         return true;
       }
 
@@ -105,6 +127,14 @@ export const authOptions: NextAuthOptions = {
 
       if (!isUlabEmail(email)) {
         return '/auth/error?reason=domain';
+      }
+
+      // The attendance check-in and check-marks providers only need to prove the visitor
+      // owns a real @ulab.edu.bd Google account - they must never create or link a User
+      // document, so a student checking their attendance/marks doesn't end up with a
+      // login-capable account they never asked for.
+      if (isStudentOnlyProvider) {
+        return true;
       }
 
       // Google accounts used for student attendance check-in are set up with the
@@ -137,13 +167,18 @@ export const authOptions: NextAuthOptions = {
     },
     async jwt({ token, user, account }) {
       if (account) {
-        // Tokens minted via the attendance check-in provider are scoped to that flow only -
-        // they must never grant access to the teacher dashboard/course routes (see middleware.ts).
+        // Tokens minted via the attendance check-in / check-marks providers are scoped to
+        // those flows only - they must never grant access to the teacher dashboard/course
+        // routes (see middleware.ts).
         token.checkinOnly = account.provider === CHECKIN_GOOGLE_PROVIDER_ID;
+        token.marksOnly = account.provider === MARKS_GOOGLE_PROVIDER_ID;
       }
 
       if (user) {
-        const email = user.email?.toLowerCase();
+        // No User document is ever created for these providers (see signIn above), so
+        // there's nothing to look up - skip straight to the OAuth-account-only token.
+        const isStudentOnlyProvider = STUDENT_ONLY_GOOGLE_PROVIDER_IDS.includes(account?.provider || '');
+        const email = !isStudentOnlyProvider ? user.email?.toLowerCase() : undefined;
 
         if (email) {
           await dbConnect();
@@ -172,6 +207,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).googleLinked = !!token.googleLinked;
         (session.user as any).hasPassword = !!token.hasPassword;
         (session.user as any).checkinOnly = !!token.checkinOnly;
+        (session.user as any).marksOnly = !!token.marksOnly;
       }
       return session;
     },

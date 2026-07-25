@@ -10,6 +10,7 @@ declare module 'next-auth' {
       googleLinked?: boolean;
       hasPassword?: boolean;
       checkinOnly?: boolean;
+      marksOnly?: boolean;
     };
   }
 

@@ -1,21 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
+import AdminSettings from '@/models/AdminSettings';
 import Student from '@/models/Student';
 import Mark from '@/models/Mark';
 import Exam from '@/models/Exam';
 import Course from '@/models/Course';
 import AttendanceSession from '@/models/AttendanceSession';
 
-// GET student marks by student ID
-export async function GET(request: NextRequest) {
+// Marks are only released after the visitor either signs in with a real @ulab.edu.bd
+// Google account (via the 'google-marks' provider, see app/api/auth/[...nextauth]/route.ts -
+// this never creates a User document) or a teacher/admin supplies the admin password as an
+// override. Without this, anyone could enumerate every student's marks by guessing IDs.
+async function isAuthorized(adminPassword?: string): Promise<boolean> {
+  const session = (await getServerSession(authOptions as any)) as any;
+  if (session?.user?.email && session.user.email.toLowerCase().endsWith('@ulab.edu.bd')) {
+    return true;
+  }
+
+  if (adminPassword) {
+    await dbConnect();
+    const adminSettings = await AdminSettings.findOne();
+    if (adminSettings?.passwordHash) {
+      return bcrypt.compare(adminPassword, adminSettings.passwordHash);
+    }
+  }
+
+  return false;
+}
+
+// POST student marks by student ID (POST so the admin-password override never lands in a
+// URL / server access log the way a query string would).
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const studentId = searchParams.get('studentId');
+    const body = await request.json().catch(() => ({}));
+    const studentId = typeof body?.studentId === 'string' ? body.studentId.trim() : '';
+    const adminPassword = typeof body?.adminPassword === 'string' ? body.adminPassword : undefined;
 
     if (!studentId) {
       return NextResponse.json(
         { error: 'Student ID is required' },
         { status: 400 }
+      );
+    }
+
+    if (!(await isAuthorized(adminPassword))) {
+      return NextResponse.json(
+        { error: adminPassword ? 'Invalid admin password' : 'Please sign in with your ULAB Google account to check marks' },
+        { status: 401 }
       );
     }
 
