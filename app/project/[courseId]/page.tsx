@@ -51,6 +51,7 @@ export default function ProjectCheckinPage() {
   const [isActive, setIsActive] = useState(false);
   const [maxMembers, setMaxMembers] = useState(4);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
@@ -70,8 +71,11 @@ export default function ProjectCheckinPage() {
 
   const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // `silent` skips the full-page loading state so the 15s auto-refresh and the manual
+  // refresh button update data in place (just a small spinner on the refresh button)
+  // instead of blanking the whole page every time.
+  const fetchData = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true); else setLoading(true);
     try {
       const res = await fetch(`/api/project/${courseId}`);
       const data = await res.json();
@@ -85,7 +89,7 @@ export default function ProjectCheckinPage() {
     } catch {
       setError('Failed to connect to server');
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false); else setLoading(false);
     }
   }, [courseId]);
 
@@ -94,10 +98,10 @@ export default function ProjectCheckinPage() {
     fetchData();
   }, [isGoogleVerified, fetchData]);
 
-  // Auto-refresh every 15s when active
+  // Auto-refresh every 15s when active - silent, so it never flashes the loading screen.
   useEffect(() => {
     if (!isActive || !isGoogleVerified) return;
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(() => fetchData(true), 15000);
     return () => clearInterval(interval);
   }, [isActive, isGoogleVerified, fetchData]);
 
@@ -427,8 +431,14 @@ export default function ProjectCheckinPage() {
                 ({groups.length} group{groups.length !== 1 ? 's' : ''} • max {maxMembers}/group)
               </span>
             </h2>
-            <Button size="sm" variant="ghost" onClick={fetchData} className="h-7 px-2 text-xs text-muted-foreground">
-              <RefreshCw className="h-3.5 w-3.5" />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              className="h-7 px-2 text-xs text-muted-foreground"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
