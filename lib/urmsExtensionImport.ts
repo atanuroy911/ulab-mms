@@ -133,3 +133,75 @@ export function connectAndStartImport(
     disconnect: () => port.disconnect(),
   };
 }
+
+export interface GradeToFill {
+  studentId: string;
+  name: string;
+  grade: string;
+}
+
+/**
+ * A course that's split by alias (old code / new code) has two DISJOINT
+ * rosters in URMS even though MMS tracks it as one course with a `useAlias`
+ * tag per student. Grades must be grouped by which URMS course code they
+ * belong under, so the extension fills only the group matching whichever
+ * code the user actually selected — not a merged list.
+ */
+export interface GradeCodeGroup {
+  code: string;
+  grades: GradeToFill[];
+}
+
+export interface GradeNameMismatch {
+  studentId: string;
+  urmsName: string;
+  mmsName: string;
+}
+
+export type UrmsGradeFillStatus =
+  | { type: 'GRADES_FILLED'; filled: number; notFound: number; nameMismatches: GradeNameMismatch[] }
+  | { type: 'GRADES_SAVED' }
+  | { type: 'COURSE_MISMATCH'; courseId: string; expectedCourseCodes: string[] }
+  | { type: 'NO_MATCHES'; courseId: string; section: string; expectedSection?: string; rosterCount: number };
+
+/**
+ * Beta: opens URMS and asks the extension to fill in the on-page grade
+ * dropdowns for the given students. This never submits anything to URMS by
+ * itself — the user reviews the filled-in values and clicks URMS's own
+ * "Save" button. `onStatus` reports fill progress, course mismatches, and
+ * when the extension has detected the save completed (so MMS can prompt to
+ * print the grade sheet).
+ */
+export function connectAndStartGradeFill(
+  extensionId: string,
+  codeGroups: GradeCodeGroup[],
+  expectedSection: string | undefined,
+  onStatus: (status: UrmsGradeFillStatus) => void,
+  onDisconnect?: () => void
+): ImportSession | null {
+  const runtime = getChromeRuntime();
+  if (!runtime || typeof runtime.connect !== 'function') return null;
+
+  const port = runtime.connect(extensionId, { name: 'mms-urms-grades' });
+
+  port.onMessage.addListener((message: any) => {
+    if (
+      message?.type === 'GRADES_FILLED' ||
+      message?.type === 'GRADES_SAVED' ||
+      message?.type === 'COURSE_MISMATCH' ||
+      message?.type === 'NO_MATCHES'
+    ) {
+      onStatus(message as UrmsGradeFillStatus);
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    onDisconnect?.();
+  });
+
+  port.postMessage({ type: 'START_GRADE_FILL', codeGroups, expectedSection });
+
+  return {
+    disconnect: () => port.disconnect(),
+  };
+}

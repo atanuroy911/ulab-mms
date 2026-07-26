@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles, Grid3x3 } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
+import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
 
 interface Course {
   _id: string;
@@ -63,6 +64,7 @@ export default function OverviewView({
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [showUrmsModal, setShowUrmsModal] = useState(false);
+  const [showUrmsAutoFillModal, setShowUrmsAutoFillModal] = useState(false);
   const [showPdfStyleDialog, setShowPdfStyleDialog] = useState(false);
   const [alphaDisclaimerTarget, setAlphaDisclaimerTarget] = useState<'excel' | 'pdf' | null>(null);
 
@@ -307,6 +309,15 @@ export default function OverviewView({
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Side-by-Side URMS Entry
+                  </Button>
+                  <Button
+                    onClick={() => setShowUrmsAutoFillModal(true)}
+                    variant="outline"
+                    className="w-full justify-start gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Auto-Fill Grades in URMS
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-auto">Beta</Badge>
                   </Button>
                 </div>
               </div>
@@ -605,6 +616,15 @@ export default function OverviewView({
         course={course}
         students={students}
         calculateFinalGrade={calculateFinalGrade}
+      />
+
+      <UrmsAutoFillGradesModal
+        open={showUrmsAutoFillModal}
+        onOpenChange={setShowUrmsAutoFillModal}
+        course={course}
+        students={students}
+        calculateFinalGrade={calculateFinalGrade}
+        onOpenSidePanel={() => setShowUrmsModal(true)}
       />
     </div>
   );
