@@ -1,16 +1,25 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Upload, Info, Copy, Check, FileText, Loader2, AlertTriangle, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Upload, Info, Copy, Check, FileText, Loader2, AlertTriangle, X, PlugZap, ExternalLink } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { parseCSV } from '@/app/utils/csv';
 import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pdfStudentImport';
+import {
+  resolveExtensionId,
+  connectAndStartImport,
+  URMS_EXTENSION_STORE_URL,
+  type ImportSession,
+  type UrmsStudentsMessage,
+  type UrmsMismatchMessage,
+} from '@/lib/urmsExtensionImport';
 import { toast } from 'sonner';
 
 const FORMAT_HELP_PROMPT = `I will paste a student roster copied from the URMS Attendance Sheet page (https://urms-awp.ulab.edu.bd/AttendanceSheet), which contains student IDs, names, and possibly other columns such as email, section, or program.
@@ -96,6 +105,112 @@ export function ImportStudentsModal({
   const [promptCopied, setPromptCopied] = useState(false);
   const [pdfSlots, setPdfSlots] = useState<PdfSlotState[]>(() => makeSlots(course));
   const [scheduleFilled, setScheduleFilled] = useState(false);
+  const [urmsExtensionStatus, setUrmsExtensionStatus] = useState<'checking' | 'installed' | 'missing'>('checking');
+  const [urmsImportState, setUrmsImportState] = useState<'idle' | 'waiting' | 'received'>('idle');
+  const [urmsStudentCount, setUrmsStudentCount] = useState(0);
+  const [urmsMismatch, setUrmsMismatch] = useState<{ courseId: string; expected: string[] } | null>(null);
+  const urmsSessionRef = useRef<ImportSession | null>(null);
+  const urmsExtensionIdRef = useRef<string | null>(null);
+  const urmsWaitingRef = useRef(false);
+  const urmsResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urmsWaitSinceRef = useRef(0);
+
+  // The extension's service worker can go idle (and lose its in-memory port
+  // reference) during a long URMS login, dropping our connection before the
+  // student list ever arrives. Silently reconnect (without reopening the
+  // URMS window) until either the result shows up or we give up.
+  const URMS_RESUME_DELAY_MS = 3000;
+  const URMS_WAIT_TIMEOUT_MS = 20 * 60 * 1000;
+
+  const clearUrmsResumeTimer = () => {
+    if (urmsResumeTimerRef.current) {
+      clearTimeout(urmsResumeTimerRef.current);
+      urmsResumeTimerRef.current = null;
+    }
+  };
+
+  const checkUrmsExtension = () => {
+    setUrmsExtensionStatus('checking');
+    resolveExtensionId().then((id) => {
+      urmsExtensionIdRef.current = id;
+      setUrmsExtensionStatus(id ? 'installed' : 'missing');
+    });
+  };
+
+  useEffect(() => {
+    if (isOpen) checkUrmsExtension();
+    return () => {
+      urmsWaitingRef.current = false;
+      clearUrmsResumeTimer();
+      urmsSessionRef.current?.disconnect();
+      urmsSessionRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const urmsExpectedCourseCodes = [course.code, ...(course.aliasEnabled && course.alternateCode ? [course.alternateCode] : [])].filter(
+    (code): code is string => Boolean(code)
+  );
+
+  const handleUrmsStudents = (message: UrmsStudentsMessage) => {
+    urmsWaitingRef.current = false;
+    clearUrmsResumeTimer();
+    setUrmsMismatch(null);
+    const lines = message.students.map((s) => `${s.studentId}, ${s.name}`);
+    setCsvInput(lines.join('\n'));
+    setUrmsStudentCount(message.students.length);
+    setUrmsImportState('received');
+    toast.success(`Received ${message.students.length} student(s) from URMS`);
+  };
+
+  const handleUrmsMismatch = (message: UrmsMismatchMessage) => {
+    setUrmsMismatch({ courseId: message.courseId, expected: message.expectedCourseCodes });
+  };
+
+  const handleUrmsDisconnect = () => {
+    urmsSessionRef.current = null;
+    if (!urmsWaitingRef.current) return;
+
+    if (Date.now() - urmsWaitSinceRef.current > URMS_WAIT_TIMEOUT_MS) {
+      urmsWaitingRef.current = false;
+      setUrmsImportState('idle');
+      toast.error('Timed out waiting for the student list from URMS. Please try again.');
+      return;
+    }
+
+    clearUrmsResumeTimer();
+    urmsResumeTimerRef.current = setTimeout(() => {
+      if (!urmsWaitingRef.current || !urmsExtensionIdRef.current) return;
+      urmsSessionRef.current = connectAndStartImport(
+        urmsExtensionIdRef.current,
+        'resume',
+        urmsExpectedCourseCodes,
+        handleUrmsStudents,
+        handleUrmsMismatch,
+        handleUrmsDisconnect
+      );
+    }, URMS_RESUME_DELAY_MS);
+  };
+
+  const handleStartUrmsImport = () => {
+    if (!urmsExtensionIdRef.current) return;
+    clearUrmsResumeTimer();
+    urmsSessionRef.current?.disconnect();
+    urmsWaitingRef.current = true;
+    urmsWaitSinceRef.current = Date.now();
+    setUrmsImportState('waiting');
+    setUrmsStudentCount(0);
+    setUrmsMismatch(null);
+
+    urmsSessionRef.current = connectAndStartImport(
+      urmsExtensionIdRef.current,
+      'start',
+      urmsExpectedCourseCodes,
+      handleUrmsStudents,
+      handleUrmsMismatch,
+      handleUrmsDisconnect
+    );
+  };
 
   const applyPdfSlotsToInput = (slots: PdfSlotState[]) => {
     const lines = slots
@@ -274,6 +389,13 @@ export function ImportStudentsModal({
     setShowFormatHelp(false);
     setPdfSlots(makeSlots(course));
     setScheduleFilled(false);
+    urmsWaitingRef.current = false;
+    clearUrmsResumeTimer();
+    urmsSessionRef.current?.disconnect();
+    urmsSessionRef.current = null;
+    setUrmsImportState('idle');
+    setUrmsStudentCount(0);
+    setUrmsMismatch(null);
     onClose();
   };
 
@@ -281,8 +403,8 @@ export function ImportStudentsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
             Import Students
@@ -303,16 +425,22 @@ export function ImportStudentsModal({
         </DialogHeader>
 
         {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="px-6 shrink-0 pt-4">
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 flex-1 px-6 py-4">
           <Tabs defaultValue="paste">
             <TabsList>
               <TabsTrigger value="paste">Paste Text</TabsTrigger>
               <TabsTrigger value="pdf">Upload PDF</TabsTrigger>
+              <TabsTrigger value="urms" className="gap-1.5">
+                Import from URMS
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Beta</Badge>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="paste">
@@ -434,6 +562,90 @@ export function ImportStudentsModal({
                 </div>
               ))}
             </TabsContent>
+
+            <TabsContent value="urms" className="space-y-3">
+              <Alert>
+                <AlertDescription className="text-xs">
+                  Beta feature — imports the student list straight from URMS's Section Wise Result Entry
+                  page using the ULAB Faculty Companion Chrome extension.
+                </AlertDescription>
+              </Alert>
+
+              {urmsExtensionStatus === 'checking' && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking for the ULAB Faculty Companion extension...
+                </div>
+              )}
+
+              {urmsExtensionStatus === 'missing' && (
+                <div className="rounded-lg border p-3 space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    This feature needs the <strong>ULAB Faculty Companion</strong> Chrome extension installed.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={URMS_EXTENSION_STORE_URL} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                        Install Extension
+                      </a>
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={checkUrmsExtension}>
+                      I've installed it — check again
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {urmsExtensionStatus === 'installed' && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  {urmsImportState === 'idle' && (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        This will open URMS's Section Wise Result Entry page in a popup. Log in if needed and
+                        pick the Course / Section — once selected, the extension fetches the student list
+                        automatically and closes the popup for you.
+                      </p>
+                      <Button onClick={handleStartUrmsImport} variant="outline" className="w-full">
+                        <PlugZap className="w-4 h-4 mr-2" />
+                        Start Import from URMS
+                      </Button>
+                    </>
+                  )}
+
+                  {urmsImportState === 'waiting' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Waiting for you to log in and select a Course / Section on the URMS popup...
+                      </div>
+                      {urmsMismatch && (
+                        <Alert variant="destructive" className="py-2">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <AlertDescription className="text-xs">
+                            You selected course <strong>{urmsMismatch.courseId}</strong> in URMS, but this MMS
+                            course is <strong>{urmsMismatch.expected.join(' / ') || 'unset'}</strong>. Please pick
+                            the matching course/section in the popup to continue.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  )}
+
+                  {urmsImportState === 'received' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+                        <Check className="w-4 h-4" />
+                        Received {urmsStudentCount} student(s) from URMS
+                      </div>
+                      <Button onClick={handleStartUrmsImport} variant="secondary" size="sm">
+                        Import a different section
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
 
           {csvInput.trim() && diffResult.toAdd.length === 0 && diffResult.unchanged.length === 0 && diffResult.missing.length === 0 && (
@@ -537,12 +749,12 @@ export function ImportStudentsModal({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t shrink-0">
           <Button variant="outline" onClick={handleClose} disabled={isImporting}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleImport} 
+          <Button
+            onClick={handleImport}
             disabled={isImporting || (!csvInput.trim()) || (diffResult.toAdd.length === 0 && (!deleteMissing || diffResult.missing.length === 0))}
           >
             {isImporting ? 'Processing...' : 'Confirm Import'}
