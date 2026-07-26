@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { GOOGLE_AUTH_ERROR_MESSAGES } from '@/lib/googleAccount';
+import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
 
 export default function SignIn() {
   return (
@@ -110,7 +111,9 @@ function SignInForm() {
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
       </div>
-      
+
+      <ChromeExtensionPromo />
+
       <div className="max-w-md w-full space-y-8">
         {/* Logo and Title */}
         <div className="text-center space-y-4">

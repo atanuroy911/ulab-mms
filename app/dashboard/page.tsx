@@ -19,6 +19,7 @@ import { notify } from '@/app/utils/notifications';
 import { CourseCombobox } from '@/app/components/CourseCombobox';
 import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pdfStudentImport';
 import { parseCSV } from '@/app/utils/csv';
+import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
 
 interface Course {
   _id: string;
@@ -637,6 +638,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      <ChromeExtensionPromo />
       {/* Navbar */}
       <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
         <div className="max-w-7xl mx-auto px-4 py-4">

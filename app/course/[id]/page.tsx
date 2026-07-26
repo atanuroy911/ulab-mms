@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ImportStudentsModal } from './components/ImportStudentsModal';
+import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
@@ -1490,6 +1491,7 @@ export default function CoursePage() {
   return (
     <>
     <div className="min-h-screen">
+      <ChromeExtensionPromo />
       {/* Navbar */}
       <nav className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
