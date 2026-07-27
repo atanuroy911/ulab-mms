@@ -9,18 +9,22 @@ import {
   Trash2,
   Loader2,
   BookOpen,
+  FlaskConical,
   AlertTriangle,
+  GraduationCap,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { notify } from '@/app/utils/notifications';
+import CourseGradesModal from './CourseGradesModal';
 
 interface Account {
   _id: string;
@@ -47,6 +51,22 @@ interface AccountCourse {
 
 const SEMESTERS = ['Spring', 'Summer', 'Fall'];
 
+const ALL_SEMESTERS_FILTER = 'all';
+
+function semesterKey(course: { semester: string; year: number }): string {
+  return `${course.semester}__${course.year}`;
+}
+
+function semesterSortValue(course: { semester: string; year: number }): number {
+  return course.year * 10 + SEMESTERS.indexOf(course.semester);
+}
+
+function mostRecentSemesterKey(courses: { semester: string; year: number }[]): string {
+  if (courses.length === 0) return ALL_SEMESTERS_FILTER;
+  const latest = [...courses].sort((a, b) => semesterSortValue(b) - semesterSortValue(a))[0];
+  return semesterKey(latest);
+}
+
 export default function AccountManagement() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +75,9 @@ export default function AccountManagement() {
   const [viewingAccount, setViewingAccount] = useState<Account | null>(null);
   const [viewingCourses, setViewingCourses] = useState<AccountCourse[]>([]);
   const [viewLoading, setViewLoading] = useState(false);
+  const [semesterFilter, setSemesterFilter] = useState<string>(ALL_SEMESTERS_FILTER);
+  const [showTheory, setShowTheory] = useState(true);
+  const [showLab, setShowLab] = useState(true);
 
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [editName, setEditName] = useState('');
@@ -75,6 +98,8 @@ export default function AccountManagement() {
 
   const [deletingCourse, setDeletingCourse] = useState<AccountCourse | null>(null);
   const [courseDeleting, setCourseDeleting] = useState(false);
+
+  const [viewingCourseDetailsFor, setViewingCourseDetailsFor] = useState<AccountCourse | null>(null);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -105,7 +130,13 @@ export default function AccountManagement() {
       const res = await fetch(`/api/admin/accounts/${account._id}`);
       const data = await res.json();
       if (res.ok) {
-        setViewingCourses(data.courses || []);
+        const courses: AccountCourse[] = data.courses || [];
+        setViewingCourses(courses);
+        // Default to the account's most recent semester so accounts with lots of
+        // courses don't dump everything on screen at once; "All Semesters" is one click away.
+        setSemesterFilter(mostRecentSemesterKey(courses));
+        setShowTheory(true);
+        setShowLab(true);
       } else {
         notify.error(data.error || 'Failed to load account details');
       }
@@ -306,6 +337,21 @@ export default function AccountManagement() {
   const visibleSelectedCount = filteredAccounts.filter(a => selectedIds.has(a._id)).length;
   const allVisibleSelected = filteredAccounts.length > 0 && visibleSelectedCount === filteredAccounts.length;
 
+  const semesterOptions = Object.values(
+    viewingCourses.reduce<Record<string, { key: string; label: string; count: number; sortValue: number }>>((acc, course) => {
+      const key = semesterKey(course);
+      if (!acc[key]) {
+        acc[key] = { key, label: `${course.semester} ${course.year}`, count: 0, sortValue: semesterSortValue(course) };
+      }
+      acc[key].count += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.sortValue - a.sortValue);
+
+  const filteredViewingCourses = viewingCourses
+    .filter((course) => semesterFilter === ALL_SEMESTERS_FILTER || semesterKey(course) === semesterFilter)
+    .filter((course) => (course.courseType === 'Theory' ? showTheory : showLab));
+
   return (
     <div className="space-y-4">
       <Card>
@@ -421,75 +467,172 @@ export default function AccountManagement() {
         </CardContent>
       </Card>
 
-      {/* View account + course manager */}
+      {/* View account + course manager — full-screen so accounts with lots of courses have room to breathe */}
       <Dialog open={viewingAccount !== null} onOpenChange={(open) => !open && setViewingAccount(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Courses — {viewingAccount?.name}
-            </DialogTitle>
-            <DialogDescription>{viewingAccount?.email}</DialogDescription>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 p-0 w-screen h-dvh max-w-none max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[95vw] sm:h-[92vh] sm:max-w-350 sm:rounded-2xl sm:border overflow-hidden"
+        >
+          {/* Header */}
+          <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 border-b bg-muted/30 px-6 py-4 space-y-0 text-left">
+            <div className="min-w-0">
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <BookOpen className="h-5 w-5 text-primary shrink-0" />
+                <span className="truncate">Courses — {viewingAccount?.name}</span>
+              </DialogTitle>
+              <DialogDescription className="mt-0.5">{viewingAccount?.email}</DialogDescription>
+            </div>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="shrink-0" aria-label="Close">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
           </DialogHeader>
 
           {viewLoading ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted-foreground">
+            <div className="flex-1 flex items-center gap-2 justify-center text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading courses...
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Course</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Semester</TableHead>
-                    <TableHead>Section</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Students</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {viewingCourses.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
-                        This account has no courses.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    viewingCourses.map((course) => (
-                      <TableRow key={course._id}>
-                        <TableCell className="font-medium">{course.name}</TableCell>
-                        <TableCell>{course.code}</TableCell>
-                        <TableCell>{course.semester} {course.year}</TableCell>
-                        <TableCell>{course.section}</TableCell>
-                        <TableCell>{course.courseType}</TableCell>
-                        <TableCell>{course.studentCount}</TableCell>
-                        <TableCell>
-                          {course.isArchived ? <Badge variant="secondary">Archived</Badge> : <Badge>Active</Badge>}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" title="Edit course" onClick={() => openCourseEdit(course)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Delete course" onClick={() => setDeletingCourse(course)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
+            <>
+              {/* Filter bar */}
+              {viewingCourses.length > 0 && (
+                <div className="shrink-0 flex flex-wrap items-end justify-between gap-4 border-b px-6 py-3">
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="w-56 space-y-1.5">
+                      <Label htmlFor="semester-filter" className="text-xs font-medium text-muted-foreground">Semester</Label>
+                      <Select value={semesterFilter} onValueChange={setSemesterFilter}>
+                        <SelectTrigger id="semester-filter">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ALL_SEMESTERS_FILTER}>All Semesters ({viewingCourses.length})</SelectItem>
+                          {semesterOptions.map((opt) => (
+                            <SelectItem key={opt.key} value={opt.key}>{opt.label} ({opt.count})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="block text-xs font-medium text-muted-foreground">Course Type</span>
+                      <div className="flex items-center gap-1 rounded-md border p-1">
+                        <label
+                          className={`flex cursor-pointer select-none items-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+                            showTheory ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={showTheory}
+                            onChange={(e) => setShowTheory(e.target.checked)}
+                          />
+                          <BookOpen className="h-3.5 w-3.5" />
+                          Theory
+                        </label>
+                        <label
+                          className={`flex cursor-pointer select-none items-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+                            showLab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={showLab}
+                            onChange={(e) => setShowLab(e.target.checked)}
+                          />
+                          <FlaskConical className="h-3.5 w-3.5" />
+                          Lab
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground pb-1.5">
+                    Showing <span className="font-medium text-foreground">{filteredViewingCourses.length}</span> of {viewingCourses.length} course{viewingCourses.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+              )}
+
+              {/* Table */}
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Course</TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Semester</TableHead>
+                        <TableHead>Section</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Students</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                    </TableHeader>
+                    <TableBody>
+                      {viewingCourses.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
+                            This account has no courses.
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredViewingCourses.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
+                            No courses match the current filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredViewingCourses.map((course) => (
+                          <TableRow key={course._id}>
+                            <TableCell className="font-medium">{course.name}</TableCell>
+                            <TableCell>{course.code}</TableCell>
+                            <TableCell>{course.semester} {course.year}</TableCell>
+                            <TableCell>{course.section}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="gap-1">
+                                {course.courseType === 'Lab' ? <FlaskConical className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
+                                {course.courseType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{course.studentCount}</TableCell>
+                            <TableCell>
+                              {course.isArchived ? <Badge variant="secondary">Archived</Badge> : <Badge>Active</Badge>}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" title="View students, marks & grades" onClick={() => setViewingCourseDetailsFor(course)}>
+                                  <GraduationCap className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" title="Edit course" onClick={() => openCourseEdit(course)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" title="Delete course" onClick={() => setDeletingCourse(course)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Read-only course -> students -> marks -> grade drill-down */}
+      <CourseGradesModal
+        accountId={viewingAccount?._id ?? null}
+        course={viewingCourseDetailsFor}
+        onClose={() => setViewingCourseDetailsFor(null)}
+      />
 
       {/* Edit account */}
       <Dialog open={editingAccount !== null} onOpenChange={(open) => !open && setEditingAccount(null)}>
