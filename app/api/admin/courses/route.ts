@@ -179,7 +179,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE a course
+// DELETE a course, or multiple courses via a JSON body { ids: string[] }
 export async function DELETE(request: NextRequest) {
   try {
     if (!(await verifyAdminToken(request))) {
@@ -189,25 +189,38 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
-    if (!id) {
+    await dbConnect();
+
+    if (id) {
+      const course = await AdminCourse.findByIdAndDelete(id);
+
+      if (!course) {
+        return NextResponse.json(
+          { error: 'Course not found' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ message: 'Course deleted successfully' }, { status: 200 });
+    }
+
+    // Bulk delete: { ids: string[] } in the JSON body
+    const body = await request.json().catch(() => null);
+    const ids = Array.isArray(body?.ids) ? body.ids.filter((v: unknown) => typeof v === 'string') : [];
+
+    if (ids.length === 0) {
       return NextResponse.json(
-        { error: 'Course ID is required' },
+        { error: 'Course ID(s) are required' },
         { status: 400 }
       );
     }
 
-    await dbConnect();
+    const result = await AdminCourse.deleteMany({ _id: { $in: ids } });
 
-    const course = await AdminCourse.findByIdAndDelete(id);
-
-    if (!course) {
-      return NextResponse.json(
-        { error: 'Course not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ message: 'Course deleted successfully' }, { status: 200 });
+    return NextResponse.json(
+      { message: 'Courses deleted successfully', count: result.deletedCount },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error('Delete admin course error:', error);
     return NextResponse.json(

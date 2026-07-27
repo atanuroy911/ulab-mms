@@ -725,7 +725,7 @@ export default function Dashboard() {
               onClick={() => setShowImportModal(true)}
             >
               <Upload className="h-4 w-4 mr-2" />
-              Import Course
+              Restore Course
             </Button>
             <Button
               onClick={() => setShowAddModal(true)}
@@ -1480,7 +1480,7 @@ export default function Dashboard() {
       <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Import Course</DialogTitle>
+            <DialogTitle>Restore Course from Backup</DialogTitle>
             <DialogDescription>
               Select a course backup JSON file to import. This will create a new course with all students, exams, and marks from the backup.
             </DialogDescription>

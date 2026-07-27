@@ -89,6 +89,9 @@ export default function CourseManagement() {
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
   const [deletingAll, setDeletingAll] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [editingCourse, setEditingCourse] = useState<AdminCourse | null>(null);
   const [viewingCourse, setViewingCourse] = useState<AdminCourse | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -381,6 +384,50 @@ export default function CourseManagement() {
     }
   };
 
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filteredCourses.map(c => c._id)));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    setBulkDeleting(true);
+    try {
+      const response = await fetch('/api/admin/courses', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(`Deleted ${data.count} course${data.count === 1 ? '' : 's'}`);
+        setShowBulkDeleteModal(false);
+        clearSelection();
+        fetchCourses();
+      } else {
+        toast.error(data.error || 'Failed to delete courses');
+      }
+    } catch (error) {
+      console.error('Bulk delete courses error:', error);
+      toast.error('Failed to delete courses');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const openEditModal = (course: AdminCourse) => {
     setEditingCourse(course);
     setFormData({
@@ -540,6 +587,9 @@ export default function CourseManagement() {
     course.courseTitle.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const visibleSelectedCount = filteredCourses.filter(c => selectedIds.has(c._id)).length;
+  const allVisibleSelected = filteredCourses.length > 0 && visibleSelectedCount === filteredCourses.length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -620,6 +670,27 @@ export default function CourseManagement() {
         </Badge>
       </div>
 
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-2 rounded-lg border bg-muted/40 px-4 py-2">
+          <p className="text-sm font-medium">
+            {selectedIds.size} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={selectAllVisible} disabled={allVisibleSelected}>
+              Select All ({filteredCourses.length})
+            </Button>
+            <Button variant="ghost" size="sm" onClick={clearSelection}>
+              Select None
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteModal(true)}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Courses Table */}
       {filteredCourses.length === 0 ? (
         <Card>
@@ -652,6 +723,14 @@ export default function CourseManagement() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all courses"
+                    checked={allVisibleSelected}
+                    onChange={() => (allVisibleSelected ? clearSelection() : selectAllVisible())}
+                  />
+                </TableHead>
                 <TableHead>Course Code</TableHead>
                 <TableHead>UNESCO/New Code</TableHead>
                 <TableHead>Course Title</TableHead>
@@ -663,7 +742,15 @@ export default function CourseManagement() {
             </TableHeader>
             <TableBody>
               {filteredCourses.map((course) => (
-                <TableRow key={course._id}>
+                <TableRow key={course._id} data-state={selectedIds.has(course._id) ? 'selected' : undefined}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${course.courseCode}`}
+                      checked={selectedIds.has(course._id)}
+                      onChange={() => toggleSelectOne(course._id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-mono font-semibold">{course.courseCode}</TableCell>
                   <TableCell className="font-mono text-muted-foreground">{course.unescoCode || 'N/A'}</TableCell>
                   <TableCell>{course.courseTitle}</TableCell>
@@ -1394,6 +1481,56 @@ export default function CourseManagement() {
                 <>
                   <Trash className="h-4 w-4 mr-2" />
                   Delete All Courses
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <Dialog open={showBulkDeleteModal} onOpenChange={setShowBulkDeleteModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Selected Courses
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete {selectedIds.size} selected {selectedIds.size === 1 ? 'course' : 'courses'} from the catalogue. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Warning:</strong> This will remove the selected course data permanently.
+            </AlertDescription>
+          </Alert>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowBulkDeleteModal(false)}
+              disabled={bulkDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete {selectedIds.size} {selectedIds.size === 1 ? 'Course' : 'Courses'}
                 </>
               )}
             </Button>

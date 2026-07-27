@@ -64,6 +64,11 @@ export default function AccountManagement() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const [editingCourse, setEditingCourse] = useState<AccountCourse | null>(null);
   const [courseForm, setCourseForm] = useState({ name: '', code: '', semester: 'Spring', year: '', section: '' });
   const [courseSaving, setCourseSaving] = useState(false);
@@ -180,6 +185,52 @@ export default function AccountManagement() {
     }
   };
 
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filteredAccounts.map(a => a._id)));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const openBulkDelete = () => {
+    setBulkDeleteConfirmText('');
+    setShowBulkDeleteModal(true);
+  };
+
+  const confirmBulkDeleteAccounts = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/admin/accounts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds), confirm: bulkDeleteConfirmText }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify.success(`Deleted ${data.accountsDeleted} account(s) (${data.coursesDeleted} course(s) removed)`);
+        setShowBulkDeleteModal(false);
+        clearSelection();
+        await fetchAccounts();
+      } else {
+        notify.error(data.error || 'Failed to delete accounts');
+      }
+    } catch (err) {
+      console.error('Error bulk deleting accounts', err);
+      notify.error('Failed to delete accounts');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const openCourseEdit = (course: AccountCourse) => {
     setEditingCourse(course);
     setCourseForm({
@@ -252,6 +303,9 @@ export default function AccountManagement() {
     return account.name.toLowerCase().includes(q) || account.email.toLowerCase().includes(q);
   });
 
+  const visibleSelectedCount = filteredAccounts.filter(a => selectedIds.has(a._id)).length;
+  const allVisibleSelected = filteredAccounts.length > 0 && visibleSelectedCount === filteredAccounts.length;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -273,6 +327,24 @@ export default function AccountManagement() {
             />
           </div>
 
+          {selectedIds.size > 0 && (
+            <div className="flex items-center justify-between flex-wrap gap-2 rounded-lg border bg-muted/40 px-4 py-2">
+              <p className="text-sm font-medium">{selectedIds.size} selected</p>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={selectAllVisible} disabled={allVisibleSelected}>
+                  Select All ({filteredAccounts.length})
+                </Button>
+                <Button variant="ghost" size="sm" onClick={clearSelection}>
+                  Select None
+                </Button>
+                <Button variant="destructive" size="sm" onClick={openBulkDelete}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -283,6 +355,14 @@ export default function AccountManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all accounts"
+                        checked={allVisibleSelected}
+                        onChange={() => (allVisibleSelected ? clearSelection() : selectAllVisible())}
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Sign-in</TableHead>
@@ -294,13 +374,21 @@ export default function AccountManagement() {
                 <TableBody>
                   {filteredAccounts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                         No accounts found.
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredAccounts.map((account) => (
-                      <TableRow key={account._id}>
+                      <TableRow key={account._id} data-state={selectedIds.has(account._id) ? 'selected' : undefined}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${account.email}`}
+                            checked={selectedIds.has(account._id)}
+                            onChange={() => toggleSelectOne(account._id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{account.name}</TableCell>
                         <TableCell className="text-muted-foreground">{account.email}</TableCell>
                         <TableCell>
@@ -464,6 +552,50 @@ export default function AccountManagement() {
               disabled={deleting || deleteConfirmText.trim().toLowerCase() !== deletingAccount?.email.toLowerCase()}
             >
               {deleting ? 'Deleting...' : 'Delete Account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk delete accounts */}
+      <Dialog open={showBulkDeleteModal} onOpenChange={(open) => !open && setShowBulkDeleteModal(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Delete {selectedIds.size} Account{selectedIds.size === 1 ? '' : 's'}</DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <Alert variant="destructive">
+              <AlertDescription>
+                This permanently deletes the {selectedIds.size} selected account{selectedIds.size === 1 ? '' : 's'} and every
+                course they own, along with all students, exams, marks, attendance, and project/capstone data in those courses.
+                This cannot be undone.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-delete-confirm">
+                Type <span className="font-medium text-foreground">DELETE</span> to confirm
+              </Label>
+              <Input
+                id="bulk-delete-confirm"
+                value={bulkDeleteConfirmText}
+                onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteModal(false)} disabled={bulkDeleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmBulkDeleteAccounts}
+              disabled={bulkDeleting || bulkDeleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+            >
+              {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} Account${selectedIds.size === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
