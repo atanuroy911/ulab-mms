@@ -150,6 +150,7 @@ export default function CoursePage() {
   const [exportingJSON, setExportingJSON] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
+  const [exportingCourseFileGroup, setExportingCourseFileGroup] = useState<'main' | 'alias' | null>(null);
   const [exportingCourseFileAlpha, setExportingCourseFileAlpha] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
@@ -1030,6 +1031,25 @@ export default function CoursePage() {
     }
   };
 
+  // Downloads a single group's file only. Used for aliased courses, where firing both the
+  // old-code and new-code downloads back-to-back (no user gesture between them) trips
+  // Chrome's "this site is trying to download multiple files" block. Each button click here
+  // is its own user gesture, so the browser lets it through.
+  const handleExportCourseFileGroup = async (group: 'main' | 'alias') => {
+    if (!course) return;
+    setExportingCourseFileGroup(group);
+    try {
+      const codeForFilename = group === 'alias' ? (course.alternateCode || '') : course.code;
+      await downloadCourseFile(group, codeForFilename);
+      notify.exportImport.exportSuccess('Excel', codeForFilename);
+    } catch (err) {
+      console.error('Export error:', err);
+      notify.exportImport.exportError(err instanceof Error ? err.message : undefined);
+    } finally {
+      setExportingCourseFileGroup(null);
+    }
+  };
+
   const handleExportCourseFileAlpha = async () => {
     setExportingCourseFileAlpha(true);
     try {
@@ -1793,6 +1813,8 @@ export default function CoursePage() {
                 exportingCSV={exportingCSV}
                 onExportCourseFile={handleExportCourseFile}
                 exportingCourseFile={exportingCourseFile}
+                onExportCourseFileGroup={handleExportCourseFileGroup}
+                exportingCourseFileGroup={exportingCourseFileGroup}
                 onExportCourseFileAlpha={handleExportCourseFileAlpha}
                 exportingCourseFileAlpha={exportingCourseFileAlpha}
                 calculateFinalGrade={calculateFinalGrade}
@@ -2973,7 +2995,7 @@ export default function CoursePage() {
                     </div>
                     <h3 className="text-xl font-medium text-gray-200 mb-2">Student is Withdrawn</h3>
                     <p className="text-gray-400">
-                      This student's final grade is recorded as Withdrawn (W).
+                      This student&apos;s final grade is recorded as Withdrawn (W).
                     </p>
                   </div>
                 );

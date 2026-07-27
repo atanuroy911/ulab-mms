@@ -37,6 +37,8 @@ interface OverviewViewProps {
   exportingCSV: boolean;
   onExportCourseFile?: () => void;
   exportingCourseFile?: boolean;
+  onExportCourseFileGroup?: (group: 'main' | 'alias') => void;
+  exportingCourseFileGroup?: 'main' | 'alias' | null;
   onExportCourseFileAlpha?: () => void;
   exportingCourseFileAlpha?: boolean;
   /** CO-PO mapping status for export warning */
@@ -56,12 +58,15 @@ export default function OverviewView({
   exportingCSV,
   onExportCourseFile,
   exportingCourseFile,
+  onExportCourseFileGroup,
+  exportingCourseFileGroup,
   onExportCourseFileAlpha,
   exportingCourseFileAlpha,
   coPoStatus = 'ok',
   onGoToCoPo,
 }: OverviewViewProps) {
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
+  const [showExportCodeChooser, setShowExportCodeChooser] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [showUrmsModal, setShowUrmsModal] = useState(false);
   const [showUrmsAutoFillModal, setShowUrmsAutoFillModal] = useState(false);
@@ -520,15 +525,69 @@ export default function OverviewView({
             <Button variant="outline" onClick={() => setShowExportDisclaimer(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 setShowExportDisclaimer(false);
-                if (onExportCourseFile) onExportCourseFile();
+                const useSplit = Boolean(course.aliasEnabled && course.alternateCode && onExportCourseFileGroup);
+                if (useSplit) {
+                  setShowExportCodeChooser(true);
+                } else if (onExportCourseFile) {
+                  onExportCourseFile();
+                }
               }}
               disabled={exportingCourseFile}
               variant={coPoStatus !== 'ok' ? 'destructive' : 'default'}
             >
               {exportingCourseFile ? 'Exporting...' : coPoStatus !== 'ok' ? 'Export Anyway' : 'I Understand, Export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export code chooser - one download per click. Firing both the old-code and new-code
+          downloads back-to-back with no user gesture in between trips Chrome's multi-file
+          download warning, so each code gets its own explicit button instead. */}
+      <Dialog open={showExportCodeChooser} onOpenChange={setShowExportCodeChooser}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Download className="w-5 h-5 mr-2" />
+              Export Course File (Beta)
+            </DialogTitle>
+            <DialogDescription>
+              This course has two codes. Download each file separately - browsers can flag
+              back-to-back automatic downloads as suspicious.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+            <Button
+              onClick={() => onExportCourseFileGroup?.('main')}
+              disabled={exportingCourseFileGroup !== null && exportingCourseFileGroup !== undefined}
+              variant="outline"
+              className="h-auto flex-col items-start gap-1 py-4 text-left"
+            >
+              <span className="flex items-center gap-2 font-semibold text-sm">
+                <Download className="w-4 h-4" />
+                {exportingCourseFileGroup === 'main' ? 'Downloading...' : 'Download for Old Code'}
+              </span>
+              <span className="text-xs text-muted-foreground font-mono">{course.code}</span>
+            </Button>
+            <Button
+              onClick={() => onExportCourseFileGroup?.('alias')}
+              disabled={exportingCourseFileGroup !== null && exportingCourseFileGroup !== undefined}
+              variant="outline"
+              className="h-auto flex-col items-start gap-1 py-4 text-left"
+            >
+              <span className="flex items-center gap-2 font-semibold text-sm">
+                <Download className="w-4 h-4" />
+                {exportingCourseFileGroup === 'alias' ? 'Downloading...' : 'Download for New Code'}
+              </span>
+              <span className="text-xs text-muted-foreground font-mono">{course.alternateCode}</span>
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowExportCodeChooser(false)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

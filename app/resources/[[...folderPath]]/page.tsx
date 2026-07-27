@@ -40,7 +40,6 @@ interface IStoredFile {
 export default function ResourcesPage({ params }: { params: Promise<{ folderPath?: string[] }> }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [folderPath, setFolderPath] = useState<string[]>([]);
   const [folders, setFolders] = useState<IResourceFolder[]>([]);
   const [files, setFiles] = useState<IStoredFile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,16 +49,42 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Clicking a folder/breadcrumb updates currentFolderId/breadcrumb/folderPath synchronously
+  // *and* pushes a new URL. That URL change re-runs this params-driven effect, which would
+  // otherwise re-resolve the whole path from the root via separate API calls - an async
+  // re-resolution that can finish after a later click and clobber it back to an ancestor
+  // folder. Count pending self-triggered navigations so this effect skips re-resolving state
+  // we already know is correct, and only actually resolves from the URL for navigations we
+  // didn't cause ourselves (initial load, shared link, browser back/forward).
+  const pendingInternalNavs = useRef(0);
+
+  // Authoritative, synchronously-updated mirror of breadcrumb/breadcrumbDisplayNames. React
+  // state updates are batched/async, so building the next click's URL from `breadcrumb`/
+  // `folderPath` state directly used a stale value if the user clicked into another folder
+  // before the previous click's state had actually committed - producing duplicated URL
+  // segments (e.g. /resources/Outlines/Outlines/CSE1102/CSE1102). Refs are mutated
+  // immediately, so every navigation reads the true current path.
+  const breadcrumbRef = useRef<IResourceFolder[]>([]);
+  const displayNamesRef = useRef<Map<string, string>>(new Map());
+
   // Initialize folderPath from params
   useEffect(() => {
     const initPath = async () => {
+      if (pendingInternalNavs.current > 0) {
+        pendingInternalNavs.current -= 1;
+        return;
+      }
+
       const resolvedParams = await params;
       const path = resolvedParams.folderPath || [];
-      setFolderPath(path);
-      
+
       if (path.length > 0) {
         // Resolve folder IDs from the folder names path
         await resolveFolderPath(path);
+      } else {
+        setCurrentFolderId(null);
+        setBreadcrumb([]);
+        setBreadcrumbDisplayNames(new Map());
       }
     };
     initPath();
@@ -72,7 +97,7 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
   }, [status, router]);
 
   useEffect(() => {
-    loadFolders();
+    loadFolderContents(currentFolderId);
   }, [currentFolderId]);
 
   // debounce search input
@@ -140,62 +165,72 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
         displayNames.set(foundFolder._id, displayName);
       }
 
-      if (lastFolderId) {
-        setCurrentFolderId(lastFolderId);
-        setBreadcrumb(breadcrumbItems);
-        setBreadcrumbDisplayNames(displayNames);
+      breadcrumbRef.current = breadcrumbItems;
+      displayNamesRef.current = displayNames;
+      setCurrentFolderId(lastFolderId);
+      setBreadcrumb(breadcrumbItems);
+      setBreadcrumbDisplayNames(displayNames);
+
+      // Resolution only found a prefix of the requested path (e.g. a stale/bad URL) - fix the
+      // URL to match what we actually resolved instead of leaving it pointing somewhere the
+      // displayed breadcrumb disagrees with.
+      if (breadcrumbItems.length !== path.length) {
+        const correctedPath = breadcrumbItems.map((f) => encodeURIComponent(displayNames.get(f._id) || f.name));
+        pendingInternalNavs.current += 1;
+        router.replace(correctedPath.length > 0 ? `/resources/${correctedPath.join('/')}` : '/resources');
       }
     } catch (err) {
       toast.error('Failed to load folder path');
     }
   };
 
-  const loadFolders = async () => {
+  // Fetch a folder's subfolders and files together (in parallel, not one-after-the-other) and
+  // apply both results in one atomic update. The previous version awaited folders, flipped
+  // `loading` to false the moment folders arrived, THEN kicked off the files fetch - so the
+  // UI revealed folders, sat still, and then files popped in a beat later. That double-reveal
+  // is what read as "waits, loading sign, then goes inside" instead of a normal file browser.
+  // Request-id guarded so a fast second click (navigating again before this resolves) can't
+  // let a stale, slower response clobber the newer folder's contents.
+  const latestContentsRequestRef = useRef(0);
+
+  const loadFolderContents = async (folderId: string | null) => {
+    const reqId = ++latestContentsRequestRef.current;
     setLoading(true);
     try {
-      const url = currentFolderId
-        ? `/api/resources/folders?parentId=${currentFolderId}`
+      const foldersUrl = folderId
+        ? `/api/resources/folders?parentId=${folderId}`
         : '/api/resources/folders';
 
-      const response = await fetch(url);
-      const data = await response.json();
+      const [foldersRes, filesRes] = await Promise.all([
+        fetch(foldersUrl),
+        folderId ? fetch(`/api/resources/files?folderId=${folderId}`) : null,
+      ]);
 
-      if (data.success) {
-        setFolders(data.folders);
-        if (currentFolderId) {
-          loadFiles(currentFolderId);
-        } else {
-          setFiles([]);
-        }
+      if (reqId !== latestContentsRequestRef.current) return;
+
+      const foldersData = await foldersRes.json();
+      const filesData = filesRes ? await filesRes.json() : { success: true, files: [] };
+
+      if (reqId !== latestContentsRequestRef.current) return;
+
+      if (foldersData.success) {
+        setFolders(foldersData.folders);
       } else {
-        toast.error(data.error || 'Failed to load folders');
+        toast.error(foldersData.error || 'Failed to load folders');
+      }
+
+      if (filesData.success) {
+        setFiles(filesData.files);
+      } else {
+        toast.error(filesData.error || 'Failed to load files');
       }
     } catch (err) {
-      toast.error('Failed to load folders');
+      if (reqId === latestContentsRequestRef.current) {
+        toast.error('Failed to load folder contents');
+      }
     } finally {
-      setLoading(false);
-    }
-  };
-
-  // Prevent race conditions from overlapping fetches
-  const latestFilesRequestRef = useRef(0);
-
-  const loadFiles = async (folderId: string) => {
-    const reqId = ++latestFilesRequestRef.current;
-    try {
-      const response = await fetch(`/api/resources/files?folderId=${folderId}`);
-      const data = await response.json();
-
-      if (reqId !== latestFilesRequestRef.current) return;
-
-      if (data.success) {
-        setFiles(data.files);
-      } else {
-        toast.error(data.error || 'Failed to load files');
-      }
-    } catch (err) {
-      if (reqId === latestFilesRequestRef.current) {
-        toast.error('Failed to load files');
+      if (reqId === latestContentsRequestRef.current) {
+        setLoading(false);
       }
     }
   };
@@ -232,39 +267,56 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
   }, [folders]);
 
   const navigateToFolder = (folderId: string, folderName: string) => {
-    setFiles([]);
+    // Don't clear files/folders here - keep the current view visible until
+    // loadFolderContents (triggered below by the currentFolderId change) swaps both in at
+    // once, so the transition doesn't flash empty before the new folder's contents arrive.
     const displayName = folderDisplayNames.get(folderId) || folderName;
-    
-    // Build new path
-    const newPath = [...folderPath, encodeURIComponent(displayName)];
+
+    // Read/write the refs (not state) so this always builds on the true current path, even
+    // if the previous click's state update hasn't committed yet.
+    const nextBreadcrumb = [...breadcrumbRef.current, { _id: folderId, name: folderName } as IResourceFolder];
+    const nextDisplayNames = new Map(displayNamesRef.current).set(folderId, displayName);
+    breadcrumbRef.current = nextBreadcrumb;
+    displayNamesRef.current = nextDisplayNames;
+
+    const newPath = nextBreadcrumb.map((f) => encodeURIComponent(nextDisplayNames.get(f._id) || f.name));
+
+    pendingInternalNavs.current += 1;
     router.push(`/resources/${newPath.join('/')}`);
-    
+
     setCurrentFolderId(folderId);
-    setBreadcrumb((b) => [...b, { _id: folderId, name: folderName } as IResourceFolder]);
-    setBreadcrumbDisplayNames((m) => new Map(m).set(folderId, displayName));
+    setBreadcrumb(nextBreadcrumb);
+    setBreadcrumbDisplayNames(nextDisplayNames);
   };
 
   const navigateTo = (index: number) => {
-    setFiles([]);
     if (index === -1) {
       // Navigate to root
+      breadcrumbRef.current = [];
+      displayNamesRef.current = new Map();
+
+      pendingInternalNavs.current += 1;
       router.push('/resources');
+
       setCurrentFolderId(null);
       setBreadcrumb([]);
       setBreadcrumbDisplayNames(new Map());
-      setFolderPath([]);
     } else {
-      const newBreadcrumb = breadcrumb.slice(0, index + 1);
-      const newPath = newBreadcrumb.map((f) => encodeURIComponent(breadcrumbDisplayNames.get(f._id) || f.name));
+      const newBreadcrumb = breadcrumbRef.current.slice(0, index + 1);
+      const newDisplayNames = new Map(displayNamesRef.current);
+      breadcrumbRef.current.slice(index + 1).forEach((f) => newDisplayNames.delete(f._id));
+
+      breadcrumbRef.current = newBreadcrumb;
+      displayNamesRef.current = newDisplayNames;
+
+      const newPath = newBreadcrumb.map((f) => encodeURIComponent(newDisplayNames.get(f._id) || f.name));
+
+      pendingInternalNavs.current += 1;
       router.push(`/resources/${newPath.join('/')}`);
-      
-      setCurrentFolderId(breadcrumb[index]._id);
+
+      setCurrentFolderId(newBreadcrumb[newBreadcrumb.length - 1]._id);
       setBreadcrumb(newBreadcrumb);
-      
-      const newDisplayNames = new Map(breadcrumbDisplayNames);
-      breadcrumb.slice(index + 1).forEach((f) => newDisplayNames.delete(f._id));
       setBreadcrumbDisplayNames(newDisplayNames);
-      setFolderPath(newPath);
     }
   };
 
@@ -384,6 +436,9 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
                 </button>
               </div>
             ))}
+            {/* Small inline indicator instead of blanking the page - the current folder's
+                contents stay visible until the next folder's contents are ready to swap in. */}
+            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
           </div>
         </div>
 
@@ -486,7 +541,7 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
             </div>
           )}
 
-          {/* Empty State */}
+          {/* Empty State - only once we're sure there's genuinely nothing here, not mid-fetch */}
           {!loading && folders.length === 0 && files.length === 0 && (
             <div className="text-center py-12">
               <Folder className="w-12 h-12 mx-auto mb-4 text-gray-400" />
@@ -496,8 +551,10 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
             </div>
           )}
 
-          {/* Loading State */}
-          {loading && (
+          {/* First-ever load only (no stale content to keep showing in the meantime) - later
+              navigations are covered by the small inline spinner next to the breadcrumb above,
+              so the current folder's contents stay on screen until the new ones are ready. */}
+          {loading && folders.length === 0 && files.length === 0 && (
             <div className="text-center py-12">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
             </div>
