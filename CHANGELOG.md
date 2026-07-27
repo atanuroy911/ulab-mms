@@ -1,3 +1,24 @@
+# [1.8.0](https://github.com/atanuroy911/ulab-mms/compare/v1.7.0...v1.8.0) (2026-07-27)
+
+
+### Bug Fixes
+
+* drop "Signature:" label above instructor name, just a dash line ([180af62](https://github.com/atanuroy911/ulab-mms/commit/180af62cd91f955ace9b9edfdf84c98a71fdb5e6))
+* fixed course file. remove modern pdf. fix alpha co po file ([53eacd5](https://github.com/atanuroy911/ulab-mms/commit/53eacd516bbdcc91962cb74afefe26141467b528))
+* grades hidden button fix ([ecb449e](https://github.com/atanuroy911/ulab-mms/commit/ecb449e9021eaa3af5a8fb32cc4f2cf1270d23bb))
+* import export bugs fixed ([348ecc2](https://github.com/atanuroy911/ulab-mms/commit/348ecc2b38b1857499d10a709d3e4640fafdb97a))
+* resources tab partial fix and course file export dialoague added ([946f37a](https://github.com/atanuroy911/ulab-mms/commit/946f37a63a9eac5348240003227c112316128231))
+
+
+### Features
+
+* add CO Mark Distribution table + redesign the modern PDF report ([c22fd51](https://github.com/atanuroy911/ulab-mms/commit/c22fd51fb8b2d6afd518b55c62185b8ebd2445af))
+* added import students from URMS (Beta) ([14658dc](https://github.com/atanuroy911/ulab-mms/commit/14658dc2ac172464f86b75a74e745fecb3ca9931))
+* added select all select none and bulk delete in account manager and course manager in admin ([5680df7](https://github.com/atanuroy911/ulab-mms/commit/5680df72f150a52a84a2c9ad14de2f8470688a92))
+* added student view details in admin ([dd03009](https://github.com/atanuroy911/ulab-mms/commit/dd0300937ea29818a1f93aa715518b60ffb2511d))
+* advertised chrome extension ([f812b25](https://github.com/atanuroy911/ulab-mms/commit/f812b253cbea626c58e9c90b9366fa9fa8ce4f38))
+* export to URMS auto fill grade ([4bff622](https://github.com/atanuroy911/ulab-mms/commit/4bff622dd9524d6b66a346d5a4267f3162fb0b43))
+
 # [1.7.0](https://github.com/atanuroy911/ulab-mms/compare/v1.6.1...v1.7.0) (2026-07-25)
 
 
