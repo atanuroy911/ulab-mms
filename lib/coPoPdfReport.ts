@@ -6,9 +6,12 @@
 // `@page`/`page-break` CSS, the browser tab that opens it handles Print -> Save as PDF, so
 // there's no server-side PDF-rendering dependency (no headless browser, no PDF library).
 //
-// Two visual styles share the same computed data:
-//  - "excel": a plain grid replica of the spreadsheet's layout (borders, dense tables).
-//  - "modern": a redesigned report (stat cards, bar visualizations, card-based layout).
+// A plain grid replica of the spreadsheet's layout (borders, dense tables), matching the
+// Sample CO PO.xlsx template this is standing in for - including that template's per-sheet
+// print header (Department name / sheet title / ULAB form code), read directly off the
+// template's `worksheet.headerFooter.oddHeader` for CourseSummary, CO_PO_AttainmentAnalysis,
+// and ContinuousQualityImprovement (GradeSheet/GradingPolicy have no header set in the
+// template, so none is rendered for those sections either).
 import { decodeGradingScale, getGradeDisplay, type GradeThreshold } from '@/app/utils/grading';
 import {
   GRADE_DISTRIBUTION,
@@ -96,7 +99,15 @@ function pageStyleBase(orientation: 'portrait' | 'landscape') {
   `;
 }
 
-// ─── "Excel" style: a plain grid replica of the spreadsheet ───────────────────────────────
+// Reproduces the left/center/right layout of an Excel print header, for the sheets in
+// Sample CO PO.xlsx that actually have one configured (see module comment above).
+function sheetHeader(left: string, center: string, right: string) {
+  return `<div style="display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#333;border-bottom:1px solid #999;padding-bottom:5px;margin-bottom:12px;">
+    <span>${esc(left)}</span><span style="font-weight:bold;">${esc(center)}</span><span>${esc(right)}</span>
+  </div>`;
+}
+
+// ─── A plain grid replica of the spreadsheet ───────────────────────────────────────────────
 
 function excelTable(headers: string[], rows: (string | number)[][], opts?: { fontSize?: number }) {
   const fs = opts?.fontSize ?? 10;
@@ -186,6 +197,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
   </div>
 
   <div class="sheet">
+    ${sheetHeader('Department of CSE, ULAB', 'Course Summary', 'AC18(00)')}
     <h2>Course Summary</h2>
     <table style="width:auto;margin-bottom:12px;">
       <tr><td style="font-weight:bold;padding:2px 8px;">Course Code</td><td style="padding:2px 8px;">${esc(course.code)}</td></tr>
@@ -216,6 +228,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
   </div>
 
   <div class="sheet">
+    ${sheetHeader('Department of CSE, ULAB', 'CO-PO Attainment Analysis', 'CSE004(00)')}
     <h2>CO-PO Attainment Analysis</h2>
     <h3>Mapping of COs to POs</h3>
     ${excelTable(['CO / PO', ...PO_LABELS], mappingRows, { fontSize: 9 })}
@@ -229,6 +242,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
   </div>
 
   <div class="sheet">
+    ${sheetHeader('Department of CSE, ULAB', 'CQI Form', 'CSE005(00)')}
     <h2>Continuous Quality Improvement (CQI)</h2>
     <table style="width:auto;margin-bottom:12px;">
       <tr><td style="font-weight:bold;padding:2px 8px;">Course Code</td><td style="padding:2px 8px;">${esc(course.code)}</td><td style="font-weight:bold;padding:2px 8px;">Section</td><td style="padding:2px 8px;">${esc(course.section)}</td></tr>
@@ -245,229 +259,9 @@ function buildExcelStyleReport(data: CoPoReportData): string {
   `;
 }
 
-// ─── "Modern" style: freely redesigned report ─────────────────────────────────────────────
-//
-// Small design-system tokens (colors/spacing/radius) kept in one <style> block so the report
-// reads as one coherent product instead of a pile of one-off inline styles. Uses a
-// system-font stack (no external fonts - has to render standalone in a print tab), a single
-// accent (indigo) plus semantic green/red/amber for pass/fail/at-risk states, and a
-// consistent card/section rhythm reused across every page.
-
-const MODERN_STYLE = `
-  :root {
-    --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --surface: #ffffff; --canvas: #f8fafc;
-    --accent: #4f46e5; --accent-soft: #eef2ff; --accent-ink: #3730a3;
-    --good: #16a34a; --good-soft: #f0fdf4; --bad: #dc2626; --bad-soft: #fef2f2;
-    --warn: #d97706; --warn-soft: #fffbeb;
-    --radius: 14px; --radius-sm: 8px;
-  }
-  * { box-sizing: border-box; }
-  body { background: var(--canvas); font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink); font-size: 13px; }
-  .sheet { padding: 2mm 0; }
-  .eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
-  h1 { font-size: 26px; letter-spacing: -0.02em; }
-  h2.section-title { font-size: 16px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
-  h2.section-title .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); display: inline-block; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
-  .grid { display: flex; gap: 14px; }
-  .grid > * { flex: 1; min-width: 0; }
-  .stat { border-radius: var(--radius); padding: 14px 16px; border: 1px solid var(--line); background: var(--surface); }
-  .stat .label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
-  .stat .value { font-size: 23px; font-weight: 800; margin-top: 3px; letter-spacing: -0.01em; }
-  table.modern { width: 100%; border-collapse: collapse; font-size: 12px; }
-  table.modern thead th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--line); font-weight: 700; }
-  table.modern tbody td { padding: 7px 10px; border-bottom: 1px solid var(--line); }
-  table.modern tbody tr:nth-child(even) { background: #fafbff; }
-  table.modern tbody tr:last-child td { border-bottom: none; }
-  .pill { display: inline-block; border-radius: 999px; padding: 2px 11px; font-weight: 700; font-size: 11px; }
-  .bar-track { background: #eef0f4; border-radius: 999px; overflow: hidden; height: 9px; width: 100%; }
-  .bar-fill { height: 100%; border-radius: 999px; }
-  .legend-row { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
-  .legend-row:last-child { border-bottom: none; }
-  .signature-line { border-bottom: 1.5px solid var(--ink); width: 220px; height: 28px; }
-`;
-
-function modernBar(percentage: number, tone: 'good' | 'bad' | 'accent' = 'accent') {
-  const clamped = Math.max(0, Math.min(1, percentage));
-  const color = tone === 'good' ? 'var(--good)' : tone === 'bad' ? 'var(--bad)' : 'var(--accent)';
-  return `<div class="bar-track"><div class="bar-fill" style="width:${clamped * 100}%;background:${color};"></div></div>`;
-}
-
-function statCard(label: string, value: string, accent: string) {
-  return `<div class="stat"><div class="label">${esc(label)}</div><div class="value" style="color:${accent};">${esc(value)}</div></div>`;
-}
-
-function sectionTitle(text: string) {
-  return `<h2 class="section-title"><span class="dot"></span>${esc(text)}</h2>`;
-}
-
-function pillFor(achieved: number, threshold: number) {
-  const ok = achieved >= threshold;
-  return `<span class="pill" style="background:${ok ? 'var(--good-soft)' : 'var(--bad-soft)'};color:${ok ? 'var(--good)' : 'var(--bad)'};">${pct(achieved)}</span>`;
-}
-
-function buildModernReport(data: CoPoReportData): string {
-  const { course, instructorName, rows, summary, gradingScale, coPoMatrix, coMarkDistribution } = data;
-  const passCount = summary.n - summary.withdrawnCount - summary.incompleteCount - summary.distributionCounts[GRADE_DISTRIBUTION.findIndex((d) => d.grade === 'F (Fail)')];
-  const passRate = summary.n > 0 ? passCount / summary.n : 0;
-  const attendanceRate = summary.n > 0 && summary.sessionCount > 0 ? 1 - summary.absentStudentCount / summary.n : 1;
-  const maxDistribution = Math.max(1, ...summary.distributionCounts);
-
-  const studentTableRows = rows.map((r, i) => `
-    <tr>
-      <td style="color:var(--muted);">${i + 1}</td>
-      <td>${esc(r.student.studentId)}</td>
-      <td style="font-weight:600;">${esc(r.student.name)}</td>
-      <td style="text-align:center;">${r.total}</td>
-      <td style="text-align:center;">${num(r.percent * 100, 1)}%</td>
-      <td style="text-align:center;"><span class="pill" style="background:var(--accent-soft);color:var(--accent-ink);">${esc(r.gradeDisplay)}</span></td>
-    </tr>`).join('');
-
-  const distributionBars = GRADE_DISTRIBUTION.map(({ label }, i) => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
-      <div style="width:22px;font-size:11px;color:var(--muted);font-weight:600;">${label}</div>
-      <div style="flex:1;">${modernBar(summary.distributionCounts[i] / maxDistribution)}</div>
-      <div style="width:22px;font-size:11px;text-align:right;font-weight:600;">${summary.distributionCounts[i]}</div>
-    </div>`).join('');
-
-  const coBars = CO_LABELS.map((label, i) => `
-    <div style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-        <span style="font-weight:700;">${label}</span><span style="font-weight:600;color:var(--muted);">${pct(summary.coPercentageAvg[i])}</span>
-      </div>
-      ${modernBar(summary.coPercentageAvg[i], summary.coPercentageAvg[i] >= 0.55 ? 'good' : 'bad')}
-    </div>`).join('');
-
-  const poBars = PO_LABELS.map((label, i) => `
-    <div style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-        <span style="font-weight:700;">${label}</span><span style="font-weight:600;color:var(--muted);">${pct(summary.poPercentageAvg[i])}</span>
-      </div>
-      ${modernBar(summary.poPercentageAvg[i], summary.poPercentageAvg[i] >= 0.65 ? 'good' : 'bad')}
-    </div>`).join('');
-
-  const coMarkDistributionTable = `
-    <table class="modern">
-      <thead><tr><th>Assessment Item</th>${CO_LABELS.map((c) => `<th style="text-align:center;">${c}</th>`).join('')}</tr></thead>
-      <tbody>${coMarkDistribution.map(({ label, values }, idx) => `
-        <tr style="${idx === coMarkDistribution.length - 1 ? 'font-weight:700;background:var(--accent-soft);' : ''}">
-          <td>${esc(label)}</td>${values.map((v) => `<td style="text-align:center;">${num(v, 0)}</td>`).join('')}
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-
-  const mappingGrid = `
-    <table class="modern" style="font-size:11px;">
-      <thead><tr><th></th>${PO_LABELS.map((p) => `<th style="text-align:center;">${p}</th>`).join('')}</tr></thead>
-      <tbody>${CO_LABELS.map((co, ci) => `
-        <tr>
-          <td style="font-weight:700;">${co}</td>
-          ${PO_LABELS.map((_, pi) => `<td style="text-align:center;">${coPoMatrix[ci]?.[pi] ? '<span style="color:var(--good);font-weight:800;">✓</span>' : '<span style="color:#cbd5e1;">·</span>'}</td>`).join('')}
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-
-  const gradingScaleChips = gradingScale.map((g) => `
-    <div class="legend-row">
-      <span style="color:var(--muted);">${g.threshold}% and above</span><span style="font-weight:700;">${getGradeDisplay(g.letter, g.modifier)}</span>
-    </div>`).join('');
-
-  const cqiRows = CO_LABELS.map((label, i) => {
-    const achieved = summary.gradedCount > 0 ? summary.coAttainedCounts[i] / summary.gradedCount : 0;
-    return `<tr>
-      <td style="font-weight:700;">${label}</td>
-      <td style="color:var(--muted);">60% of students to achieve 55% of the allocated mark</td>
-      <td style="text-align:center;">${pillFor(achieved, 0.6)}</td>
-    </tr>`;
-  }).join('');
-
-  return `
-  <div class="sheet">
-    <div style="background:linear-gradient(135deg,#4338ca,#7c3aed 60%,#a855f7);color:#fff;border-radius:var(--radius);padding:26px 30px;">
-      <div class="eyebrow" style="color:rgba(255,255,255,0.75);">Course File Report</div>
-      <h1 style="margin:6px 0 4px;color:#fff;">${esc(course.name)}</h1>
-      <div style="font-size:13px;opacity:0.92;">${esc(course.code)} &nbsp;·&nbsp; Section ${esc(course.section)} &nbsp;·&nbsp; ${esc(course.semester)} ${esc(course.year)} &nbsp;·&nbsp; Instructor: ${esc(instructorName)}</div>
-    </div>
-    <div class="grid" style="margin-top:16px;">
-      ${statCard('Students', String(summary.n), 'var(--accent)')}
-      ${statCard('Pass Rate', pct(passRate, 0), 'var(--good)')}
-      ${statCard('Withdrawn', String(summary.withdrawnCount), 'var(--bad)')}
-      ${statCard('Attendance ≥75%', pct(attendanceRate, 0), '#0891b2')}
-    </div>
-    <div class="grid" style="margin-top:14px;">
-      <div class="card">
-        ${sectionTitle('Grade Distribution')}
-        ${distributionBars}
-      </div>
-      <div class="card">
-        ${sectionTitle('Grading Scale')}
-        ${gradingScaleChips}
-      </div>
-    </div>
-  </div>
-
-  <div class="sheet">
-    ${sectionTitle('Student Grade Sheet')}
-    <div class="card" style="padding:8px 16px;">
-      <table class="modern">
-        <thead><tr>
-          <th>No.</th><th>Student ID</th><th>Name</th>
-          <th style="text-align:center;">Total</th><th style="text-align:center;">%</th><th style="text-align:center;">Grade</th>
-        </tr></thead>
-        <tbody>${studentTableRows}</tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="sheet">
-    ${sectionTitle('CO Mark Distribution')}
-    <div class="card" style="margin-bottom:16px;padding:8px 16px;">
-      ${coMarkDistributionTable}
-    </div>
-    <div class="grid">
-      <div class="card">
-        ${sectionTitle('Course Outcome (CO) Attainment')}
-        ${coBars}
-      </div>
-      <div class="card">
-        ${sectionTitle('Program Outcome (PO) Attainment')}
-        ${poBars}
-      </div>
-    </div>
-  </div>
-
-  <div class="sheet">
-    ${sectionTitle('CO → PO Mapping')}
-    <div class="card" style="padding:8px 16px;">
-      ${mappingGrid}
-    </div>
-  </div>
-
-  <div class="sheet">
-    ${sectionTitle('Continuous Quality Improvement (CQI)')}
-    <div class="card" style="padding:8px 16px;margin-bottom:16px;">
-      <table class="modern">
-        <thead><tr><th>CO</th><th>Criteria</th><th style="text-align:center;">Attainment</th></tr></thead>
-        <tbody>${cqiRows}</tbody>
-      </table>
-    </div>
-    <div class="card" style="border-style:dashed;color:var(--muted);font-size:12px;">
-      Plan for Course Improvement (fill in by hand):
-      <div style="margin-top:10px;" class="signature-line"></div>
-    </div>
-    <div style="margin-top:26px;font-size:13px;">
-      <div class="signature-line"></div>
-      <div style="margin-top:8px;font-weight:600;">${esc(instructorName)}</div>
-      <div style="color:var(--muted);font-size:12px;">${new Date().toLocaleDateString()}</div>
-    </div>
-  </div>
-  `;
-}
-
-export function buildCoPoPdfHtml(data: CoPoReportData, style: 'excel' | 'modern'): string {
-  const body = style === 'modern' ? buildModernReport(data) : buildExcelStyleReport(data);
-  const orientation = style === 'modern' ? 'portrait' : 'landscape';
-  const styleBlock = pageStyleBase(orientation) + (style === 'modern' ? MODERN_STYLE : '');
+export function buildCoPoPdfHtml(data: CoPoReportData): string {
+  const body = buildExcelStyleReport(data);
+  const styleBlock = pageStyleBase('landscape');
   return `<!doctype html>
 <html>
 <head>

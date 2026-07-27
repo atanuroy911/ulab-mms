@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles, Grid3x3 } from 'lucide-react';
+import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
 
@@ -41,6 +41,8 @@ interface OverviewViewProps {
   exportingCourseFileGroup?: 'main' | 'alias' | null;
   onExportCourseFileAlpha?: () => void;
   exportingCourseFileAlpha?: boolean;
+  onExportCourseFileAlphaGroup?: (group: 'main' | 'alias') => void;
+  exportingCourseFileAlphaGroup?: 'main' | 'alias' | null;
   /** CO-PO mapping status for export warning */
   coPoStatus?: 'no-mapping' | 'no-max-marks' | 'ok';
   onGoToCoPo?: () => void;
@@ -62,35 +64,43 @@ export default function OverviewView({
   exportingCourseFileGroup,
   onExportCourseFileAlpha,
   exportingCourseFileAlpha,
+  onExportCourseFileAlphaGroup,
+  exportingCourseFileAlphaGroup,
   coPoStatus = 'ok',
   onGoToCoPo,
 }: OverviewViewProps) {
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
-  const [showExportCodeChooser, setShowExportCodeChooser] = useState(false);
+  // Which export flow the code-chooser modal is currently serving - null when closed. Shared
+  // between the Beta and Alpha excel exports since both need the same "pick one code, download
+  // it, come back for the other" treatment for aliased courses.
+  const [exportCodeChooserKind, setExportCodeChooserKind] = useState<'beta' | 'alpha' | null>(null);
   const [showChecklist, setShowChecklist] = useState(false);
   const [showUrmsModal, setShowUrmsModal] = useState(false);
   const [showUrmsAutoFillModal, setShowUrmsAutoFillModal] = useState(false);
-  const [showPdfStyleDialog, setShowPdfStyleDialog] = useState(false);
   const [alphaDisclaimerTarget, setAlphaDisclaimerTarget] = useState<'excel' | 'pdf' | null>(null);
 
   const confirmAlphaDisclaimer = () => {
     const target = alphaDisclaimerTarget;
     setAlphaDisclaimerTarget(null);
     if (target === 'excel') {
-      onExportCourseFileAlpha?.();
+      const useSplit = Boolean(course.aliasEnabled && course.alternateCode && onExportCourseFileAlphaGroup);
+      if (useSplit) {
+        setExportCodeChooserKind('alpha');
+      } else {
+        onExportCourseFileAlpha?.();
+      }
     } else if (target === 'pdf') {
-      setShowPdfStyleDialog(true);
+      openPdfExport();
     }
   };
 
-  const openPdfExport = (style: 'excel' | 'modern') => {
-    setShowPdfStyleDialog(false);
+  const openPdfExport = () => {
     const useSplit = Boolean(course.aliasEnabled && course.alternateCode);
     if (useSplit) {
-      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?style=${style}&group=main`, '_blank');
-      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?style=${style}&group=alias`, '_blank');
+      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?group=main`, '_blank');
+      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?group=alias`, '_blank');
     } else {
-      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha?style=${style}`, '_blank');
+      window.open(`/api/courses/${course._id}/export-copo-pdf-alpha`, '_blank');
     }
   };
 
@@ -437,41 +447,6 @@ export default function OverviewView({
         </DialogContent>
       </Dialog>
 
-      {/* PDF style picker */}
-      <Dialog open={showPdfStyleDialog} onOpenChange={setShowPdfStyleDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Choose a PDF Style</DialogTitle>
-            <DialogDescription>
-              Pick how the course file (grade sheet, CO-PO attainment, course summary, and CQI) should look.
-              It opens in a new tab - use your browser&apos;s Print → Save as PDF to save it.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-            <button
-              onClick={() => openPdfExport('excel')}
-              className="flex flex-col items-start gap-2 rounded-lg border p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-            >
-              <Grid3x3 className="w-5 h-5 text-primary" />
-              <div className="font-semibold text-sm">Excel-style</div>
-              <div className="text-xs text-muted-foreground">
-                A plain grid replica of the spreadsheet - dense tables, gridlines, landscape layout.
-              </div>
-            </button>
-            <button
-              onClick={() => openPdfExport('modern')}
-              className="flex flex-col items-start gap-2 rounded-lg border p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-            >
-              <Sparkles className="w-5 h-5 text-primary" />
-              <div className="font-semibold text-sm">Modern</div>
-              <div className="text-xs text-muted-foreground">
-                A redesigned report with stat cards and attainment bar charts, portrait layout.
-              </div>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Export Disclaimer Modal */}
       <Dialog open={showExportDisclaimer} onOpenChange={setShowExportDisclaimer}>
         <DialogContent>
@@ -530,7 +505,7 @@ export default function OverviewView({
                 setShowExportDisclaimer(false);
                 const useSplit = Boolean(course.aliasEnabled && course.alternateCode && onExportCourseFileGroup);
                 if (useSplit) {
-                  setShowExportCodeChooser(true);
+                  setExportCodeChooserKind('beta');
                 } else if (onExportCourseFile) {
                   onExportCourseFile();
                 }
@@ -546,47 +521,61 @@ export default function OverviewView({
 
       {/* Export code chooser - one download per click. Firing both the old-code and new-code
           downloads back-to-back with no user gesture in between trips Chrome's multi-file
-          download warning, so each code gets its own explicit button instead. */}
-      <Dialog open={showExportCodeChooser} onOpenChange={setShowExportCodeChooser}>
+          download warning, so each code gets its own explicit button instead. Serves both the
+          Beta and Alpha excel exports. */}
+      <Dialog open={exportCodeChooserKind !== null} onOpenChange={(open) => !open && setExportCodeChooserKind(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center">
               <Download className="w-5 h-5 mr-2" />
-              Export Course File (Beta)
+              Export Course File ({exportCodeChooserKind === 'alpha' ? 'Alpha' : 'Beta'})
             </DialogTitle>
             <DialogDescription>
               This course has two codes. Download each file separately - browsers can flag
               back-to-back automatic downloads as suspicious.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-            <Button
-              onClick={() => onExportCourseFileGroup?.('main')}
-              disabled={exportingCourseFileGroup !== null && exportingCourseFileGroup !== undefined}
-              variant="outline"
-              className="h-auto flex-col items-start gap-1 py-4 text-left"
-            >
-              <span className="flex items-center gap-2 font-semibold text-sm">
-                <Download className="w-4 h-4" />
-                {exportingCourseFileGroup === 'main' ? 'Downloading...' : 'Download for Old Code'}
-              </span>
-              <span className="text-xs text-muted-foreground font-mono">{course.code}</span>
-            </Button>
-            <Button
-              onClick={() => onExportCourseFileGroup?.('alias')}
-              disabled={exportingCourseFileGroup !== null && exportingCourseFileGroup !== undefined}
-              variant="outline"
-              className="h-auto flex-col items-start gap-1 py-4 text-left"
-            >
-              <span className="flex items-center gap-2 font-semibold text-sm">
-                <Download className="w-4 h-4" />
-                {exportingCourseFileGroup === 'alias' ? 'Downloading...' : 'Download for New Code'}
-              </span>
-              <span className="text-xs text-muted-foreground font-mono">{course.alternateCode}</span>
-            </Button>
-          </div>
+          {(() => {
+            const activeGroup = exportCodeChooserKind === 'alpha' ? exportingCourseFileAlphaGroup : exportingCourseFileGroup;
+            const isBusy = activeGroup !== null && activeGroup !== undefined;
+            const download = (group: 'main' | 'alias') => {
+              if (exportCodeChooserKind === 'alpha') {
+                onExportCourseFileAlphaGroup?.(group);
+              } else {
+                onExportCourseFileGroup?.(group);
+              }
+            };
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+                <Button
+                  onClick={() => download('main')}
+                  disabled={isBusy}
+                  variant="outline"
+                  className="h-auto flex-col items-start gap-1 py-4 text-left"
+                >
+                  <span className="flex items-center gap-2 font-semibold text-sm">
+                    <Download className="w-4 h-4" />
+                    {activeGroup === 'main' ? 'Downloading...' : 'Download for Old Code'}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">{course.code}</span>
+                </Button>
+                <Button
+                  onClick={() => download('alias')}
+                  disabled={isBusy}
+                  variant="outline"
+                  className="h-auto flex-col items-start gap-1 py-4 text-left"
+                >
+                  <span className="flex items-center gap-2 font-semibold text-sm">
+                    <Download className="w-4 h-4" />
+                    {activeGroup === 'alias' ? 'Downloading...' : 'Download for New Code'}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">{course.alternateCode}</span>
+                </Button>
+              </div>
+            );
+          })()}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowExportCodeChooser(false)}>
+            <Button variant="ghost" onClick={() => setExportCodeChooserKind(null)}>
               Done
             </Button>
           </DialogFooter>

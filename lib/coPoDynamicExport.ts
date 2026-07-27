@@ -192,6 +192,40 @@ export async function buildDynamicCoPoWorkbook(params: {
   });
   gradeSheet.getCell(`C${71 + gradeShift}`).value = summary.totalWeight;
 
+  // ── Row 9 header labels (D-J) and the mirrored weight row (P-V) - both are template
+  //    formulas anchored to the *original* row 64-70 addresses (e.g. D9 is
+  //    `=CONCATENATE("Attendance (",GradeSheet!$C$64,")")`, P9 is `=C64`). spliceRows() above
+  //    does not repoint formulas elsewhere in the sheet the way a real Excel row insert/delete
+  //    would, so for any class that isn't exactly 50 students (i.e. almost always) those
+  //    formulas end up reading whatever row now occupies the old address - usually blank -
+  //    producing "Attendance ()" instead of "Attendance (10)". Overwrite both as literals,
+  //    same as everywhere else in this file, so there's no stale formula left to point wrong.
+  const headerLabels: Array<[string, string, number]> = [
+    ['D9', 'Attendance', summary.assessmentWeights.attendance],
+    ['E9', 'Performance', summary.assessmentWeights.classPerformance],
+    ['F9', 'Quiz', summary.assessmentWeights.quiz],
+    ['G9', 'Assignment', summary.assessmentWeights.assignment],
+    ['H9', 'Midterm', summary.assessmentWeights.midterm],
+    ['I9', 'Project', summary.assessmentWeights.project],
+    ['J9', 'Final', summary.assessmentWeights.final],
+  ];
+  headerLabels.forEach(([cell, label, weight]) => {
+    gradeSheet.getCell(cell).value = `${label} (${weight})`;
+  });
+
+  const mirroredWeights: Array<[string, number]> = [
+    ['P9', summary.assessmentWeights.attendance],
+    ['Q9', summary.assessmentWeights.classPerformance],
+    ['R9', summary.assessmentWeights.quiz],
+    ['S9', summary.assessmentWeights.assignment],
+    ['T9', summary.assessmentWeights.midterm],
+    ['U9', summary.assessmentWeights.project],
+    ['V9', summary.assessmentWeights.final],
+  ];
+  mirroredWeights.forEach(([cell, weight]) => {
+    gradeSheet.getCell(cell).value = weight;
+  });
+
   summary.distributionCounts.forEach((count, i) => {
     gradeSheet.getCell(`H${64 + i + gradeShift}`).value = count;
   });

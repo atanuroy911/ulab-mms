@@ -152,6 +152,7 @@ export default function CoursePage() {
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [exportingCourseFileGroup, setExportingCourseFileGroup] = useState<'main' | 'alias' | null>(null);
   const [exportingCourseFileAlpha, setExportingCourseFileAlpha] = useState(false);
+  const [exportingCourseFileAlphaGroup, setExportingCourseFileAlphaGroup] = useState<'main' | 'alias' | null>(null);
   const [importingCourse, setImportingCourse] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias'>('aggregation');
@@ -1069,6 +1070,23 @@ export default function CoursePage() {
     }
   };
 
+  // Same reasoning as handleExportCourseFileGroup - one user-gesture download per click so
+  // aliased courses don't trip Chrome's multi-download warning.
+  const handleExportCourseFileAlphaGroup = async (group: 'main' | 'alias') => {
+    if (!course) return;
+    setExportingCourseFileAlphaGroup(group);
+    try {
+      const codeForFilename = group === 'alias' ? (course.alternateCode || '') : course.code;
+      await downloadCourseFile(group, codeForFilename, 'export-copo-alpha', '_alpha');
+      notify.exportImport.exportSuccess('Excel', codeForFilename);
+    } catch (err) {
+      console.error('Export error:', err);
+      notify.exportImport.exportError(err instanceof Error ? err.message : undefined);
+    } finally {
+      setExportingCourseFileAlphaGroup(null);
+    }
+  };
+
   const handleImportCourse = async () => {
     if (!importCourseFile) {
       notify.exportImport.noFileSelected();
@@ -1817,6 +1835,8 @@ export default function CoursePage() {
                 exportingCourseFileGroup={exportingCourseFileGroup}
                 onExportCourseFileAlpha={handleExportCourseFileAlpha}
                 exportingCourseFileAlpha={exportingCourseFileAlpha}
+                onExportCourseFileAlphaGroup={handleExportCourseFileAlphaGroup}
+                exportingCourseFileAlphaGroup={exportingCourseFileAlphaGroup}
                 calculateFinalGrade={calculateFinalGrade}
                 coPoStatus={getCoPoStatus()}
                 onGoToCoPo={() => setActiveView('copo')}

@@ -34,7 +34,6 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
-    const style = searchParams.get('style') === 'modern' ? 'modern' : 'excel';
     const group = searchParams.get('group') === 'alias' ? 'alias' : 'main';
     const useSplit = Boolean(course.aliasEnabled && course.alternateCode);
 
@@ -61,7 +60,7 @@ export async function GET(
       instructorName: session.user?.name || '',
     });
 
-    const html = buildCoPoPdfHtml(data, style);
+    const html = buildCoPoPdfHtml(data);
 
     return new NextResponse(html, {
       status: 200,
