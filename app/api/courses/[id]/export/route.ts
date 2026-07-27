@@ -61,6 +61,7 @@ export async function GET(
         code: course.code,
         semester: course.semester,
         year: course.year,
+        section: course.section,
         courseType: course.courseType,
         showFinalGrade: course.showFinalGrade,
         quizAggregation: course.quizAggregation,
@@ -77,6 +78,9 @@ export async function GET(
       students: students.map(student => ({
         studentId: student.studentId,
         name: student.name,
+        probation: student.probation,
+        withdrawn: student.withdrawn,
+        useAlias: student.useAlias,
       })),
       exams: exams.map(exam => ({
         displayName: exam.displayName,

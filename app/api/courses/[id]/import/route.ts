@@ -53,6 +53,7 @@ export async function POST(
       quizWeightage: importData.course.quizWeightage,
       assignmentAggregation: importData.course.assignmentAggregation,
       assignmentWeightage: importData.course.assignmentWeightage,
+      projectWeightage: importData.course.projectWeightage,
       // If gradingScale is not present in import, keep existing (defaults are set in model)
       ...(importData.course.gradingScale && { gradingScale: importData.course.gradingScale }),
     });
@@ -63,6 +64,9 @@ export async function POST(
       const student = await Student.create({
         studentId: studentData.studentId,
         name: studentData.name,
+        probation: studentData.probation,
+        withdrawn: studentData.withdrawn,
+        useAlias: studentData.useAlias,
         courseId,
         userId: session.user.id,
       });

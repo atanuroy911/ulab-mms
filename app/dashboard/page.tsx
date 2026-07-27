@@ -585,6 +585,7 @@ export default function Dashboard() {
       courseData.course.code = duplicateFormData.code;
       courseData.course.semester = duplicateFormData.semester;
       courseData.course.year = duplicateFormData.year;
+      courseData.course.section = duplicateFormData.section;
       courseData.course.courseType = duplicateFormData.courseType;
 
       if (duplicateMode === 'copy') {

@@ -36,12 +36,17 @@ export async function POST(request: NextRequest) {
       code: importData.course.code,
       semester: importData.course.semester,
       year: importData.course.year,
+      // If section is not present in import, keep schema default
+      ...(importData.course.section && { section: importData.course.section }),
       courseType: importData.course.courseType,
       showFinalGrade: importData.course.showFinalGrade,
       quizAggregation: importData.course.quizAggregation,
       quizWeightage: importData.course.quizWeightage,
       assignmentAggregation: importData.course.assignmentAggregation,
       assignmentWeightage: importData.course.assignmentWeightage,
+      projectWeightage: importData.course.projectWeightage,
+      // If gradingScale is not present in import, keep schema default
+      ...(importData.course.gradingScale && { gradingScale: importData.course.gradingScale }),
       userId: session.user.id,
     });
 
@@ -53,6 +58,9 @@ export async function POST(request: NextRequest) {
       const student = await Student.create({
         studentId: studentData.studentId,
         name: studentData.name,
+        probation: studentData.probation,
+        withdrawn: studentData.withdrawn,
+        useAlias: studentData.useAlias,
         courseId,
         userId: session.user.id,
       });
