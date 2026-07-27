@@ -301,6 +301,7 @@ export default function CoursePage() {
     assignmentWeightage: '',
     projectWeightage: '',
     gradingScale: DEFAULT_GRADING_SCALE,
+    showFinalGrade: false,
     aliasEnabled: false,
     alternateCode: '',
   });
@@ -895,6 +896,7 @@ export default function CoursePage() {
         quizAggregation: courseSettingsData.quizAggregation,
         assignmentAggregation: courseSettingsData.assignmentAggregation,
         gradingScale: encodeGradingScale(courseSettingsData.gradingScale),
+        showFinalGrade: courseSettingsData.showFinalGrade,
         aliasEnabled: courseSettingsData.aliasEnabled,
         alternateCode: courseSettingsData.alternateCode,
       };
@@ -1672,6 +1674,7 @@ export default function CoursePage() {
                   gradingScale: course?.gradingScale
                     ? decodeGradingScale(course.gradingScale)
                     : DEFAULT_GRADING_SCALE,
+                  showFinalGrade: Boolean(course?.showFinalGrade),
                   aliasEnabled: Boolean(course?.aliasEnabled),
                   alternateCode: course?.alternateCode || '',
                 });
@@ -2684,6 +2687,35 @@ export default function CoursePage() {
                 {/* Grading Scale Tab */}
                 {courseSettingsTab === 'grading' && (
                   <div className="space-y-6">
+                    <Card>
+                      <CardContent className="space-y-3 pt-6">
+                        <div>
+                          <Label>Show final grade to students?</Label>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Controls whether students see a computed final grade/letter grade when they check their
+                            marks. Individual exam marks are always visible — this only hides the running final total,
+                            useful mid-semester before all grading is finalized.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={!courseSettingsData.showFinalGrade ? 'default' : 'outline'}
+                            onClick={() => setCourseSettingsData({ ...courseSettingsData, showFinalGrade: false })}
+                          >
+                            No
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={courseSettingsData.showFinalGrade ? 'default' : 'outline'}
+                            onClick={() => setCourseSettingsData({ ...courseSettingsData, showFinalGrade: true })}
+                          >
+                            Yes
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
                     <div className="flex items-center justify-between">
                       <h3 className="text-2xl font-semibold flex items-center gap-3">
                         <span className="text-3xl">📊</span>
