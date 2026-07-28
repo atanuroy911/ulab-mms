@@ -127,6 +127,10 @@ export async function buildDynamicCoPoWorkbook(params: {
   gradeSheet.getCell('L2').value = course.section || '';
   gradeSheet.getCell('L3').value = `${course.semester} ${course.year}`.trim();
 
+  // Labs inherit the Assignment exam from Theory, but the column header should read "CLA"
+  const assignmentLabel = course.courseType === 'Lab' ? 'CLA' : 'Assignment';
+  gradeSheet.getCell('S8').value = assignmentLabel;
+
   // ── Per-student rows ──
   // Every column in the student block is written as a plain literal, including the ones
   // the template normally drives with row-relative formulas (A/B/C/D-J reference X/W/P-V of
@@ -190,6 +194,7 @@ export async function buildDynamicCoPoWorkbook(params: {
   weightRows.forEach(([row, weight]) => {
     gradeSheet.getCell(`C${row + gradeShift}`).value = weight;
   });
+  gradeSheet.getCell(`B${67 + gradeShift}`).value = assignmentLabel;
   gradeSheet.getCell(`C${71 + gradeShift}`).value = summary.totalWeight;
 
   // ── Row 9 header labels (D-J) and the mirrored weight row (P-V) - both are template
@@ -204,7 +209,7 @@ export async function buildDynamicCoPoWorkbook(params: {
     ['D9', 'Attendance', summary.assessmentWeights.attendance],
     ['E9', 'Performance', summary.assessmentWeights.classPerformance],
     ['F9', 'Quiz', summary.assessmentWeights.quiz],
-    ['G9', 'Assignment', summary.assessmentWeights.assignment],
+    ['G9', assignmentLabel, summary.assessmentWeights.assignment],
     ['H9', 'Midterm', summary.assessmentWeights.midterm],
     ['I9', 'Project', summary.assessmentWeights.project],
     ['J9', 'Final', summary.assessmentWeights.final],

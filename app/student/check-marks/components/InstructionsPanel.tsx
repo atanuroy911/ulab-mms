@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
 const STEPS = [
-  'Enter your complete Student ID in the search box above',
-  'Click the "Search" button to retrieve your marks',
+  'Sign in with your ULAB Google account above',
+  'Your marks load automatically using the Student ID from your Google account name',
   'View all your courses by clicking on each course card',
   'See detailed marks including raw, weighted, and CO-wise breakdowns',
 ];
@@ -35,8 +35,8 @@ export function InstructionsPanel() {
 
         <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
           <p className="text-sm">
-            <strong>Note:</strong> Make sure you enter your Student ID exactly as it appears in your records
-            (including hyphens or special characters if any).
+            <strong>Note:</strong> Your Google account display name must include your Student ID in parentheses
+            (e.g. &quot;Jane Doe (2021-1-60-001)&quot;) for your marks to load.
           </p>
         </div>
       </CardContent>

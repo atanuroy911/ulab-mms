@@ -335,6 +335,13 @@ export async function POST(
     // Write "W" for withdrawn students in column M (M10 to M59) without touching other cells
     const gradeSheet = workbook.sheet(mapping.sheetName || 'GradeSheet');
     if (gradeSheet) {
+      // Labs inherit the Assignment exam from Theory, but the column header/labels should read "CLA"
+      if (course.courseType === 'Lab') {
+        gradeSheet.cell('S8').value('CLA');
+        gradeSheet.cell('B67').value('CLA');
+        gradeSheet.cell('G9').formula('CONCATENATE("CLA (",GradeSheet!$C$67,")")');
+      }
+
       const targetStudents = students.slice(0, 50);
       targetStudents.forEach((student, index) => {
         if (student.withdrawn) {

@@ -129,11 +129,13 @@ function buildExcelStyleReport(data: CoPoReportData): string {
 
   const distributionRows = GRADE_DISTRIBUTION.map(({ label }, i) => [label, summary.distributionCounts[i]]);
 
+  const assignmentLabel = course.courseType === 'Lab' ? 'CLA' : 'Assignment';
+
   const weightRows = [
     ['Attendance', summary.assessmentWeights.attendance],
     ['Class Performance', summary.assessmentWeights.classPerformance],
     ['Quiz', summary.assessmentWeights.quiz],
-    ['Assignment', summary.assessmentWeights.assignment],
+    [assignmentLabel, summary.assessmentWeights.assignment],
     ['Midterm Exam', summary.assessmentWeights.midterm],
     ['Project', summary.assessmentWeights.project],
     ['Final Exam', summary.assessmentWeights.final],
@@ -170,7 +172,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
       <tr><td style="font-weight:bold;padding:2px 8px;">Instructor</td><td style="padding:2px 8px;">${esc(instructorName)}</td></tr>
     </table>
     ${excelTable(
-      ['No.', 'Student ID', 'Name', 'Attendance', 'Performance', 'Quiz', 'Assignment', 'Mid', 'Project', 'Final', 'Total (100)', '%', 'Grade'],
+      ['No.', 'Student ID', 'Name', 'Attendance', 'Performance', 'Quiz', assignmentLabel, 'Mid', 'Project', 'Final', 'Total (100)', '%', 'Grade'],
       gradeSheetRows,
     )}
     <div style="display:flex;gap:24px;margin-top:12px;">

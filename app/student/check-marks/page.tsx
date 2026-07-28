@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ClipboardList, UserX } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -33,6 +34,18 @@ export default function StudentCheckMarks() {
 
   const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
   const canSearch = isGoogleVerified || adminOverride;
+
+  // Same convention as the attendance check-in flow: the student's Google display name is
+  // expected to end with their ID in parentheses, e.g. "Jane Doe (2021-1-60-001)". We derive
+  // the ID from that instead of asking them to type it, so a signed-in student can only ever
+  // look up their own marks - letting them free-type any ID here would make the Google
+  // sign-in gate pointless as a privacy boundary.
+  const parsedStudentId = (() => {
+    const match = (session?.user?.name || '').match(/\(([^)]+)\)/);
+    return match ? match[1].trim() : null;
+  })();
+  const [nameIdMissing, setNameIdMissing] = useState(false);
+  const autoFetchAttempted = useRef(false);
 
   const fetchMarks = async (id: string, adminPassword?: string) => {
     setError('');
@@ -85,6 +98,18 @@ export default function StudentCheckMarks() {
     await fetchMarks(id, adminPassword);
   };
 
+  useEffect(() => {
+    if (!isGoogleVerified || adminOverride || autoFetchAttempted.current) return;
+    autoFetchAttempted.current = true;
+
+    if (parsedStudentId) {
+      fetchMarks(parsedStudentId);
+    } else {
+      setNameIdMissing(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGoogleVerified, adminOverride, parsedStudentId]);
+
   return (
     <div className="min-h-screen">
       <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
@@ -117,6 +142,22 @@ export default function StudentCheckMarks() {
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {!canSearch ? (
           <AuthGate onAdminOverride={handleAdminOverride} loading={loading} error={error} />
+        ) : isGoogleVerified && !adminOverride ? (
+          (nameIdMissing || error) && (
+            <Card className="mb-6">
+              <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  <UserX className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <CardTitle>{nameIdMissing ? "Couldn't identify your Student ID" : 'Unable to load your marks'}</CardTitle>
+                <CardDescription>
+                  {nameIdMissing
+                    ? <>Your Google account name doesn&apos;t include your Student ID in parentheses (e.g. &quot;Jane Doe (2021-1-60-001)&quot;). Update your Google profile name to include it, then reload this page. Ask your instructor or admin for help if you&apos;re unsure.</>
+                    : error}
+                </CardDescription>
+              </CardContent>
+            </Card>
+          )
         ) : (
           <SearchForm
             studentId={studentId}
