@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/atanuroy911/ulab-mms/compare/v1.8.0...v1.8.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* CLA label fixes + student check marks fix ([c8af513](https://github.com/atanuroy911/ulab-mms/commit/c8af513a68cca1a7923fba8758cf2a947f1b5999))
+
 # [1.8.0](https://github.com/atanuroy911/ulab-mms/compare/v1.7.0...v1.8.0) (2026-07-27)
 
 
