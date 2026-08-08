@@ -36,7 +36,7 @@ export default function ExcelExportMappingInfo() {
             <CardDescription>Data written to specific individual cells.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted">
                   <tr>
@@ -63,7 +63,7 @@ export default function ExcelExportMappingInfo() {
             <CardDescription>Data written down a column for each student.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted">
                   <tr>

@@ -936,7 +936,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
       {/* ─── Direct mark modal (per section, no rubric assigned) ─── */}
       <Dialog open={editingDirectMark !== null} onOpenChange={open => !open && setEditingDirectMark(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               Enter Mark — Group {activeDirectMarkGroup?.groupNumber}
@@ -982,7 +982,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
       {/* ─── QR dialog ─── */}
       <Dialog open={showQr} onOpenChange={setShowQr}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Project Registration QR Code</DialogTitle>
             <DialogDescription>Students scan this or open the link below to register their group.</DialogDescription>
@@ -1000,7 +1000,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
       {/* ─── Start session dialog ─── */}
       <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Start Project Session</DialogTitle>
             <DialogDescription>Students will be able to register and join groups using a link or QR code.</DialogDescription>
@@ -1127,7 +1127,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
       {/* ─── Add section dialog ─── */}
       <Dialog open={showAddSection} onOpenChange={setShowAddSection}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add {sectionLabel[0].toUpperCase() + sectionLabel.slice(1)}</DialogTitle>
             <DialogDescription>

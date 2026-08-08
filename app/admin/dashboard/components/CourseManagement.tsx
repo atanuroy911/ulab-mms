@@ -810,7 +810,7 @@ export default function CourseManagement() {
           </DialogHeader>
 
           <form onSubmit={handleAddCourse} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="add-courseCode">
                   Course Code <span className="text-destructive">*</span>
@@ -854,7 +854,7 @@ export default function CourseManagement() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="add-prerequisite">Prerequisite</Label>
                 <Input
@@ -928,7 +928,7 @@ export default function CourseManagement() {
           </DialogHeader>
 
           <form onSubmit={handleEditCourse} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-courseCode">
                   Course Code <span className="text-destructive">*</span>
@@ -972,7 +972,7 @@ export default function CourseManagement() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-prerequisite">Prerequisite</Label>
                 <Input
@@ -1135,7 +1135,7 @@ export default function CourseManagement() {
           {importResult && (
             <div className="space-y-4">
               {/* Summary */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
@@ -1294,7 +1294,7 @@ export default function CourseManagement() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="min-w-0">
                           <Label className="text-xs text-muted-foreground">Course Code</Label>
                           <p className="text-lg font-mono font-bold text-primary mt-1 break-all">

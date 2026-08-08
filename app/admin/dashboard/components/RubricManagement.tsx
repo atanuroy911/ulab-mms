@@ -241,7 +241,7 @@ export default function RubricManagement() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="rubric-name">Rubric Name *</Label>
                 <Input
@@ -281,7 +281,7 @@ export default function RubricManagement() {
                     value={c.co || ''}
                     onChange={e => updateCriterionField(index, 'co', e.target.value)}
                   />
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {[0, 1, 2, 3].map(level => (
                       <div key={level} className="space-y-1">
                         <Label className="text-xs">Level {level} description</Label>

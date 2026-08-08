@@ -805,7 +805,7 @@ export default function BulkMarkEntryModal({
       {/* Empty Fields Dialog */}
       {showEmptyDialog && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[110]">
-          <div className="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-700 p-6">
+          <div className="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-700 p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-gray-100 mb-4">⚠️ Empty Fields Detected</h3>
             <p className="text-gray-300 mb-6">
               {emptyCount} student(s) have empty marks. What would you like to do?

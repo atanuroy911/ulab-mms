@@ -1556,28 +1556,28 @@ export default function CoursePage() {
       {/* Navbar */}
       <nav className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-4 min-w-0">
               <Link href="/dashboard">
                 <Image
                   src="/ulab.svg"
                   alt="ULAB Logo"
                   width={50}
                   height={50}
-                  className="drop-shadow-lg cursor-pointer"
+                  className="drop-shadow-lg cursor-pointer shrink-0"
                 />
               </Link>
-              <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold flex items-center gap-2 truncate">
                   {course?.courseType === 'Theory' ? (
-                    <BookOpen className="w-6 h-6 text-primary" />
+                    <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
                   ) : (
-                    <FlaskConical className="w-6 h-6 text-primary" />
+                    <FlaskConical className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
                   )}
-                  {course.name}
+                  <span className="truncate">{course.name}</span>
                 </h1>
-                <p className="text-xs mt-1 text-muted-foreground">
-                  {course.code} • {course.semester} {course.year} • Section {course.section} • 
+                <p className="text-xs mt-1 text-muted-foreground truncate">
+                  {course.code} • {course.semester} {course.year} • Section {course.section} •
                   <Badge variant="secondary" className="ml-1">
                     {course.courseType}
                   </Badge>
@@ -1585,42 +1585,67 @@ export default function CoursePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <ThemeToggle />
               <Button variant="outline" size="sm" asChild>
                 <Link href="/settings">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Settings
+                  <Settings className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Settings</span>
                 </Link>
               </Button>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/dashboard">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Dashboard
+                  <ArrowLeft className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Dashboard</span>
                 </Link>
               </Button>
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 size="sm"
                 onClick={() => {
                   notify.auth.signOutSuccess();
                   signOut({ callbackUrl: '/auth/signin' });
                 }}
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
+                <LogOut className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
               </Button>
             </div>
           </div>
         </div>
       </nav>
 
+      {/* Mobile view switcher — the sidebar below is desktop/tablet only */}
+      <div className="md:hidden sticky top-[73px] z-40 bg-background/95 backdrop-blur-md border-b overflow-x-auto">
+        <div className="flex items-center gap-1.5 px-3 py-2 min-w-max">
+          {([
+            ['overview', '📊', 'Overview'],
+            ['exams', '📝', 'Exams'],
+            ['students', '👥', 'Students'],
+            ['marks', '✏️', 'Marks'],
+            ['attendance', '📍', 'Attendance'],
+            ['copo', '🔗', 'CO PO'],
+            ['project', course?.courseType === 'Lab' ? '🚀' : '🎓', course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'],
+          ] as const).map(([view, icon, label]) => (
+            <Button
+              key={view}
+              variant={activeView === view ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setActiveView(view)}
+              className="shrink-0"
+            >
+              <span className="mr-1.5">{icon}</span>{label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {/* Sidebar + Main Content Layout */}
       <div className="flex h-[calc(100vh-72px)]">
-        {/* Left Sidebar */}
-        <aside className={`${
+        {/* Left Sidebar — desktop/tablet only; mobile users switch views with the tab bar above */}
+        <aside className={`hidden md:flex ${
           sidebarOpen ? 'w-64' : 'w-16'
-        } transition-all duration-300 border-r bg-card flex flex-col`}>
+        } transition-all duration-300 border-r bg-card flex-col`}>
           {/* Sidebar Header */}
           <div className="p-4 border-b">
             <Button
@@ -3480,7 +3505,7 @@ export default function CoursePage() {
               <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/50">
                 <h4 className="text-lg font-semibold text-gray-100 mb-3">📈 Final Grade</h4>
                 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
                   <div>
                     <div className="text-xs text-gray-400">Exams Taken</div>
                     <div className="text-xl font-bold text-blue-300">
@@ -3575,7 +3600,7 @@ export default function CoursePage() {
                   <span>Grade Estimator</span>
                 </h4>
                 
-                <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="p-3 bg-purple-900/20 rounded-lg">
                     <div className="text-xs text-gray-400">Current Progress</div>
                     <div className="text-lg font-bold text-purple-300">

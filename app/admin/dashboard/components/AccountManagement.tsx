@@ -759,7 +759,7 @@ export default function AccountManagement() {
               <Label htmlFor="course-code">Code</Label>
               <Input id="course-code" value={courseForm.code} onChange={(e) => setCourseForm({ ...courseForm, code: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Semester</Label>
                 <Select value={courseForm.semester} onValueChange={(value) => setCourseForm({ ...courseForm, semester: value })}>

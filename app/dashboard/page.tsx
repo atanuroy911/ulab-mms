@@ -643,56 +643,57 @@ export default function Dashboard() {
       {/* Navbar */}
       <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-4 min-w-0">
               <Link href="/dashboard">
                 <Image
                   src="/ulab.svg"
                   alt="ULAB Logo"
                   width={100}
                   height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
+                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity w-10 h-10 sm:w-[100px] sm:h-[100px] shrink-0"
                 />
               </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent truncate">
                   Marks Management System
                 </h1>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground truncate">
                   Welcome, {session?.user?.name}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <ThemeToggle />
-              <Button variant="default" asChild>
+              <Button variant="default" size="sm" asChild>
                 <Link href="/resources">
-                  <FileStack className="h-4 w-4 mr-2" />
-                  Resources
+                  <FileStack className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Resources</span>
                 </Link>
               </Button>
-              <Button variant="default" asChild>
+              <Button variant="default" size="sm" asChild>
                 <Link href="/capstone">
-                  <FlaskConical className="h-4 w-4 mr-2" />
-                  Capstone
+                  <FlaskConical className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Capstone</span>
                 </Link>
               </Button>
-              <Button variant="outline" asChild>
+              <Button variant="outline" size="sm" asChild>
                 <Link href="/settings">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                  <Settings className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Settings</span>
                 </Link>
               </Button>
               <Button
                 variant="destructive"
+                size="sm"
                 onClick={() => {
                   notify.auth.signOutSuccess();
                   signOut({ callbackUrl: '/auth/signin' });
                 }}
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
               </Button>
             </div>
           </div>
@@ -701,7 +702,7 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto p-4 pt-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h2 className="text-3xl font-bold mb-2">
               My Courses
@@ -710,9 +711,10 @@ export default function Dashboard() {
               Manage your courses and student marks
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <Button
               variant="outline"
+              size="sm"
               asChild
             >
               <Link href="/dashboard/archived">
@@ -722,12 +724,14 @@ export default function Dashboard() {
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setShowImportModal(true)}
             >
               <Upload className="h-4 w-4 mr-2" />
               Restore Course
             </Button>
             <Button
+              size="sm"
               onClick={() => setShowAddModal(true)}
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -926,7 +930,7 @@ export default function Dashboard() {
                   </Card>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="course-name">Course Name</Label>
                     <Input
@@ -974,7 +978,7 @@ export default function Dashboard() {
 
             {addWizardStep === 1 && (
               <>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="semester">Semester</Label>
                     <select
@@ -1042,7 +1046,7 @@ export default function Dashboard() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="class-time">Class Time (optional)</Label>
                     <Input

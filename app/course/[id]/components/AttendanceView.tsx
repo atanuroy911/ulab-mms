@@ -791,7 +791,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                           <button
                             type="button"
                             aria-label={`Bulk actions for ${session.label}`}
-                            className="rounded p-0.5 opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100"
+                            className="rounded p-0.5 opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100 max-[1024px]:opacity-100"
                           >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </button>
@@ -911,7 +911,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       )}
 
       <Dialog open={showQrModal} onOpenChange={setShowQrModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Attendance QR</DialogTitle>
           </DialogHeader>
@@ -927,7 +927,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       </Dialog>
 
       <Dialog open={showSessionDialog} onOpenChange={setShowSessionDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Choose class date</DialogTitle>
           </DialogHeader>
@@ -991,7 +991,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       </Dialog>
 
       <Dialog open={showManageModal} onOpenChange={setShowManageModal}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage class session</DialogTitle>
           </DialogHeader>
@@ -1044,7 +1044,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
         </DialogContent>
       </Dialog>
       <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Class Settings</DialogTitle>
           </DialogHeader>
@@ -1079,7 +1079,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       />
 
       <Dialog open={showExportWarningModal} onOpenChange={setShowExportWarningModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Class Settings Not Set</DialogTitle>
           </DialogHeader>
@@ -1119,7 +1119,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       </Dialog>
 
       <Dialog open={showPrintChoiceModal} onOpenChange={setShowPrintChoiceModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Which sheet do you want to print?</DialogTitle>
           </DialogHeader>
@@ -1159,7 +1159,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       </Dialog>
 
       <Dialog open={showPrintOptionsModal} onOpenChange={setShowPrintOptionsModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Print Attendance Sheet</DialogTitle>
           </DialogHeader>
@@ -1197,7 +1197,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       </Dialog>
 
       <Dialog open={bulkActionPending !== null} onOpenChange={(open) => !open && setBulkActionPending(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -1235,7 +1235,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       </Dialog>
 
       <Dialog open={pendingImport !== null} onOpenChange={(open) => !open && setPendingImport(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />

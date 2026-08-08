@@ -203,14 +203,14 @@ export default function StudentsView({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Students & Marks</h1>
           <p className="text-sm mt-1 text-muted-foreground">
             Managing {students.length} student(s)
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {selectedStudentIds.size > 0 && (
             <Button
               onClick={() => setShowBulkDeleteModal(true)}

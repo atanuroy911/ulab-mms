@@ -118,32 +118,32 @@ function AdminDashboardContent() {
       <div className="flex-1 flex flex-col">
         {/* Top Navigation Bar */}
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
+            <div className="flex items-center gap-4 min-w-0">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
                 width={40}
                 height={40}
-                className="drop-shadow-lg"
+                className="drop-shadow-lg shrink-0"
               />
-              <div>
-                <h1 className="text-xl font-bold">Admin Dashboard</h1>
-                <p className="text-sm text-muted-foreground">Marks Management System</p>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold truncate">Admin Dashboard</h1>
+                <p className="text-sm text-muted-foreground truncate">Marks Management System</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <ThemeToggle />
               <Button variant="outline" size="sm" asChild>
                 <Link href="/admin/settings">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                  <Settings className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Settings</span>
                 </Link>
               </Button>
               <Button variant="destructive" size="sm" onClick={handleSignOut}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
               </Button>
             </div>
           </div>

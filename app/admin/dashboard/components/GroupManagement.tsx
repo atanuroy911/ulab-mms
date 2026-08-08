@@ -546,7 +546,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       {/* Filter Section */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Filter by Course</Label>
               <select
@@ -663,7 +663,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
                   {group.studentIds.length === 0 ? (
                     <p className="text-sm text-gray-500 italic">No students in this group yet</p>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {group.studentIds.map((student) => (
                         <div key={student._id} className="text-sm p-2 bg-gray-50 rounded">
                           <p className="font-medium">{student.name}</p>
