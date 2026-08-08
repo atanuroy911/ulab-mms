@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import { RUBRIC_CRITERIA, calculateProjectMark } from '@/app/utils/projectRubric';
+import { calculateProjectMark } from '@/app/utils/projectRubric';
 import type { IRubricScores } from '@/app/utils/projectRubric';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ interface GroupEntry {
   groupNumber: number;
   projectTitle: string;
   studentIds: StudentInfo[];
-  examRubricScores: { examId: string; scores: IRubricScores; markMode: 'rubric' | 'direct'; reasoning?: string }[];
+  examRubricScores: { examId: string; scores: IRubricScores; markMode: 'rubric' | 'direct'; reasoning?: string; directMark?: number | null }[];
   markedAt?: string | null;
 }
 
@@ -40,6 +41,21 @@ interface ProjectExam {
   totalMarks: number;
   examCategory?: string;
   examType?: string;
+  rubricTemplateId?: string;
+}
+
+interface RubricCriterion {
+  key: 'c1' | 'c2' | 'c3' | 'c4' | 'c5';
+  label: string;
+  co?: string;
+  descriptions: string[];
+}
+
+interface RubricTemplate {
+  _id: string;
+  name: string;
+  slug: string;
+  criteria: RubricCriterion[];
 }
 
 interface ProjectViewProps {
@@ -49,6 +65,10 @@ interface ProjectViewProps {
   examFilter?: (e: ProjectExam) => boolean;
   title?: string;
   description?: string;
+  courseType?: 'Theory' | 'Lab';
+  defaultProjectWeightage?: number;
+  /** Called after a section (Project exam) is created or its rubric is changed, so the parent can refresh its exam list. */
+  onExamsChanged?: () => void | Promise<void>;
 }
 
 // null means "not yet selected" — different from 0 which means deliberately scored 0
@@ -73,18 +93,14 @@ function getExamRubric(group: GroupEntry, examId: string) {
 
 
 // ─── Detailed rubric inline display ──────────────────────────────────────────
-function RubricDetail({ scores }: { scores: IRubricScores }) {
-  const shortLabels: Record<string, string> = {
-    c1: 'Understanding',
-    c2: 'Design',
-    c3: 'Result',
-    c4: 'Complex Prob.',
-    c5: 'Complex Act.',
-  };
+function RubricDetail({ scores, criteria }: { scores: IRubricScores; criteria: RubricCriterion[] }) {
+  const shortLabels: Record<string, string> = Object.fromEntries(
+    criteria.map(c => [c.key, c.label.split(' ').slice(0, 2).join(' ')])
+  );
 
   return (
     <div className="flex flex-wrap gap-x-6 gap-y-2">
-      {RUBRIC_CRITERIA.map(c => {
+      {criteria.map(c => {
         const v = scores[c.key] ?? 0;
         const barColor =
           v === 3 ? 'bg-green-500'
@@ -123,7 +139,7 @@ function RubricDetail({ scores }: { scores: IRubricScores }) {
 
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function ProjectView({ courseId, students, exams, examFilter, title, description }: ProjectViewProps) {
+export default function ProjectView({ courseId, students, exams, examFilter, title, description, courseType, defaultProjectWeightage, onExamsChanged }: ProjectViewProps) {
   const [state, setState] = useState<ProjectState>({ isActive: false, maxMembersPerGroup: 4, groups: [] });
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -151,9 +167,112 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
   // Saved marks (from Mark records): { [groupId]: { [examId]: number } }
   const [savedMarks, setSavedMarks] = useState<Record<string, Record<string, number>>>({});
 
+  // Rubric templates, keyed by _id — drives which criteria to show per exam (or none = direct marks)
+  const [rubricTemplates, setRubricTemplates] = useState<Record<string, RubricTemplate>>({});
+
+  // Direct-mark drafts for exams with no rubric assigned: { [groupId]: { [examId]: string } }
+  const [directMarkDrafts, setDirectMarkDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [savingDirectMark, setSavingDirectMark] = useState<Record<string, boolean>>({});
+  // Which direct-mark modal is open: { groupId, examId } | null
+  const [editingDirectMark, setEditingDirectMark] = useState<{ groupId: string; examId: string } | null>(null);
+
   const projectExams = examFilter ? exams.filter(examFilter) : exams.filter(e => e.examCategory === 'Project');
 
+  const getRubricTemplate = useCallback((exam: ProjectExam): RubricTemplate | null => {
+    if (!exam.rubricTemplateId) return null;
+    return rubricTemplates[exam.rubricTemplateId] || null;
+  }, [rubricTemplates]);
+
+  // ─── Sections manager (create Project exams / assign rubrics, right from this tab) ──
+  const sectionLabel = courseType === 'Lab' ? 'OEL / CE section' : 'project section';
+  const [showSectionsManager, setShowSectionsManager] = useState(false);
+  const [hasPromptedThisSession, setHasPromptedThisSession] = useState(false);
+
+  // Which exam's rubric is being configured (opens the rubric-picker dialog)
+  const [configuringExamId, setConfiguringExamId] = useState<string | null>(null);
+  const [configuringRubricChoice, setConfiguringRubricChoice] = useState<string>(''); // '' = no rubric
+  const [savingRubricChoice, setSavingRubricChoice] = useState(false);
+
+  // Add-section form
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [addSectionForm, setAddSectionForm] = useState({ displayName: '', totalMarks: '100', rubricTemplateId: '' });
+  const [savingSection, setSavingSection] = useState(false);
+
+  const handleOpenConfigureRubric = (exam: ProjectExam) => {
+    setConfiguringRubricChoice(exam.rubricTemplateId || '');
+    setConfiguringExamId(exam._id);
+  };
+
+  const handleSaveRubricChoice = async () => {
+    if (!configuringExamId) return;
+    setSavingRubricChoice(true);
+    try {
+      const res = await fetch(`/api/exams/${configuringExamId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rubricTemplateId: configuringRubricChoice || null }),
+      });
+      if (res.ok) {
+        toast.success('Rubric updated for this section');
+        setConfiguringExamId(null);
+        await onExamsChanged?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to update rubric');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingRubricChoice(false);
+    }
+  };
+
+  const handleCreateSection = async () => {
+    if (!addSectionForm.displayName.trim()) { toast.error('Enter a section name'); return; }
+    const totalMarks = parseFloat(addSectionForm.totalMarks);
+    if (!totalMarks || totalMarks <= 0) { toast.error('Enter valid total marks'); return; }
+
+    setSavingSection(true);
+    try {
+      const res = await fetch('/api/exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseId,
+          displayName: addSectionForm.displayName.trim(),
+          totalMarks,
+          weightage: defaultProjectWeightage ?? 25,
+          examCategory: 'Project',
+          rubricTemplateId: addSectionForm.rubricTemplateId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`"${data.exam.displayName}" added`);
+        setShowAddSection(false);
+        setAddSectionForm({ displayName: '', totalMarks: '100', rubricTemplateId: '' });
+        await onExamsChanged?.();
+      } else {
+        toast.error(data.error || 'Failed to create section');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingSection(false);
+    }
+  };
+
   // ─── Data fetching ──────────────────────────────────────────────────────────
+
+  const fetchRubricTemplates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/rubrics');
+      if (res.ok) {
+        const data: RubricTemplate[] = await res.json();
+        setRubricTemplates(Object.fromEntries(data.map(r => [r._id, r])));
+      }
+    } catch { /* silent */ }
+  }, []);
 
   const fetchState = useCallback(async () => {
     try {
@@ -180,7 +299,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
     } catch { /* silent */ }
   }, [courseId]);
 
-  useEffect(() => { fetchState(); fetchSavedMarks(); }, [fetchState, fetchSavedMarks]);
+  useEffect(() => { fetchState(); fetchSavedMarks(); fetchRubricTemplates(); }, [fetchState, fetchSavedMarks, fetchRubricTemplates]);
 
   // Auto-refresh when active
   useEffect(() => {
@@ -212,12 +331,46 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
         body: JSON.stringify({ maxMembersPerGroup: parseInt(maxInput) || 4 }),
       });
       const data = await res.json();
-      if (res.ok) { setState(data); toast.success('Project session started!'); }
-      else toast.error(data.error || 'Failed to start session');
+      if (res.ok) {
+        setState(data);
+        toast.success('Project session started!');
+        // Walk the teacher through rubric setup (or creating a first section) right away.
+        if (!hasPromptedThisSession) {
+          setHasPromptedThisSession(true);
+          if (projectExams.length > 0) setShowSectionsManager(true);
+          else setShowAddSection(true);
+        }
+      } else {
+        toast.error(data.error || 'Failed to start session');
+      }
     } finally { setToggling(false); }
   };
 
   // ─── Group actions ──────────────────────────────────────────────────────────
+
+  const [autoAssigning, setAutoAssigning] = useState(false);
+
+  const handleAutoAssignSolo = async () => {
+    setAutoAssigning(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/project/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'autoAssignSolo' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setState(data);
+        toast.success('Each unassigned student placed into their own group');
+      } else {
+        toast.error(data.error || 'Failed to auto-assign students');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
 
   const handleDeleteGroup = async (groupId: string) => {
     if (deletingGroupId !== groupId) { setDeletingGroupId(groupId); return; }
@@ -306,6 +459,47 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
     }
   };
 
+  /** Save a direct (no-rubric) mark for a group+exam */
+  const handleSaveDirectMark = async (group: GroupEntry, exam: ProjectExam) => {
+    const draftKey = `${group._id}:${exam._id}`;
+    const raw = directMarkDrafts[group._id]?.[exam._id];
+    const value = parseFloat(raw ?? '');
+    if (raw === undefined || raw === '' || isNaN(value)) {
+      toast.error('Enter a valid mark first');
+      return;
+    }
+    if (value < 0 || value > exam.totalMarks) {
+      toast.error(`Mark must be between 0 and ${exam.totalMarks}`);
+      return;
+    }
+
+    setSavingDirectMark(prev => ({ ...prev, [draftKey]: true }));
+    try {
+      const res = await fetch(`/api/courses/${courseId}/project`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId: group._id,
+          examRubricScores: { examId: exam._id, markMode: 'direct', directMark: value },
+        }),
+      });
+      if (res.ok) {
+        const updated: ProjectState = await res.json();
+        setState(updated);
+        toast.success('Mark saved');
+        setEditingDirectMark(null);
+        const updatedGroup = updated.groups.find(g => g._id === group._id);
+        if (updatedGroup) await handleSaveGroupMarks(updatedGroup);
+      } else {
+        toast.error('Failed to save mark');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingDirectMark(prev => ({ ...prev, [draftKey]: false }));
+    }
+  };
+
   // ─── Save marks ─────────────────────────────────────────────────────────────
 
   const handleSaveGroupMarks = async (group: GroupEntry) => {
@@ -316,6 +510,15 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
       for (const exam of projectExams) {
         const entry = getExamRubric(group, exam._id);
+        const template = getRubricTemplate(exam);
+
+        if (!template) {
+          // Direct-mark mode: use the saved directMark, skip if not yet entered
+          if (entry?.directMark === undefined || entry?.directMark === null) continue;
+          entries.push({ examId: exam._id, rawMark: entry.directMark });
+          continue;
+        }
+
         const scores = entry?.scores ?? EMPTY_RUBRIC;
         const total = (scores.c1 ?? 0) + (scores.c2 ?? 0) + (scores.c3 ?? 0) + (scores.c4 ?? 0) + (scores.c5 ?? 0);
         if (total === 0) continue; // skip unscored
@@ -383,6 +586,24 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
   const activeRubricExam = editingRubric ? projectExams.find(e => e._id === editingRubric.examId) : null;
   const activeRubricGroup = editingRubric ? state.groups.find(g => g._id === editingRubric.groupId) : null;
+  const activeRubricTemplate = activeRubricExam ? getRubricTemplate(activeRubricExam) : null;
+  const hasPresentationRubricExam = projectExams.some(e => getRubricTemplate(e)?.slug === 'presentation');
+
+  const activeDirectMarkExam = editingDirectMark ? projectExams.find(e => e._id === editingDirectMark.examId) : null;
+  const activeDirectMarkGroup = editingDirectMark ? state.groups.find(g => g._id === editingDirectMark.groupId) : null;
+
+  /** Open the direct-mark modal — seed the draft from the saved mark if not already drafted */
+  const handleOpenDirectMarkModal = (group: GroupEntry, exam: ProjectExam) => {
+    const entry = getExamRubric(group, exam._id);
+    setDirectMarkDrafts(prev => ({
+      ...prev,
+      [group._id]: {
+        ...prev[group._id],
+        [exam._id]: prev[group._id]?.[exam._id] ?? (entry?.directMark !== undefined && entry?.directMark !== null ? String(entry.directMark) : ''),
+      },
+    }));
+    setEditingDirectMark({ groupId: group._id, examId: exam._id });
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -405,6 +626,9 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={() => { fetchState(); fetchSavedMarks(); }} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" />Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowSectionsManager(true)}>
+            <ClipboardList className="w-4 h-4 mr-2" />Manage Sections
           </Button>
           {state.isActive && (
             <>
@@ -464,13 +688,37 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
             className="border-blue-500/40 hover:bg-blue-500/10">
             📄 Export PDF
           </Button>
+          {hasPresentationRubricExam && (
+            <Button size="sm" variant="outline" onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf?rubric=presentation`, '_blank')}
+              className="border-purple-500/40 hover:bg-purple-500/10">
+              📄 Export Presentation Marks
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* ── No project exams warning ── */}
+      {/* ── No sections yet ── */}
       {projectExams.length === 0 && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4 text-sm text-amber-700 dark:text-amber-400">
-          ⚠️ No Project exams found. Go to the <strong>Exams</strong> tab and add exams with the <strong>Project</strong> category to enable marking here.
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm text-amber-700 dark:text-amber-400">
+            ⚠️ No {sectionLabel}s yet — add one (e.g. "First Presentation", "Final Presentation", "Project Report") to start marking.
+          </span>
+          <Button size="sm" onClick={() => setShowAddSection(true)}>
+            <Plus className="w-4 h-4 mr-2" />Add Section
+          </Button>
+        </div>
+      )}
+
+      {/* ── Sections needing rubric review ── */}
+      {projectExams.length > 0 && (
+        <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm text-muted-foreground">
+            <Sparkles className="w-4 h-4 inline mr-1.5 -mt-0.5 text-primary" />
+            {projectExams.length} {sectionLabel}{projectExams.length > 1 ? 's' : ''} configured — review or change how each one is marked.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => setShowSectionsManager(true)}>
+            <Settings className="w-4 h-4 mr-2" />Review Sections & Rubrics
+          </Button>
         </div>
       )}
 
@@ -539,61 +787,43 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                   ))}
                 </div>
 
-                {/* ─ Per-exam mark rows ─ */}
+                {/* ─ Section chips — click a section to mark it in its own modal ─ */}
                 {projectExams.length > 0 && (
-                  <div className="px-5 py-4 space-y-3">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Project Marks</p>
+                  <div className="px-5 py-4">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Project Marks</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {projectExams.map(exam => {
+                        const entry = getExamRubric(group, exam._id);
+                        const template = getRubricTemplate(exam);
+                        const savedMark = groupSaved[exam._id];
+                        const isScored = template
+                          ? !!entry && entry.markMode === 'rubric'
+                          : entry?.directMark !== undefined && entry?.directMark !== null;
 
-                    {projectExams.map(exam => {
-                      const entry = getExamRubric(group, exam._id);
-                      const scores = entry?.scores ?? EMPTY_RUBRIC;
-                      const computed = calculateProjectMark(scores, exam.totalMarks);
-                      const savedMark = groupSaved[exam._id];
-
-                      return (
-                        <div key={exam._id} className="rounded-lg border bg-muted/10 overflow-hidden">
-                          {/* Exam header */}
-                          <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b bg-muted/20">
-                            <div>
-                              <span className="text-sm font-semibold">{exam.displayName}</span>
-                              <span className="text-xs text-muted-foreground ml-2">out of {exam.totalMarks}</span>
+                        return (
+                          <button
+                            key={exam._id}
+                            onClick={() => template ? handleOpenRubric(group, exam._id) : handleOpenDirectMarkModal(group, exam)}
+                            className={`text-left rounded-lg border p-3 transition-all hover:border-primary/50 hover:bg-muted/30 ${
+                              isScored ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-muted/10'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold truncate">{exam.displayName}</span>
+                              {isScored
+                                ? <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0" />
+                                : <span className="text-[10px] text-muted-foreground shrink-0">Not marked</span>}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1 flex items-center justify-between gap-2">
+                              <span className="truncate">{template ? template.name : 'Direct mark'} · /{exam.totalMarks}</span>
                               {savedMark !== undefined && (
-                                <span className="ml-2 text-xs font-medium text-green-600 dark:text-green-400">
-                                  · saved: {savedMark} pts
-                                </span>
+                                <span className="font-medium text-green-600 dark:text-green-400 shrink-0">{savedMark} pts</span>
                               )}
                             </div>
-                          </div>
-
-                          {/* Rubric content */}
-                          <div className="px-4 py-3">
-                            <div className="space-y-3">
-                              {!entry ? (
-                                <p className="text-sm text-muted-foreground italic">No rubric scored yet — click to score</p>
-                              ) : (
-                                <div className="space-y-2">
-                                  <RubricDetail scores={scores} />
-                                  {entry.reasoning && (
-                                    <p className="text-xs text-muted-foreground italic mt-2 border-l-2 pl-2 border-primary/20">
-                                      "{entry.reasoning}"
-                                    </p>
-                                  )}
-                                  <p className="text-sm pt-1">
-                                    Total: <strong>{(scores.c1 ?? 0) + (scores.c2 ?? 0) + (scores.c3 ?? 0) + (scores.c4 ?? 0) + (scores.c5 ?? 0)}/15</strong>
-                                    <span className="mx-1 text-muted-foreground">→</span>
-                                    <strong className="text-foreground">{computed} / {exam.totalMarks} marks</strong>
-                                  </p>
-                                </div>
-                              )}
-                              <Button size="sm" variant="outline" onClick={() => handleOpenRubric(group, exam._id)} className="shrink-0">
-                                📊 {!entry ? 'Score Rubric' : 'Edit Rubric'}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -605,9 +835,16 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
       {/* ── Unassigned students ── */}
       {unassignedStudents.length > 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            ⏳ Unassigned Students <Badge variant="secondary">{unassignedStudents.length}</Badge>
-          </h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              ⏳ Unassigned Students <Badge variant="secondary">{unassignedStudents.length}</Badge>
+            </h3>
+            <Button size="sm" variant="outline" onClick={handleAutoAssignSolo} disabled={autoAssigning}
+              className="border-amber-500/40 hover:bg-amber-500/10">
+              {autoAssigning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Users className="w-4 h-4 mr-2" />}
+              Auto-Assign 1 Per Group
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {unassignedStudents.map(s => (
               <span key={s._id} className="inline-flex items-center gap-1.5 bg-muted/60 rounded-full px-3 py-1 text-sm">
@@ -636,10 +873,13 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                 </span>
               )}
             </DialogTitle>
+            <DialogDescription>
+              Score each criterion 0–3. The final mark is calculated automatically from these scores.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {RUBRIC_CRITERIA.map(criterion => (
+            {(activeRubricTemplate?.criteria ?? []).map(criterion => (
               <div key={criterion.key} className="rounded-xl border p-4 space-y-3">
                 <div>
                   <p className="font-semibold text-sm">{criterion.label}</p>
@@ -694,10 +934,59 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
         </DialogContent>
       </Dialog>
 
+      {/* ─── Direct mark modal (per section, no rubric assigned) ─── */}
+      <Dialog open={editingDirectMark !== null} onOpenChange={open => !open && setEditingDirectMark(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              Enter Mark — Group {activeDirectMarkGroup?.groupNumber}
+              {activeDirectMarkExam && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  · {activeDirectMarkExam.displayName} (out of {activeDirectMarkExam.totalMarks})
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>This section has no rubric assigned — enter one mark for the whole group.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <input
+              type="number"
+              autoFocus
+              min={0}
+              max={activeDirectMarkExam?.totalMarks}
+              step="0.01"
+              value={editingDirectMark ? (directMarkDrafts[editingDirectMark.groupId]?.[editingDirectMark.examId] ?? '') : ''}
+              onChange={e => editingDirectMark && setDirectMarkDrafts(prev => ({
+                ...prev,
+                [editingDirectMark.groupId]: { ...prev[editingDirectMark.groupId], [editingDirectMark.examId]: e.target.value },
+              }))}
+              placeholder={activeDirectMarkExam ? `0 - ${activeDirectMarkExam.totalMarks}` : ''}
+              className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingDirectMark(null)}>Cancel</Button>
+              <Button
+                onClick={() => activeDirectMarkGroup && activeDirectMarkExam && handleSaveDirectMark(activeDirectMarkGroup, activeDirectMarkExam)}
+                disabled={!editingDirectMark || savingDirectMark[`${editingDirectMark.groupId}:${editingDirectMark.examId}`]}
+              >
+                {editingDirectMark && savingDirectMark[`${editingDirectMark.groupId}:${editingDirectMark.examId}`]
+                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  : <Save className="w-4 h-4 mr-2" />}
+                Save Mark
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ─── QR dialog ─── */}
       <Dialog open={showQr} onOpenChange={setShowQr}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Project Registration QR Code</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Project Registration QR Code</DialogTitle>
+            <DialogDescription>Students scan this or open the link below to register their group.</DialogDescription>
+          </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-4">
             <img src={qrImageUrl} alt="Project QR Code" className="rounded-xl border bg-white p-3" />
             <p className="text-xs text-muted-foreground text-center break-all max-w-xs">{projectUrl}</p>
@@ -712,7 +1001,10 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
       {/* ─── Start session dialog ─── */}
       <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Start Project Session</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Start Project Session</DialogTitle>
+            <DialogDescription>Students will be able to register and join groups using a link or QR code.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
               <label className="text-sm font-medium">Maximum members per group</label>
@@ -727,6 +1019,169 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                 Start Session
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Sections manager dialog ─── */}
+      <Dialog open={showSectionsManager} onOpenChange={setShowSectionsManager}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Project Sections & Rubrics</DialogTitle>
+            <DialogDescription>
+              Each {sectionLabel} (e.g. a presentation, demo, or report) can be marked with a rubric (score 0–3
+              per criterion, auto-converted to marks) or directly (one manual mark per group). Choose whichever
+              fits each section.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {projectExams.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-6 text-center">No sections yet — add your first one below.</p>
+            ) : (
+              projectExams.map(exam => {
+                const template = getRubricTemplate(exam);
+                return (
+                  <div key={exam._id} className="rounded-xl border p-4 flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="font-semibold text-sm">{exam.displayName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Out of {exam.totalMarks} marks ·{' '}
+                        {template ? (
+                          <span className="text-primary font-medium">{template.name}</span>
+                        ) : (
+                          <span className="italic">Direct marks (no rubric)</span>
+                        )}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleOpenConfigureRubric(exam)}>
+                      <Settings className="w-3.5 h-3.5 mr-1.5" />
+                      {template ? 'Change Rubric' : 'Assign Rubric'}
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+
+            <Button variant="outline" className="w-full" onClick={() => { setShowSectionsManager(false); setShowAddSection(true); }}>
+              <Plus className="w-4 h-4 mr-2" />Add Another Section
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Rubric picker dialog (per section) ─── */}
+      <Dialog open={configuringExamId !== null} onOpenChange={open => !open && setConfiguringExamId(null)}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Choose Rubric{configuringExamId && (() => {
+                const exam = projectExams.find(e => e._id === configuringExamId);
+                return exam ? ` — ${exam.displayName}` : '';
+              })()}
+            </DialogTitle>
+            <DialogDescription>
+              Pick a rubric to score this section 0–3 per criterion (auto-converted to marks), or choose direct
+              marking to enter one mark per group by hand.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <button
+              onClick={() => setConfiguringRubricChoice('')}
+              className={`w-full text-left rounded-xl border p-4 transition-all ${
+                configuringRubricChoice === '' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <p className="font-semibold text-sm">No rubric — direct marks</p>
+              <p className="text-xs text-muted-foreground mt-1">Enter a single mark per group by hand. Best for quick sections you don't want a rubric for.</p>
+            </button>
+
+            {Object.values(rubricTemplates).map(t => (
+              <button
+                key={t._id}
+                onClick={() => setConfiguringRubricChoice(t._id)}
+                className={`w-full text-left rounded-xl border p-4 transition-all ${
+                  configuringRubricChoice === t._id ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/50'
+                }`}
+              >
+                <p className="font-semibold text-sm">{t.name}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {t.criteria.map(c => (
+                    <span key={c.key} className="text-[11px] bg-muted/60 rounded-full px-2 py-0.5 text-muted-foreground">{c.label}</span>
+                  ))}
+                </div>
+              </button>
+            ))}
+
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setConfiguringExamId(null)}>Cancel</Button>
+              <Button onClick={handleSaveRubricChoice} disabled={savingRubricChoice}>
+                {savingRubricChoice ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save Choice
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Add section dialog ─── */}
+      <Dialog open={showAddSection} onOpenChange={setShowAddSection}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add {sectionLabel[0].toUpperCase() + sectionLabel.slice(1)}</DialogTitle>
+            <DialogDescription>
+              Create a new gradable section, e.g. "First Presentation", "Final Presentation", or "Project Report".
+              You can optionally assign a rubric now, or add it later from Manage Sections.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Section Name</Label>
+              <input
+                type="text"
+                value={addSectionForm.displayName}
+                onChange={e => setAddSectionForm(prev => ({ ...prev, displayName: e.target.value }))}
+                placeholder="e.g., Final Presentation"
+                className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Total Marks</Label>
+              <input
+                type="number"
+                min={1}
+                step="0.01"
+                value={addSectionForm.totalMarks}
+                onChange={e => setAddSectionForm(prev => ({ ...prev, totalMarks: e.target.value }))}
+                className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rubric (optional)</Label>
+              <select
+                value={addSectionForm.rubricTemplateId}
+                onChange={e => setAddSectionForm(prev => ({ ...prev, rubricTemplateId: e.target.value }))}
+                className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">No rubric (direct marks)</option>
+                {Object.values(rubricTemplates).map(t => (
+                  <option key={t._id} value={t._id}>{t.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Rubric scoring is 0–3 per criterion and is converted to marks automatically. You can change this anytime.
+              </p>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setShowAddSection(false)}>Cancel</Button>
+              <Button onClick={handleCreateSection} disabled={savingSection}>
+                {savingSection ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                Add Section
+              </Button>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>

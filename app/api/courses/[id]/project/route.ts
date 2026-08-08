@@ -137,41 +137,51 @@ export async function PATCH(
 
       // Per-exam rubric scores + mark mode
       if (examRubricScores !== undefined) {
-        const { examId, scores, markMode, reasoning } = examRubricScores as {
+        const { examId, scores, markMode, reasoning, directMark } = examRubricScores as {
           examId: string;
-          scores: { c1: number; c2: number; c3: number; c4: number; c5: number };
+          scores?: { c1: number; c2: number; c3: number; c4: number; c5: number };
           markMode: 'direct' | 'rubric';
           reasoning?: string;
+          directMark?: number;
         };
-        
+
         // Completely bypass Mongoose deep array tracking by extracting, mutating, and replacing.
         const currentGroups = projectGroup.toObject().groups;
         const groupIndex = currentGroups.findIndex((g: any) => g._id.toString() === groupId);
-        
+
         if (groupIndex !== -1) {
           const targetGroup = currentGroups[groupIndex];
           if (!targetGroup.examRubricScores) {
             targetGroup.examRubricScores = [];
           }
-          
+
           const existingIndex = targetGroup.examRubricScores.findIndex(
             (e: any) => e.examId?.toString() === examId
           );
 
           if (existingIndex !== -1) {
-            targetGroup.examRubricScores[existingIndex].scores = scores;
+            if (scores !== undefined) targetGroup.examRubricScores[existingIndex].scores = scores;
             if (markMode !== undefined) {
               targetGroup.examRubricScores[existingIndex].markMode = markMode;
             }
             if (reasoning !== undefined) {
               targetGroup.examRubricScores[existingIndex].reasoning = reasoning;
             }
+            if (directMark !== undefined) {
+              targetGroup.examRubricScores[existingIndex].directMark = directMark;
+            }
           } else {
-            targetGroup.examRubricScores.push({ examId: examId as any, scores, markMode: markMode || 'rubric', reasoning: reasoning || '' });
+            targetGroup.examRubricScores.push({
+              examId: examId as any,
+              scores: scores || { c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 },
+              markMode: markMode || 'rubric',
+              reasoning: reasoning || '',
+              directMark: directMark ?? null,
+            });
           }
-          
+
           targetGroup.markedAt = new Date();
-          
+
           // Completely re-assign to trigger full re-cast and save
           projectGroup.groups = currentGroups;
         }

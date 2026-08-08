@@ -84,6 +84,7 @@ interface Exam {
   numberOfCOs?: number;
   numberOfQuestions?: number;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
+  rubricTemplateId?: string;
 }
 
 interface Mark {
@@ -193,7 +194,16 @@ export default function CoursePage() {
     numberOfCOs: '',
     numberOfQuestions: '',
     examCategory: '',
+    rubricTemplateId: '',
   });
+  const [rubricTemplates, setRubricTemplates] = useState<{ _id: string; name: string; slug: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/rubrics')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setRubricTemplates(Array.isArray(data) ? data : []))
+      .catch(() => setRubricTemplates([]));
+  }, []);
 
   const getInheritedExamWeightage = (examCategory: string) => {
     if (examCategory === 'Quiz') {
@@ -295,6 +305,7 @@ export default function CoursePage() {
     numberOfQuestions: '',
     totalMarks: '',
     examCategory: '',
+    rubricTemplateId: '',
   });
   const [courseSettingsData, setCourseSettingsData] = useState({
     quizAggregation: 'average' as 'average' | 'best',
@@ -599,6 +610,11 @@ export default function CoursePage() {
         examData.numberOfQuestions = parseInt(examFormData.numberOfQuestions);
       }
 
+      // Rubric template only applies to Project exams
+      if (examFormData.examCategory === 'Project' && examFormData.rubricTemplateId) {
+        examData.rubricTemplateId = examFormData.rubricTemplateId;
+      }
+
       const response = await fetch('/api/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -611,7 +627,7 @@ export default function CoursePage() {
         notify.exam.created(data.exam.displayName);
         setExams([...exams, data.exam]);
         setShowExamModal(false);
-        setExamFormData({ displayName: '', totalMarks: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', examCategory: '' });
+        setExamFormData({ displayName: '', totalMarks: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', examCategory: '', rubricTemplateId: '' });
       } else {
         notify.exam.createError(data.error);
         setError(data.error);
@@ -642,6 +658,7 @@ export default function CoursePage() {
         numberOfCOs: '',
         numberOfQuestions: '',
         examCategory: presetCategory,
+        rubricTemplateId: '',
       });
     } else {
       setExamFormData({
@@ -651,6 +668,7 @@ export default function CoursePage() {
         numberOfCOs: '',
         numberOfQuestions: '',
         examCategory: presetCategory || '',
+        rubricTemplateId: '',
       });
     }
 
@@ -822,6 +840,9 @@ export default function CoursePage() {
       if (examSettings.numberOfCOs) updateData.numberOfCOs = parseInt(examSettings.numberOfCOs);
       if (examSettings.numberOfQuestions) updateData.numberOfQuestions = parseInt(examSettings.numberOfQuestions);
       if (examSettings.examCategory) updateData.examCategory = examSettings.examCategory;
+      if (examSettings.examCategory === 'Project') {
+        updateData.rubricTemplateId = examSettings.rubricTemplateId || null;
+      }
 
       const response = await fetch(`/api/exams/${showExamSettings}`, {
         method: 'PUT',
@@ -833,7 +854,7 @@ export default function CoursePage() {
         await fetchCourseData();
         notify.exam.settingsUpdated();
         setShowExamSettings(null);
-        setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', totalMarks: '', examCategory: '' });
+        setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', totalMarks: '', examCategory: '', rubricTemplateId: '' });
         setError('');
       } else {
         const data = await response.json();
@@ -1939,13 +1960,16 @@ export default function CoursePage() {
             )}
 
             {activeView === 'project' && (
-              <ProjectView 
-                courseId={courseId} 
-                students={students} 
+              <ProjectView
+                courseId={courseId}
+                students={students}
                 exams={exams}
                 title={course?.courseType === 'Lab' ? 'OEL / CE Project Groups' : 'Project Groups'}
                 description={course?.courseType === 'Lab' ? 'Score each group\'s OEL / CE project using the rubric. Marks are pushed to the Marks tab.' : undefined}
                 examFilter={(e) => e.examCategory === 'Project'}
+                courseType={course?.courseType}
+                defaultProjectWeightage={course?.projectWeightage ?? 25}
+                onExamsChanged={fetchCourseData}
               />
             )}
 
@@ -2192,6 +2216,25 @@ export default function CoursePage() {
               />
               <p className="text-xs text-muted-foreground mt-1">For question-wise marks breakdown (usually for MainExam category)</p>
             </div>
+
+            {examFormData.examCategory === 'Project' && (
+              <div>
+                <Label>Rubric</Label>
+                <select
+                  value={examFormData.rubricTemplateId}
+                  onChange={(e) => setExamFormData({ ...examFormData, rubricTemplateId: e.target.value })}
+                  className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+                >
+                  <option value="">No rubric (direct marks)</option>
+                  {rubricTemplates.map((r) => (
+                    <option key={r._id} value={r._id}>{r.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Choose a rubric to score this section 0–3 per criterion in the Project tab, or leave blank to enter a single mark per group directly.
+                </p>
+              </div>
+            )}
 
             <DialogFooter>
               <Button
@@ -2464,6 +2507,25 @@ export default function CoursePage() {
               />
               <p className="text-xs text-muted-foreground mt-1">For question-wise marks breakdown (usually for MainExam category)</p>
             </div>
+
+            {examSettings.examCategory === 'Project' && (
+              <div>
+                <Label>Rubric</Label>
+                <select
+                  value={examSettings.rubricTemplateId}
+                  onChange={(e) => setExamSettings({ ...examSettings, rubricTemplateId: e.target.value })}
+                  className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+                >
+                  <option value="">No rubric (direct marks)</option>
+                  {rubricTemplates.map((r) => (
+                    <option key={r._id} value={r._id}>{r.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Choose a rubric to score this section 0–3 per criterion in the Project tab, or leave blank to enter a single mark per group directly.
+                </p>
+              </div>
+            )}
 
             <DialogFooter>
               <Button

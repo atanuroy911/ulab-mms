@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
+import { isUlabEmail } from '@/lib/googleAccount';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +13,13 @@ export async function POST(request: NextRequest) {
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: 'Please provide all required fields' },
+        { status: 400 }
+      );
+    }
+
+    if (!isUlabEmail(email)) {
+      return NextResponse.json(
+        { error: 'Please use your @ulab.edu.bd email address to register' },
         { status: 400 }
       );
     }

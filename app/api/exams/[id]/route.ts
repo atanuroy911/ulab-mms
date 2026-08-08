@@ -5,6 +5,8 @@ import dbConnect from '@/lib/mongodb';
 import Exam from '@/models/Exam';
 import Course from '@/models/Course';
 import Mark from '@/models/Mark';
+import RubricTemplate from '@/models/RubricTemplate';
+import mongoose from 'mongoose';
 
 // PUT - Update exam settings
 export async function PUT(
@@ -19,7 +21,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { displayName, weightage, numberOfCOs, numberOfQuestions, totalMarks, examCategory } =
+    const { displayName, weightage, numberOfCOs, numberOfQuestions, totalMarks, examCategory, rubricTemplateId } =
       await request.json();
 
     await dbConnect();
@@ -80,6 +82,22 @@ export async function PUT(
         );
       }
       updateData.totalMarks = totalMarks;
+    }
+
+    // rubricTemplateId only applies to Project exams; empty/null clears it back to direct marking
+    if (rubricTemplateId !== undefined) {
+      if (!rubricTemplateId) {
+        updateData.rubricTemplateId = null;
+      } else {
+        if (!mongoose.Types.ObjectId.isValid(rubricTemplateId)) {
+          return NextResponse.json({ error: 'Invalid rubric template' }, { status: 400 });
+        }
+        const rubric = await RubricTemplate.findById(rubricTemplateId);
+        if (!rubric) {
+          return NextResponse.json({ error: 'Rubric template not found' }, { status: 400 });
+        }
+        updateData.rubricTemplateId = rubricTemplateId;
+      }
     }
 
     const exam = await Exam.findOneAndUpdate(

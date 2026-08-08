@@ -6,7 +6,7 @@ import ProjectGroup from '@/models/ProjectGroup';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
-import { RUBRIC_CRITERIA } from '@/app/utils/projectRubric';
+import RubricTemplate from '@/models/RubricTemplate';
 
 export async function GET(
   _req: NextRequest,
@@ -28,6 +28,10 @@ export async function GET(
 
     const projectGroup = await ProjectGroup.findOne({ courseId: id });
     const projectExams = await Exam.find({ courseId: id, examCategory: 'Project' });
+
+    const templateIds = [...new Set(projectExams.map((e: any) => e.rubricTemplateId?.toString()).filter(Boolean))];
+    const templates = await RubricTemplate.find({ _id: { $in: templateIds } });
+    const templatesById = new Map(templates.map((t: any) => [t._id.toString(), t]));
 
     const groups = projectGroup?.groups || [];
 
@@ -85,8 +89,13 @@ ${groups.length === 0 ? '<p>No groups created yet.</p>' : groups.map((group: any
       <div class="members-list">${members || '<span style="color:#aaa;font-style:italic">No members assigned</span>'}</div>
     </div>
     
-    ${projectExams.map((exam: any) => `
-      <h2>${exam.displayName} (Total Marks: ${exam.totalMarks})</h2>
+    ${projectExams.map((exam: any) => {
+      const template = exam.rubricTemplateId ? templatesById.get(exam.rubricTemplateId.toString()) : null;
+      const criteria = template?.criteria || [];
+
+      return `
+      <h2>${exam.displayName} (Total Marks: ${exam.totalMarks})${template ? ` — ${template.name}` : ' — Direct Mark'}</h2>
+      ${template ? `
       <table>
         <thead>
           <tr>
@@ -98,11 +107,11 @@ ${groups.length === 0 ? '<p>No groups created yet.</p>' : groups.map((group: any
           </tr>
         </thead>
         <tbody>
-          ${RUBRIC_CRITERIA.map(c => `
+          ${criteria.map((c: any) => `
             <tr>
               <td>
                 <strong>${c.key.toUpperCase()}: ${c.label}</strong><br/>
-                <span style="font-size: 9px; color: #888;">${c.co}</span>
+                <span style="font-size: 9px; color: #888;">${c.co || ''}</span>
               </td>
               <td class="score-col"><span class="score-desc">${c.descriptions[0]}</span></td>
               <td class="score-col"><span class="score-desc">${c.descriptions[1]}</span></td>
@@ -112,17 +121,19 @@ ${groups.length === 0 ? '<p>No groups created yet.</p>' : groups.map((group: any
           `).join('')}
         </tbody>
       </table>
-      
+      ` : ''}
+
       <div class="reasoning-box">
         <div class="title">Reasoning / Comments:</div>
       </div>
-      
+
       <div class="final-score">
         <div class="final-score-box">
           Final Score: &nbsp; &nbsp; &nbsp; &nbsp; / ${exam.totalMarks}
         </div>
       </div>
-    `).join('<div style="margin-top: 40px; border-top: 2px dashed #ccc; padding-top: 40px;"></div>')}
+    `;
+    }).join('<div style="margin-top: 40px; border-top: 2px dashed #ccc; padding-top: 40px;"></div>')}
   </div>
   `;
 }).join('')}

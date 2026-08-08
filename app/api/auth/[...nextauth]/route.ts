@@ -42,6 +42,10 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email/password sign-in is currently disabled. Please use "Continue with Google" instead.');
         }
 
+        if (!isUlabEmail(credentials.email)) {
+          throw new Error('Please sign in with your @ulab.edu.bd email address');
+        }
+
         const user = await User.findOne({ email: credentials.email });
 
         if (!user) {

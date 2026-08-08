@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import ProjectGroup from '@/models/ProjectGroup';
 import Course from '@/models/Course';
+import Student from '@/models/Student';
 
 export async function POST(
   req: NextRequest,
@@ -23,9 +24,46 @@ export async function POST(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const { action } = body as { action?: string };
+
     let projectGroup = await ProjectGroup.findOne({ courseId: id });
     if (!projectGroup) {
       return NextResponse.json({ error: 'Project session not started' }, { status: 404 });
+    }
+
+    // Auto-assign every unassigned, non-withdrawn student to their own solo group
+    if (action === 'autoAssignSolo') {
+      const allStudents = await Student.find({ courseId: id, withdrawn: { $ne: true } }).select('_id');
+      const assignedIds = new Set(
+        projectGroup.groups.flatMap((g: any) => g.studentIds.map((sid: any) => sid.toString()))
+      );
+      const unassigned = allStudents.filter((s: any) => !assignedIds.has(s._id.toString()));
+
+      if (unassigned.length === 0) {
+        return NextResponse.json({ error: 'No unassigned students to place' }, { status: 400 });
+      }
+
+      let maxNum = projectGroup.groups.reduce(
+        (max: number, g: any) => Math.max(max, g.groupNumber),
+        0
+      );
+
+      for (const student of unassigned) {
+        maxNum += 1;
+        projectGroup.groups.push({
+          groupNumber: maxNum,
+          projectTitle: '',
+          studentIds: [student._id],
+          rubricScores: { c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 },
+          markedAt: null,
+        } as any);
+      }
+
+      await projectGroup.save();
+      await projectGroup.populate('groups.studentIds', 'name studentId');
+
+      return NextResponse.json(projectGroup);
     }
 
     const maxNum = projectGroup.groups.reduce(

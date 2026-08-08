@@ -168,7 +168,7 @@ function SignUpForm() {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="your.email@example.com"
+                      placeholder="yourname@ulab.edu.bd"
                       value={formData.email}
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
@@ -176,6 +176,7 @@ function SignUpForm() {
                       required
                       disabled={loading}
                     />
+                    <p className="text-xs text-muted-foreground">Use your @ulab.edu.bd email</p>
                   </div>
 
                   <div className="space-y-2">

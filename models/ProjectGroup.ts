@@ -10,6 +10,7 @@ export interface IExamRubricEntry {
   scores: IRubricScores;
   markMode: 'direct' | 'rubric';
   reasoning?: string;
+  directMark?: number | null; // used when markMode === 'direct'
 }
 
 export interface IProjectGroupEntry {
@@ -51,6 +52,7 @@ const ExamRubricEntrySchema = new Schema(
     },
     markMode: { type: String, enum: ['direct', 'rubric'], default: 'direct' },
     reasoning: { type: String, default: '' },
+    directMark: { type: Number, default: null },
   },
   { _id: false }
 );

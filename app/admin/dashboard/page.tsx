@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users } from 'lucide-react';
+import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar, SidebarItem } from '@/app/components/AdminSidebar';
@@ -15,6 +15,7 @@ import ResourcesManager from './components/ResourcesManager';
 import CapstoneManagement from './components/CapstoneManagement';
 import SemesterManagement from './components/SemesterManagement';
 import AccountManagement from './components/AccountManagement';
+import RubricManagement from './components/RubricManagement';
 
 const sidebarItems: SidebarItem[] = [
   {
@@ -46,6 +47,11 @@ const sidebarItems: SidebarItem[] = [
     title: 'Capstone Management',
     href: '/admin/dashboard?tab=capstone',
     icon: GraduationCap,
+  },
+  {
+    title: 'Rubric Management',
+    href: '/admin/dashboard?tab=rubrics',
+    icon: ClipboardList,
   },
 ];
 
@@ -151,6 +157,7 @@ function AdminDashboardContent() {
           {activeTab === 'resources' && <ResourcesManager />}
           {activeTab === 'semesters' && <SemesterManagement />}
           {activeTab === 'capstone' && <CapstoneManagement />}
+          {activeTab === 'rubrics' && <RubricManagement />}
         </main>
       </div>
     </div>

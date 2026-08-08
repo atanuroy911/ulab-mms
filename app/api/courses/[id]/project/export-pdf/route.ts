@@ -6,10 +6,11 @@ import ProjectGroup from '@/models/ProjectGroup';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
-import { calculateProjectMark, RUBRIC_CRITERIA } from '@/app/utils/projectRubric';
+import RubricTemplate from '@/models/RubricTemplate';
+import { calculateProjectMark } from '@/app/utils/projectRubric';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: any }
 ) {
   try {
@@ -26,8 +27,22 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
+    const rubricFilter = req.nextUrl.searchParams.get('rubric'); // e.g. 'presentation' - filters to exams using this rubric slug
+
     const projectGroup = await ProjectGroup.findOne({ courseId: id });
-    const projectExams = await Exam.find({ courseId: id, examCategory: 'Project' });
+    let projectExams = await Exam.find({ courseId: id, examCategory: 'Project' });
+
+    // Batch-fetch every rubric template referenced by this course's Project exams
+    const templateIds = [...new Set(projectExams.map((e: any) => e.rubricTemplateId?.toString()).filter(Boolean))];
+    const templates = await RubricTemplate.find({ _id: { $in: templateIds } });
+    const templatesById = new Map(templates.map((t: any) => [t._id.toString(), t]));
+
+    if (rubricFilter) {
+      projectExams = projectExams.filter((e: any) => {
+        const t = e.rubricTemplateId ? templatesById.get(e.rubricTemplateId.toString()) : null;
+        return t?.slug === rubricFilter;
+      });
+    }
 
     const groups = projectGroup?.groups || [];
 
@@ -69,9 +84,13 @@ export async function GET(
   Generated: ${new Date().toLocaleString()}
 </div>
 
-${projectExams.length === 0 ? '<p>No project exams created yet.</p>' : projectExams.map((exam: any) => `
+${projectExams.length === 0 ? '<p>No project exams found.</p>' : projectExams.map((exam: any) => {
+  const template = exam.rubricTemplateId ? templatesById.get(exam.rubricTemplateId.toString()) : null;
+  const criteria = template?.criteria || [];
+
+  return `
 <h2 style="margin-top: 24px; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 4px;">
-  ${exam.displayName} <span style="font-weight: normal; color: #666; font-size: 11px; margin-left: 8px;">(Total Marks: ${exam.totalMarks})</span>
+  ${exam.displayName} <span style="font-weight: normal; color: #666; font-size: 11px; margin-left: 8px;">(Total Marks: ${exam.totalMarks})${template ? ` · ${template.name}` : ' · Direct mark (no rubric)'}</span>
 </h2>
 <table>
   <thead>
@@ -79,7 +98,10 @@ ${projectExams.length === 0 ? '<p>No project exams created yet.</p>' : projectEx
       <th style="width:45px">Grp</th>
       <th style="width:150px">Project Title</th>
       <th>Members</th>
-      ${RUBRIC_CRITERIA.map(c => `<th style="width:48px;text-align:center" title="${c.label}">${c.label.split(' ').slice(0, 2).join(' ')}</th>`).join('')}
+      ${template
+        ? criteria.map((c: any) => `<th style="width:48px;text-align:center" title="${c.label}">${c.label.split(' ').slice(0, 2).join(' ')}</th>`).join('')
+        : ''
+      }
       <th style="width:65px;text-align:center">Calc.</th>
       <th style="width:85px;text-align:center">Manual</th>
     </tr>
@@ -93,6 +115,18 @@ ${projectExams.length === 0 ? '<p>No project exams created yet.</p>' : projectEx
             return s ? `<span class="student-chip">${s.name} (${s.studentId})</span>` : '';
           }).join('');
           const examEntry = group.examRubricScores?.find((e: any) => e.examId?.toString() === exam?._id?.toString());
+
+          if (!template) {
+            const directMark = examEntry?.directMark;
+            return `<tr>
+              <td class="group-num">${group.groupNumber}</td>
+              <td>${group.projectTitle || '<span style="color:#aaa;font-style:italic">—</span>'}</td>
+              <td>${members || '<span style="color:#aaa;font-style:italic">No members</span>'}</td>
+              <td class="score-cell">${directMark !== undefined && directMark !== null ? directMark : '<span style="color:#aaa">—</span>'}</td>
+              <td><div class="mark-box"></div></td>
+            </tr>`;
+          }
+
           const rs = examEntry?.scores || { c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 };
           const calcMark = calculateProjectMark(rs, exam.totalMarks);
           return `<tr>
@@ -107,11 +141,10 @@ ${projectExams.length === 0 ? '<p>No project exams created yet.</p>' : projectEx
     }
   </tbody>
 </table>
-`).join('')}
+`;
+}).join('')}
 
 <div class="footer">
-  <strong>Rubric scoring:</strong>
-  ${RUBRIC_CRITERIA.map((c, i) => `C${i+1}: ${c.label}`).join(' &nbsp;|&nbsp; ')}<br/>
   <strong>Scores:</strong> 0 = No/Wrong &nbsp;|&nbsp; 1 = Poor &nbsp;|&nbsp; 2 = Developing &nbsp;|&nbsp; 3 = Accomplished &nbsp;|&nbsp;
   <strong>Formula:</strong> Σ (score/3) × (Exam Marks/5) per criterion
 </div>

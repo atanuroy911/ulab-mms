@@ -9,6 +9,7 @@ export interface IExam extends Document {
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others'; // Category for grouping
   numberOfCOs?: number; // For theory exams and Lab Final/OEL when needed
   numberOfQuestions?: number; // For question-wise marking
+  rubricTemplateId?: mongoose.Types.ObjectId; // For Project exams: which rubric to mark with; null = direct marks, no rubric
   courseId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -55,6 +56,11 @@ const ExamSchema: Schema = new Schema(
     numberOfQuestions: {
       type: Number,
       min: [0, 'Number of Questions cannot be negative'],
+      default: null,
+    },
+    rubricTemplateId: {
+      type: Schema.Types.ObjectId,
+      ref: 'RubricTemplate',
       default: null,
     },
     courseId: {

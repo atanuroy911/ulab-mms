@@ -16,6 +16,7 @@ interface Exam {
   examCategory?: string;
   numberOfCOs?: number;
   numberOfQuestions?: number;
+  rubricTemplateId?: string;
 }
 
 interface ExamSettings {
@@ -25,6 +26,7 @@ interface ExamSettings {
   numberOfCOs: string;
   numberOfQuestions: string;
   examCategory: string;
+  rubricTemplateId: string;
 }
 
 interface CourseSummary {
@@ -163,6 +165,7 @@ export default function ExamsView({
                                   numberOfCOs: exam.numberOfCOs?.toString() || '',
                                   numberOfQuestions: exam.numberOfQuestions?.toString() || '',
                                   examCategory: exam.examCategory || 'Quiz',
+                                  rubricTemplateId: exam.rubricTemplateId || '',
                                 });
                               }}
                             >
@@ -259,6 +262,7 @@ export default function ExamsView({
                                   numberOfCOs: exam.numberOfCOs?.toString() || '',
                                   numberOfQuestions: exam.numberOfQuestions?.toString() || '',
                                   examCategory: exam.examCategory || 'Assignment',
+                                  rubricTemplateId: exam.rubricTemplateId || '',
                                 });
                               }}
                             >
@@ -356,6 +360,7 @@ export default function ExamsView({
                                   numberOfCOs: exam.numberOfCOs?.toString() || '',
                                   numberOfQuestions: exam.numberOfQuestions?.toString() || '',
                                   examCategory: 'Project',
+                                  rubricTemplateId: exam.rubricTemplateId || '',
                                 });
                               }}
                             >
@@ -462,6 +467,7 @@ export default function ExamsView({
                               numberOfCOs: exam.numberOfCOs?.toString() || '',
                               numberOfQuestions: exam.numberOfQuestions?.toString() || '',
                               examCategory: exam.examCategory || '',
+                              rubricTemplateId: exam.rubricTemplateId || '',
                             });
                           }}
                         >

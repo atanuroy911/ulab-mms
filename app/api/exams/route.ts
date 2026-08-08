@@ -4,6 +4,8 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Exam from '@/models/Exam';
 import Course from '@/models/Course';
+import RubricTemplate from '@/models/RubricTemplate';
+import mongoose from 'mongoose';
 
 // POST create a custom exam
 export async function POST(request: NextRequest) {
@@ -14,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { courseId, displayName, totalMarks, weightage, numberOfCOs, numberOfQuestions, examCategory } =
+    const { courseId, displayName, totalMarks, weightage, numberOfCOs, numberOfQuestions, examCategory, rubricTemplateId } =
       await request.json();
 
     // Validation
@@ -129,6 +131,18 @@ export async function POST(request: NextRequest) {
         );
       }
       examData.numberOfQuestions = numberOfQuestions;
+    }
+
+    // rubricTemplateId only applies to Project exams: null/undefined = direct marking
+    if (rubricTemplateId && examCategory === 'Project') {
+      if (!mongoose.Types.ObjectId.isValid(rubricTemplateId)) {
+        return NextResponse.json({ error: 'Invalid rubric template' }, { status: 400 });
+      }
+      const rubric = await RubricTemplate.findById(rubricTemplateId);
+      if (!rubric) {
+        return NextResponse.json({ error: 'Rubric template not found' }, { status: 400 });
+      }
+      examData.rubricTemplateId = rubricTemplateId;
     }
 
     const exam = await Exam.create(examData);
