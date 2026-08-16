@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { notify } from '@/app/utils/notifications';
+import { AppHeader } from '@/app/components/AppHeader';
 
 export default function AdminSettings() {
   const router = useRouter();
@@ -259,43 +260,15 @@ export default function AdminSettings() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/admin/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Admin Portal
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Settings
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <ThemeToggle />
-              <Button
-                variant="destructive"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Admin Portal"
+        subtitle="Settings"
+        gradient="purple"
+        logoHref="/admin/dashboard"
+        actions={[
+          { key: 'signout', label: 'Sign Out', icon: LogOut, variant: 'destructive', onClick: handleSignOut },
+        ]}
+      />
 
       <div className="max-w-2xl mx-auto p-4 pt-8">
         {/* Back Button */}

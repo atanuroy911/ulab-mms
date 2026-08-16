@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertCircle, Download, FileText, ArrowLeft, Trash2, Loader2 } from 'lucide-react';
+import { AppHeader } from '@/app/components/AppHeader';
 
 interface FileItem {
   id: string;
@@ -163,37 +164,14 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Navigation Bar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-6xl mx-auto px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Image
-                src="/ulab.svg"
-                alt="ULAB Logo"
-                width={80}
-                height={80}
-                className="drop-shadow-lg"
-              />
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  Available Files
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Download resources uploaded by administrators
-                </p>
-              </div>
-            </div>
-
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Dashboard
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Available Files"
+        subtitle="Download resources uploaded by administrators"
+        gradient="blue"
+        actions={[
+          { key: 'dashboard', label: 'Back to Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline', alwaysShowLabel: true },
+        ]}
+      />
 
       {/* Main Content */}
       <div className="p-8">

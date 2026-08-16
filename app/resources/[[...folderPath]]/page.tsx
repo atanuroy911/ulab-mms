@@ -5,12 +5,12 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, ChevronRight, Download, Folder, File, FlaskConical } from 'lucide-react';
+import { Loader2, LogOut, Settings, ChevronRight, Download, Folder, File, FlaskConical, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
+import { AppHeader } from '@/app/components/AppHeader';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -355,64 +355,26 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar - Same as Dashboard */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  Resources
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Welcome, {session?.user?.name}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <ThemeToggle />
-              <Button variant="default" asChild>
-                <Link href="/dashboard">
-                  <span className="h-4 w-4 mr-2">📊</span>
-                  Dashboard
-                </Link>
-              </Button>
-              <Button variant="default" asChild>
-                <Link href="/capstone">
-                  <FlaskConical className="h-4 w-4 mr-2" />
-                  Capstone
-                </Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/settings">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  notify.auth.signOutSuccess();
-                  signOut({ callbackUrl: '/auth/signin' });
-                }}
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Resources"
+        subtitle={`Welcome, ${session?.user?.name}`}
+        gradient="blue"
+        actions={[
+          { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', variant: 'default' },
+          { key: 'capstone', label: 'Capstone', icon: FlaskConical, href: '/capstone', variant: 'default' },
+          { key: 'settings', label: 'Settings', icon: Settings, href: '/settings', variant: 'outline' },
+          {
+            key: 'signout',
+            label: 'Sign Out',
+            icon: LogOut,
+            variant: 'destructive',
+            onClick: () => {
+              notify.auth.signOutSuccess();
+              signOut({ callbackUrl: '/auth/signin' });
+            },
+          },
+        ]}
+      />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

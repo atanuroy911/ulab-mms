@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
+import { AppHeader } from '@/app/components/AppHeader';
 
 const CATEGORIES = [
   { code: 'CSE4098A', color: 'bg-blue-100 dark:bg-blue-900', textColor: 'text-blue-600 dark:text-blue-400', buttonColor: 'bg-blue-600 hover:bg-blue-700' },
@@ -39,38 +40,15 @@ export default function EvaluatorCapstone() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Evaluator - Capstone Marks
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Select a category to submit marks
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" asChild>
-              <Link href="/capstone">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Evaluator - Capstone Marks"
+        subtitle="Select a category to submit marks"
+        gradient="purple"
+        logoHref="/capstone"
+        actions={[
+          { key: 'back', label: 'Back', icon: ArrowLeft, href: '/capstone', variant: 'outline', alwaysShowLabel: true },
+        ]}
+      />
 
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}

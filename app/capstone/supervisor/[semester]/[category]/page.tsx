@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
+import { AppHeader } from '@/app/components/AppHeader';
 
 const SUBCATEGORIES = [
   { name: 'Peer Review', code: 'peer', color: 'bg-blue-100 dark:bg-blue-900', textColor: 'text-blue-600 dark:text-blue-400' },
@@ -41,25 +42,14 @@ export default function CategoryPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href={`/capstone/supervisor/${semester}`}>
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold capitalize">{category.replace('-', ' ')}</h1>
-                <p className="text-sm text-muted-foreground">Semester: {semester}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title={category.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+        subtitle={`Semester: ${semester}`}
+        logoHref={`/capstone/supervisor/${semester}`}
+        actions={[
+          { key: 'back', label: 'Back', icon: ArrowLeft, href: `/capstone/supervisor/${semester}`, variant: 'ghost', alwaysShowLabel: true },
+        ]}
+      />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">

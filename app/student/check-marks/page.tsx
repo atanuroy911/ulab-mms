@@ -9,7 +9,7 @@ import { notify } from '@/app/utils/notifications';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { AppHeader } from '@/app/components/AppHeader';
 
 import { AuthGate } from './components/AuthGate';
 import { SearchForm } from './components/SearchForm';
@@ -115,32 +115,15 @@ export default function StudentCheckMarks() {
 
   return (
     <div className="min-h-screen">
-      <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Image src="/ulab.svg" alt="ULAB Logo" width={44} height={44} className="drop-shadow-lg" />
-              <div>
-                <h1 className="text-xl font-bold flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5 text-primary" />
-                  Check Your Marks
-                </h1>
-                <p className="text-xs text-muted-foreground">Student Self-Service Portal</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <Button variant="outline" asChild>
-                <Link href="/auth/signin">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Sign In
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Check Your Marks"
+        subtitle="Student Self-Service Portal"
+        icon={ClipboardList}
+        logoHref="/auth/signin"
+        actions={[
+          { key: 'signin', label: 'Back to Sign In', icon: ArrowLeft, href: '/auth/signin', variant: 'outline', alwaysShowLabel: true },
+        ]}
+      />
 
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {!canSearch ? (

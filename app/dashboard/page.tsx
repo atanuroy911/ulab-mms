@@ -20,6 +20,7 @@ import { CourseCombobox } from '@/app/components/CourseCombobox';
 import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pdfStudentImport';
 import { parseCSV } from '@/app/utils/csv';
 import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
+import { AppHeader } from '@/app/components/AppHeader';
 
 interface Course {
   _id: string;
@@ -640,65 +641,26 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <ChromeExtensionPromo />
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-4 min-w-0">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity w-10 h-10 sm:w-[100px] sm:h-[100px] shrink-0"
-                />
-              </Link>
-              <div className="min-w-0">
-                <h1 className="text-base sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent truncate">
-                  Marks Management System
-                </h1>
-                <p className="text-xs text-muted-foreground truncate">
-                  Welcome, {session?.user?.name}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <ThemeToggle />
-              <Button variant="default" size="sm" asChild>
-                <Link href="/resources">
-                  <FileStack className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Resources</span>
-                </Link>
-              </Button>
-              <Button variant="default" size="sm" asChild>
-                <Link href="/capstone">
-                  <FlaskConical className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Capstone</span>
-                </Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/settings">
-                  <Settings className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Settings</span>
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  notify.auth.signOutSuccess();
-                  signOut({ callbackUrl: '/auth/signin' });
-                }}
-              >
-                <LogOut className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Marks Management System"
+        subtitle={`Welcome, ${session?.user?.name}`}
+        gradient="blue"
+        actions={[
+          { key: 'resources', label: 'Resources', icon: FileStack, href: '/resources', variant: 'default' },
+          { key: 'capstone', label: 'Capstone', icon: FlaskConical, href: '/capstone', variant: 'default' },
+          { key: 'settings', label: 'Settings', icon: Settings, href: '/settings', variant: 'outline' },
+          {
+            key: 'signout',
+            label: 'Sign Out',
+            icon: LogOut,
+            variant: 'destructive',
+            onClick: () => {
+              notify.auth.signOutSuccess();
+              signOut({ callbackUrl: '/auth/signin' });
+            },
+          },
+        ]}
+      />
 
       <div className="max-w-7xl mx-auto p-4 pt-8">
         {/* Header */}

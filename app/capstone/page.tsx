@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, ArrowLeft, User, BarChart3 } from 'lucide-react';
 import Image from 'next/image';
+import { AppHeader } from '@/app/components/AppHeader';
 
 export default function CapstonePage() {
   const { data: session, status } = useSession();
@@ -33,38 +34,14 @@ export default function CapstonePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  Capstone Marks Management
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Submit capstone project marks
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" asChild>
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Capstone Marks Management"
+        subtitle="Submit capstone project marks"
+        gradient="blue"
+        actions={[
+          { key: 'dashboard', label: 'Back to Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline', alwaysShowLabel: true },
+        ]}
+      />
 
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}

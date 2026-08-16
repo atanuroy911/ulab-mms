@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
+import { AppHeader } from '@/app/components/AppHeader';
 
 interface Semester {
   _id: string;
@@ -66,38 +67,15 @@ export default function SupervisorCapstone() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  Supervisor - Capstone Marks
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Select a semester to submit marks
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" asChild>
-              <Link href="/capstone">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Supervisor - Capstone Marks"
+        subtitle="Select a semester to submit marks"
+        gradient="blue"
+        logoHref="/capstone"
+        actions={[
+          { key: 'back', label: 'Back', icon: ArrowLeft, href: '/capstone', variant: 'outline', alwaysShowLabel: true },
+        ]}
+      />
 
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}

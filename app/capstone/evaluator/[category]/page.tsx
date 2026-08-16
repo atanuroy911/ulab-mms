@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft, Plus, Edit, CheckCircle2 } from 'lucide-react';
+import { AppHeader } from '@/app/components/AppHeader';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import AssignedStudentsList from '@/app/capstone/components/AssignedStudentsList';
@@ -153,38 +154,15 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={100}
-                  height={100}
-                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  {category} - Evaluator Marks
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Submit evaluation marks for {category} capstone students
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" asChild>
-              <Link href="/capstone/evaluator">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title={`${category} - Evaluator Marks`}
+        subtitle={`Submit evaluation marks for ${category} capstone students`}
+        gradient="purple"
+        logoHref="/capstone/evaluator"
+        actions={[
+          { key: 'back', label: 'Back', icon: ArrowLeft, href: '/capstone/evaluator', variant: 'outline', alwaysShowLabel: true },
+        ]}
+      />
 
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}

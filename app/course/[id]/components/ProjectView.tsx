@@ -690,7 +690,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
             className="w-16 h-8 rounded-md border bg-background px-2 text-sm text-center" />
           <Button size="sm" variant="outline" onClick={handleUpdateMaxMembers}>Update</Button>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf-simple`, '_blank')}
             className="border-emerald-500/40 hover:bg-emerald-500/10">
             🖨️ Print Simple Grid
@@ -747,8 +747,8 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
-          <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
+        <div className="space-y-5 pb-24 sm:pb-0">
+          <div className="hidden sm:block sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -759,6 +759,20 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
               />
             </div>
           </div>
+
+          {/* Mobile floating search — fixed to viewport so filtering/scrolling never disturbs its position */}
+          <div className="sm:hidden fixed bottom-4 inset-x-4 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div className="relative rounded-full border border-border/50 bg-background/80 backdrop-blur-xl shadow-lg shadow-black/10">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={groupSearch}
+                onChange={e => setGroupSearch(e.target.value)}
+                placeholder="Search by group, title, or student..."
+                className="pl-11 h-12 rounded-full border-0 bg-transparent shadow-none focus-visible:ring-2"
+              />
+            </div>
+          </div>
+
           {filteredGroups.length === 0 && (
             <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
               No groups match &quot;{groupSearch}&quot;

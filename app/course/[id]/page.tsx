@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ImportStudentsModal } from './components/ImportStudentsModal';
 import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
+import { AppHeader } from '@/app/components/AppHeader';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
@@ -1553,94 +1554,57 @@ export default function CoursePage() {
     <>
     <div className="min-h-screen">
       <ChromeExtensionPromo />
-      {/* Navbar + mobile view switcher, grouped so they stick together without a hardcoded offset */}
-      <div className="sticky top-0 z-50">
-      <nav className="backdrop-blur-md bg-background/80 border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-4 min-w-0">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={50}
-                  height={50}
-                  className="drop-shadow-lg cursor-pointer shrink-0"
-                />
-              </Link>
-              <div className="min-w-0">
-                <h1 className="text-lg sm:text-2xl font-bold flex items-center gap-2 truncate">
-                  {course?.courseType === 'Theory' ? (
-                    <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
-                  ) : (
-                    <FlaskConical className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
-                  )}
-                  <span className="truncate">{course.name}</span>
-                </h1>
-                <p className="text-xs mt-1 text-muted-foreground truncate">
-                  {course.code} • {course.semester} {course.year} • Section {course.section} •
-                  <Badge variant="secondary" className="ml-1">
-                    {course.courseType}
-                  </Badge>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <ThemeToggle />
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/settings">
-                  <Settings className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Settings</span>
-                </Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/dashboard">
-                  <ArrowLeft className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Dashboard</span>
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  notify.auth.signOutSuccess();
-                  signOut({ callbackUrl: '/auth/signin' });
-                }}
-              >
-                <LogOut className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </Button>
+      <AppHeader
+        title={course.name}
+        icon={course?.courseType === 'Theory' ? BookOpen : FlaskConical}
+        subtitle={
+          <>
+            {course.code} • {course.semester} {course.year} • Section {course.section} •{' '}
+            <Badge variant="secondary" className="ml-1">
+              {course.courseType}
+            </Badge>
+          </>
+        }
+        actions={[
+          { key: 'settings', label: 'Settings', icon: Settings, href: '/settings', variant: 'outline' },
+          { key: 'dashboard', label: 'Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline' },
+          {
+            key: 'signout',
+            label: 'Sign Out',
+            icon: LogOut,
+            variant: 'destructive',
+            onClick: () => {
+              notify.auth.signOutSuccess();
+              signOut({ callbackUrl: '/auth/signin' });
+            },
+          },
+        ]}
+        bottomBar={
+          <div className="md:hidden bg-background/95 backdrop-blur-md border-b overflow-x-auto">
+            <div className="flex items-center gap-1.5 px-3 py-2 min-w-max">
+              {([
+                ['overview', '📊', 'Overview'],
+                ['exams', '📝', 'Exams'],
+                ['students', '👥', 'Students'],
+                ['marks', '✏️', 'Marks'],
+                ['attendance', '📍', 'Attendance'],
+                ['copo', '🔗', 'CO PO'],
+                ['project', course?.courseType === 'Lab' ? '🚀' : '🎓', course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'],
+              ] as const).map(([view, icon, label]) => (
+                <Button
+                  key={view}
+                  variant={activeView === view ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setActiveView(view)}
+                  className="shrink-0"
+                >
+                  <span className="mr-1.5">{icon}</span>{label}
+                </Button>
+              ))}
             </div>
           </div>
-        </div>
-      </nav>
-
-      {/* Mobile view switcher — the sidebar below is desktop/tablet only */}
-      <div className="md:hidden bg-background/95 backdrop-blur-md border-b overflow-x-auto">
-        <div className="flex items-center gap-1.5 px-3 py-2 min-w-max">
-          {([
-            ['overview', '📊', 'Overview'],
-            ['exams', '📝', 'Exams'],
-            ['students', '👥', 'Students'],
-            ['marks', '✏️', 'Marks'],
-            ['attendance', '📍', 'Attendance'],
-            ['copo', '🔗', 'CO PO'],
-            ['project', course?.courseType === 'Lab' ? '🚀' : '🎓', course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'],
-          ] as const).map(([view, icon, label]) => (
-            <Button
-              key={view}
-              variant={activeView === view ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveView(view)}
-              className="shrink-0"
-            >
-              <span className="mr-1.5">{icon}</span>{label}
-            </Button>
-          ))}
-        </div>
-      </div>
-      </div>
+        }
+      />
 
       {/* Sidebar + Main Content Layout */}
       <div className="flex h-[calc(100dvh-72px)]">

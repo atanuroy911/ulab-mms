@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, LogOut, Save, User, Mail, Link2, CheckCircle2 } from 'lucide-react';
+import { AppHeader } from '@/app/components/AppHeader';
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -137,51 +138,24 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md border-b bg-background/80">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-4 min-w-0">
-              <Link href="/dashboard">
-                <Image
-                  src="/ulab.svg"
-                  alt="ULAB Logo"
-                  width={50}
-                  height={50}
-                  className="drop-shadow-lg cursor-pointer shrink-0"
-                />
-              </Link>
-              <div className="min-w-0">
-                <h1 className="text-lg sm:text-2xl font-bold bg-linear-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent truncate">
-                  ⚙️ Settings
-                </h1>
-                <p className="text-xs text-muted-foreground truncate">
-                  Manage your preferences
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/dashboard">
-                  <ArrowLeft className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Dashboard</span>
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  notify.auth.signOutSuccess();
-                  signOut({ callbackUrl: '/auth/signin' });
-                }}
-              >
-                <LogOut className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="Settings"
+        subtitle="Manage your preferences"
+        gradient="blue"
+        actions={[
+          { key: 'dashboard', label: 'Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline' },
+          {
+            key: 'signout',
+            label: 'Sign Out',
+            icon: LogOut,
+            variant: 'destructive',
+            onClick: () => {
+              notify.auth.signOutSuccess();
+              signOut({ callbackUrl: '/auth/signin' });
+            },
+          },
+        ]}
+      />
 
       <div className="max-w-4xl mx-auto p-4 pt-8">
 

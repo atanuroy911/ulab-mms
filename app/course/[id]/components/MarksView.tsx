@@ -122,7 +122,7 @@ export default function MarksView({
     : students;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-0">
       {/* CO Warning Banner */}
       {examsWithMissingCO.length > 0 && onGoToCoPo && onIgnoreCOWarning && (
         <COMarksWarningBanner
@@ -254,7 +254,7 @@ export default function MarksView({
           </Button>
         )}
       </div>
-      <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
+      <div className="hidden sm:block sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -265,6 +265,20 @@ export default function MarksView({
           />
         </div>
       </div>
+
+      {/* Mobile floating search — fixed to viewport so filtering/scrolling never disturbs its position */}
+      <div className="sm:hidden fixed bottom-4 inset-x-4 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="relative rounded-full border border-border/50 bg-background/80 backdrop-blur-xl shadow-lg shadow-black/10">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or ID..."
+            className="pl-11 h-12 rounded-full border-0 bg-transparent shadow-none focus-visible:ring-2"
+          />
+        </div>
+      </div>
+
       <Card className="p-6">
         <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">
           <table className="min-w-full divide-y divide-border">
