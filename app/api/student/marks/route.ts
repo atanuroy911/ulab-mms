@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
             quizWeightage: course.quizWeightage,
             assignmentAggregation: course.assignmentAggregation,
             assignmentWeightage: course.assignmentWeightage,
+            projectWeightage: course.projectWeightage,
             gradingScale: course.gradingScale,
           },
           exams: exams.map(exam => ({

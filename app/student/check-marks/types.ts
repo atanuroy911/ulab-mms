@@ -17,6 +17,7 @@ export interface Course {
   quizWeightage?: number;
   assignmentAggregation?: 'average' | 'best' | 'sum';
   assignmentWeightage?: number;
+  projectWeightage?: number;
   gradingScale?: string;
 }
 

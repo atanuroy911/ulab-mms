@@ -6,6 +6,7 @@ import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
 import Mark from '@/models/Mark';
 import Student from '@/models/Student';
+import ProjectGroup from '@/models/ProjectGroup';
 
 type RouteParams = {
   params: Promise<{ id: string }>;
@@ -65,6 +66,24 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
         userId: session.user.id,
       }),
     ]);
+
+    // Drop the deleted students from any project group they belonged to, then
+    // remove groups that are left with zero members as a result.
+    const projectGroup = await ProjectGroup.findOne({ courseId: courseObjectId });
+    if (projectGroup) {
+      const deletedIdSet = new Set(studentIdsToDelete.map((sid) => sid.toString()));
+      let changed = false;
+      for (const group of projectGroup.groups) {
+        const before = group.studentIds.length;
+        group.studentIds = group.studentIds.filter((sid) => !deletedIdSet.has(sid.toString()));
+        if (group.studentIds.length !== before) changed = true;
+      }
+      const beforeGroupCount = projectGroup.groups.length;
+      projectGroup.groups = projectGroup.groups.filter((g) => g.studentIds.length > 0) as typeof projectGroup.groups;
+      if (changed || projectGroup.groups.length !== beforeGroupCount) {
+        await projectGroup.save();
+      }
+    }
 
     return NextResponse.json(
       {

@@ -317,23 +317,32 @@ export default function AddMarkModal({
         notify.mark.added(student?.name, exam?.displayName);
         setSuccess('✓ Mark saved successfully!');
         onMarkSaved();
-        
-        // Clear fields for next student after a brief delay
-        setTimeout(() => {
-          setSelectedStudentId('');
-          setStudentSearch('');
-          setRawMark('');
-          if (numberOfCOs > 0) {
-            setCoMarks(new Array(numberOfCOs).fill(''));
-          }
-          setNonCoMark('');
-          if (numberOfQuestions > 0) {
-            setQuestionMarks(new Array(numberOfQuestions).fill(''));
-          }
-          setSuccess('');
-          setCurrentStep('student');
-          setFocusedCOIndex(-1);
-        }, 800);
+
+        if (initialStudentId) {
+          // Opened via the per-cell "+" button with a specific student pre-filled —
+          // close the modal entirely instead of looping back to student search.
+          setTimeout(() => {
+            onClose();
+          }, 800);
+        } else {
+          // Opened via the "Add Individual (Filter)" dropdown entry — keep the modal
+          // open so the teacher can search for and mark the next student.
+          setTimeout(() => {
+            setSelectedStudentId('');
+            setStudentSearch('');
+            setRawMark('');
+            if (numberOfCOs > 0) {
+              setCoMarks(new Array(numberOfCOs).fill(''));
+            }
+            setNonCoMark('');
+            if (numberOfQuestions > 0) {
+              setQuestionMarks(new Array(numberOfQuestions).fill(''));
+            }
+            setSuccess('');
+            setCurrentStep('student');
+            setFocusedCOIndex(-1);
+          }, 800);
+        }
       } else {
         notify.mark.addError(data.error);
         setError(data.error || 'Error saving mark');

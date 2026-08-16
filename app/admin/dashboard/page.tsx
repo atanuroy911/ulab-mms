@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users, ClipboardList } from 'lucide-react';
+import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users, ClipboardList, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar, SidebarItem } from '@/app/components/AdminSidebar';
@@ -16,6 +16,7 @@ import CapstoneManagement from './components/CapstoneManagement';
 import SemesterManagement from './components/SemesterManagement';
 import AccountManagement from './components/AccountManagement';
 import RubricManagement from './components/RubricManagement';
+import BackupManagement from './components/BackupManagement';
 
 const sidebarItems: SidebarItem[] = [
   {
@@ -52,6 +53,11 @@ const sidebarItems: SidebarItem[] = [
     title: 'Rubric Management',
     href: '/admin/dashboard?tab=rubrics',
     icon: ClipboardList,
+  },
+  {
+    title: 'Backup & Restore',
+    href: '/admin/dashboard?tab=backup',
+    icon: DatabaseBackup,
   },
 ];
 
@@ -158,6 +164,7 @@ function AdminDashboardContent() {
           {activeTab === 'semesters' && <SemesterManagement />}
           {activeTab === 'capstone' && <CapstoneManagement />}
           {activeTab === 'rubrics' && <RubricManagement />}
+          {activeTab === 'backup' && <BackupManagement />}
         </main>
       </div>
     </div>

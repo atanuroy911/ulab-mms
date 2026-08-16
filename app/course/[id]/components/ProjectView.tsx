@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Sparkles } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Sparkles, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateProjectMark } from '@/app/utils/projectRubric';
 import type { IRubricScores } from '@/app/utils/projectRubric';
@@ -154,6 +155,9 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
   // Group delete
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+
+  // Search/filter groups by group number, title, or member name/ID
+  const [groupSearch, setGroupSearch] = useState('');
 
   // Which rubric dialog is open: { groupId, examId } | null
   const [editingRubric, setEditingRubric] = useState<{ groupId: string; examId: string } | null>(null);
@@ -584,6 +588,17 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
   const assignedIds = new Set(state.groups.flatMap(g => g.studentIds.map(s => s._id)));
   const unassignedStudents = students.filter(s => !s.withdrawn && !assignedIds.has(s._id));
 
+  const filteredGroups = groupSearch.trim()
+    ? state.groups.filter(g => {
+        const q = groupSearch.toLowerCase();
+        return (
+          String(g.groupNumber).includes(q) ||
+          g.projectTitle?.toLowerCase().includes(q) ||
+          g.studentIds.some(s => s.name.toLowerCase().includes(q) || s.studentId.toLowerCase().includes(q))
+        );
+      })
+    : state.groups;
+
   const activeRubricExam = editingRubric ? projectExams.find(e => e._id === editingRubric.examId) : null;
   const activeRubricGroup = editingRubric ? state.groups.find(g => g._id === editingRubric.groupId) : null;
   const activeRubricTemplate = activeRubricExam ? getRubricTemplate(activeRubricExam) : null;
@@ -733,7 +748,23 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
         </div>
       ) : (
         <div className="space-y-5">
-          {state.groups.map(group => {
+          <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={groupSearch}
+                onChange={e => setGroupSearch(e.target.value)}
+                placeholder="Search by group, title, or student..."
+                className="pl-9"
+              />
+            </div>
+          </div>
+          {filteredGroups.length === 0 && (
+            <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No groups match &quot;{groupSearch}&quot;
+            </div>
+          )}
+          {filteredGroups.map(group => {
             const groupSaved = savedMarks[group._id] ?? {};
             const allSaved = projectExams.length > 0 && projectExams.every(e => groupSaved[e._id] !== undefined);
 

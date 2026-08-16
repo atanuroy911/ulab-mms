@@ -1553,8 +1553,9 @@ export default function CoursePage() {
     <>
     <div className="min-h-screen">
       <ChromeExtensionPromo />
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b">
+      {/* Navbar + mobile view switcher, grouped so they stick together without a hardcoded offset */}
+      <div className="sticky top-0 z-50">
+      <nav className="backdrop-blur-md bg-background/80 border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-4 min-w-0">
@@ -1616,7 +1617,7 @@ export default function CoursePage() {
       </nav>
 
       {/* Mobile view switcher — the sidebar below is desktop/tablet only */}
-      <div className="md:hidden sticky top-[73px] z-40 bg-background/95 backdrop-blur-md border-b overflow-x-auto">
+      <div className="md:hidden bg-background/95 backdrop-blur-md border-b overflow-x-auto">
         <div className="flex items-center gap-1.5 px-3 py-2 min-w-max">
           {([
             ['overview', '📊', 'Overview'],
@@ -1639,9 +1640,10 @@ export default function CoursePage() {
           ))}
         </div>
       </div>
+      </div>
 
       {/* Sidebar + Main Content Layout */}
-      <div className="flex h-[calc(100vh-72px)]">
+      <div className="flex h-[calc(100dvh-72px)]">
         {/* Left Sidebar — desktop/tablet only; mobile users switch views with the tab bar above */}
         <aside className={`hidden md:flex ${
           sidebarOpen ? 'w-64' : 'w-16'

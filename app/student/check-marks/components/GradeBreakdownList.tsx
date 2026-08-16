@@ -22,15 +22,15 @@ export function GradeBreakdownList({ gradeData }: GradeBreakdownListProps) {
           {gradeData.breakdown.map((item, idx) => (
             <div
               key={idx}
-              className={`flex flex-wrap items-center justify-between gap-2 text-xs p-2 rounded-md ${
+              className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-xs p-2 rounded-md ${
                 item.isAggregated ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-muted/60'
               }`}
             >
               <div className="flex items-center gap-2">
-                {item.isAggregated && <Layers className="h-3 w-3 text-amber-600 dark:text-amber-400" />}
-                <span>{item.name}</span>
+                {item.isAggregated && <Layers className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />}
+                <span className="truncate">{item.name}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-blue-600 dark:text-blue-400">
                   {item.mark.toFixed(2)}/{item.totalMarks}
                 </span>

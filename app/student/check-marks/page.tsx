@@ -32,7 +32,10 @@ export default function StudentCheckMarks() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [adminOverride, setAdminOverride] = useState(false);
 
-  const isGoogleVerified = status === 'authenticated' && !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd');
+  const isGoogleVerified =
+    status === 'authenticated' &&
+    !!session?.user?.email?.toLowerCase().endsWith('@ulab.edu.bd') &&
+    !(session?.user as any)?.checkinOnly;
   const canSearch = isGoogleVerified || adminOverride;
 
   // Same convention as the attendance check-in flow: the student's Google display name is
@@ -143,20 +146,29 @@ export default function StudentCheckMarks() {
         {!canSearch ? (
           <AuthGate onAdminOverride={handleAdminOverride} loading={loading} error={error} />
         ) : isGoogleVerified && !adminOverride ? (
-          (nameIdMissing || error) && (
+          loading ? (
             <Card className="mb-6">
               <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                  <UserX className="h-7 w-7 text-muted-foreground" />
-                </div>
-                <CardTitle>{nameIdMissing ? "Couldn't identify your Student ID" : 'Unable to load your marks'}</CardTitle>
-                <CardDescription>
-                  {nameIdMissing
-                    ? <>Your Google account name doesn&apos;t include your Student ID in parentheses (e.g. &quot;Jane Doe (2021-1-60-001)&quot;). Update your Google profile name to include it, then reload this page. Ask your instructor or admin for help if you&apos;re unsure.</>
-                    : error}
-                </CardDescription>
+                <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                <CardDescription>Loading your marks…</CardDescription>
               </CardContent>
             </Card>
+          ) : (
+            (nameIdMissing || error) && (
+              <Card className="mb-6">
+                <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <UserX className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <CardTitle>{nameIdMissing ? "Couldn't identify your Student ID" : 'Unable to load your marks'}</CardTitle>
+                  <CardDescription>
+                    {nameIdMissing
+                      ? <>Your Google account name doesn&apos;t include your Student ID in parentheses (e.g. &quot;Jane Doe (2021-1-60-001)&quot;). Update your Google profile name to include it, then reload this page. Ask your instructor or admin for help if you&apos;re unsure.</>
+                      : error}
+                  </CardDescription>
+                </CardContent>
+              </Card>
+            )
           )
         ) : (
           <SearchForm

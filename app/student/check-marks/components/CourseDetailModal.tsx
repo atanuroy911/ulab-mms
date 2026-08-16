@@ -31,7 +31,7 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -116,7 +116,7 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3">
               {courseData.exams.map((exam) => (
                 <ExamCard
                   key={exam._id}
@@ -148,6 +148,11 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
                   and <strong>
                     {courseData.course.assignmentAggregation === 'best' ? 'Best' : courseData.course.assignmentAggregation === 'sum' ? 'Sum' : 'Average'}
                   </strong> method for {courseData.course.courseType === 'Lab' ? 'assessments' : 'assignments'}.
+                </p>
+              )}
+              {courseData.exams.some(e => e.examCategory === 'Project') && (
+                <p>
+                  Project section marks are combined by summing all scored sections together (out of their combined total), then scaled to the project&apos;s overall weightage.
                 </p>
               )}
             </CardContent>

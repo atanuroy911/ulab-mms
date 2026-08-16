@@ -26,7 +26,7 @@ export default function ChromeExtensionPromo() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 flex items-center gap-1 rounded-full border bg-background/95 backdrop-blur shadow-lg pl-1 pr-1 py-1 animate-in fade-in slide-in-from-bottom-2">
+    <div className="fixed bottom-6 left-6 z-40 hidden sm:flex items-center gap-1 rounded-full border bg-background/95 backdrop-blur shadow-lg pl-1 pr-1 py-1 animate-in fade-in slide-in-from-bottom-2">
       <a
         href={EXTENSION_URL}
         target="_blank"
@@ -34,8 +34,7 @@ export default function ChromeExtensionPromo() {
         className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
       >
         <Chrome className="h-4 w-4 text-blue-500 shrink-0" />
-        <span className="hidden sm:inline whitespace-nowrap">Get our Chrome Extension</span>
-        <span className="sm:hidden">Extension</span>
+        <span className="whitespace-nowrap">Get our Chrome Extension</span>
       </a>
       <button
         type="button"

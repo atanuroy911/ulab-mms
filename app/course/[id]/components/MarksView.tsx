@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Plus, Trash2, ChevronDown } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, Trash2, ChevronDown, Search } from 'lucide-react';
 import COMarksWarningBanner from './COMarksWarningBanner';
 
 interface Student {
@@ -76,6 +77,7 @@ export default function MarksView({
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
+  const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -111,6 +113,13 @@ export default function MarksView({
 
   const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
   const hasProjectExam = exams.some(e => e.examCategory === 'Project');
+
+  const filteredStudents = search.trim()
+    ? students.filter(s =>
+        s.studentId.toLowerCase().includes(search.toLowerCase()) ||
+        s.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : students;
 
   return (
     <div className="space-y-6">
@@ -245,6 +254,17 @@ export default function MarksView({
           </Button>
         )}
       </div>
+      <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or ID..."
+            className="pl-9"
+          />
+        </div>
+      </div>
       <Card className="p-6">
         <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">
           <table className="min-w-full divide-y divide-border">
@@ -261,7 +281,14 @@ export default function MarksView({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {students.map((student, idx) => (
+              {filteredStudents.length === 0 && (
+                <tr>
+                  <td colSpan={exams.length + 2} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No students match &quot;{search}&quot;
+                  </td>
+                </tr>
+              )}
+              {filteredStudents.map((student, idx) => (
                 <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
                   <td className={`px-3 py-3 text-sm font-medium text-center sticky left-0 z-10 border-r w-[50px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{idx + 1}</td>
                   <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 border-r min-w-[200px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>

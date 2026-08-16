@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Plus, Upload, Trash2, Tag } from 'lucide-react';
+import { Plus, Upload, Trash2, Tag, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Student {
@@ -129,6 +129,8 @@ export default function StudentsView({
   const [deleteAllConfirmationText, setDeleteAllConfirmationText] = useState('');
   const [deletingAllStudents, setDeletingAllStudents] = useState(false);
 
+  const [search, setSearch] = useState('');
+
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleteConfirmationStep, setBulkDeleteConfirmationStep] = useState(0);
@@ -144,11 +146,18 @@ export default function StudentsView({
     setSelectedStudentIds(newSelected);
   };
 
+  const filteredStudents = search.trim()
+    ? students.filter(s =>
+        s.studentId.toLowerCase().includes(search.toLowerCase()) ||
+        s.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : students;
+
   const toggleAllSelection = () => {
-    if (selectedStudentIds.size === students.length) {
+    if (selectedStudentIds.size === filteredStudents.length && filteredStudents.length > 0) {
       setSelectedStudentIds(new Set());
     } else {
-      setSelectedStudentIds(new Set(students.map(s => s._id)));
+      setSelectedStudentIds(new Set(filteredStudents.map(s => s._id)));
     }
   };
 
@@ -257,14 +266,25 @@ export default function StudentsView({
           </Button>
         </div>
       </div>
+      <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or ID..."
+            className="pl-9"
+          />
+        </div>
+      </div>
       <Card className="p-6">
         <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted sticky top-0 z-20">
               <tr>
                 <th className="px-3 py-3 text-center sticky left-0 z-30 bg-muted border-r w-[40px]">
-                  <Checkbox 
-                    checked={students.length > 0 && selectedStudentIds.size === students.length}
+                  <Checkbox
+                    checked={filteredStudents.length > 0 && selectedStudentIds.size === filteredStudents.length}
                     onCheckedChange={toggleAllSelection}
                     aria-label="Select all"
                   />
@@ -331,7 +351,14 @@ export default function StudentsView({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {students.map((student, idx) => (
+              {filteredStudents.length === 0 && (
+                <tr>
+                  <td colSpan={exams.length + 8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No students match &quot;{search}&quot;
+                  </td>
+                </tr>
+              )}
+              {filteredStudents.map((student, idx) => (
                 <tr key={student._id} className={`transition-colors hover:bg-muted/50 bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5 hover:bg-primary/10' : ''}`}>
                   <td className={`px-3 py-3 text-center sticky left-0 z-10 border-r w-[40px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
                     <Checkbox 

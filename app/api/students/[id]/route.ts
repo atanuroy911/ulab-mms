@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Student from '@/models/Student';
 import Mark from '@/models/Mark';
+import ProjectGroup from '@/models/ProjectGroup';
 
 // PUT (update) a student
 export async function PUT(
@@ -120,6 +121,23 @@ export async function DELETE(
 
     // Delete the student
     await Student.deleteOne({ _id: studentId });
+
+    // Drop the student from any project group they belonged to, then remove
+    // the group entirely if it's left with zero members as a result.
+    const projectGroup = await ProjectGroup.findOne({ courseId: student.courseId });
+    if (projectGroup) {
+      let changed = false;
+      for (const group of projectGroup.groups) {
+        const before = group.studentIds.length;
+        group.studentIds = group.studentIds.filter((sid) => sid.toString() !== studentId);
+        if (group.studentIds.length !== before) changed = true;
+      }
+      const beforeGroupCount = projectGroup.groups.length;
+      projectGroup.groups = projectGroup.groups.filter((g) => g.studentIds.length > 0) as typeof projectGroup.groups;
+      if (changed || projectGroup.groups.length !== beforeGroupCount) {
+        await projectGroup.save();
+      }
+    }
 
     return NextResponse.json(
       { message: 'Student and associated marks deleted successfully' },

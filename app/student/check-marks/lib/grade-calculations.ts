@@ -75,16 +75,39 @@ function getAggregatedMark(
   return { mark: weightedScore, totalMarks: categoryWeightage };
 }
 
-/** Weighted final grade total + per-exam contribution breakdown, with Quiz/Assignment aggregated into single rows. */
+/** Aggregated mark for the Project category: sum of all raw marks / sum of all totals, scaled to projectWeightage. */
+function getProjectAggregatedMark(courseData: CourseData): { mark: number; totalMarks: number } | null {
+  const projectExams = courseData.exams.filter(exam => exam.examCategory === 'Project');
+  if (projectExams.length === 0) return null;
+
+  const projectMarks = projectExams
+    .map(exam => getMark(courseData.marks, exam._id))
+    .filter((mark): mark is Mark => mark !== undefined);
+
+  if (projectMarks.length === 0) return null;
+
+  const projectWeightage = Number(courseData.course.projectWeightage || 0);
+  const sumRaw = projectMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
+  const sumTotal = projectMarks.reduce((sum, mark) => {
+    const exam = projectExams.find(e => e._id === mark.examId);
+    return exam ? sum + exam.totalMarks : sum;
+  }, 0);
+
+  const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * projectWeightage) / 100 : 0;
+  return { mark: weightedSum, totalMarks: projectWeightage };
+}
+
+/** Weighted final grade total + per-exam contribution breakdown, with Quiz/Assignment/Project aggregated into single rows. */
 export function calculateFinalGrade(courseData: CourseData): FinalGradeResult {
   const breakdown: FinalGradeResult['breakdown'] = [];
   let totalContribution = 0;
 
   const hasQuizzes = courseData.exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = courseData.exams.some(exam => exam.examCategory === 'Assignment');
+  const hasProjects = courseData.exams.some(exam => exam.examCategory === 'Project');
 
   courseData.exams.forEach(exam => {
-    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') return;
+    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') return;
 
     const mark = getMark(courseData.marks, exam._id);
     if (!mark) return;
@@ -142,6 +165,25 @@ export function calculateFinalGrade(courseData: CourseData): FinalGradeResult {
     }
   }
 
+  if (hasProjects && courseData.course.projectWeightage) {
+    const aggMark = getProjectAggregatedMark(courseData);
+    if (aggMark) {
+      const percentage = (aggMark.mark / aggMark.totalMarks) * 100;
+      const contribution = (percentage * courseData.course.projectWeightage) / 100;
+
+      breakdown.push({
+        name: 'Project (Aggregated)',
+        mark: aggMark.mark,
+        totalMarks: aggMark.totalMarks,
+        weightage: courseData.course.projectWeightage,
+        contribution,
+        isAggregated: true,
+      });
+
+      totalContribution += contribution;
+    }
+  }
+
   return { total: totalContribution, breakdown };
 }
 
@@ -163,8 +205,9 @@ export function calculateGradeProjections(courseData: CourseData, gradeData: Fin
   const totalWeightage = courseData.exams.reduce((sum, exam) => {
     if (exam.examCategory === 'Quiz' && courseData.course.quizWeightage) return sum;
     if (exam.examCategory === 'Assignment' && courseData.course.assignmentWeightage) return sum;
+    if (exam.examCategory === 'Project' && courseData.course.projectWeightage) return sum;
     return sum + exam.weightage;
-  }, 0) + (courseData.course.quizWeightage || 0) + (courseData.course.assignmentWeightage || 0);
+  }, 0) + (courseData.course.quizWeightage || 0) + (courseData.course.assignmentWeightage || 0) + (courseData.course.projectWeightage || 0);
 
   const remainingWeightage = totalWeightage - completedWeightage;
   if (remainingWeightage <= 0) return null;
