@@ -11,8 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, LogOut, Save, User, Mail, Link2, CheckCircle2 } from 'lucide-react';
-import { AppHeader } from '@/app/components/AppHeader';
+import { LogOut, Save, User, Mail, Link2, CheckCircle2, FlaskConical } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { AdminSidebar } from '@/app/components/AdminSidebar';
+import { teacherSidebarItems } from '@/app/components/teacherNav';
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -136,27 +138,40 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <AppHeader
-        title="Settings"
-        subtitle="Manage your preferences"
-        gradient="blue"
-        actions={[
-          { key: 'dashboard', label: 'Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline' },
-          {
-            key: 'signout',
-            label: 'Sign Out',
-            icon: LogOut,
-            variant: 'destructive',
-            onClick: () => {
-              notify.auth.signOutSuccess();
-              signOut({ callbackUrl: '/auth/signin' });
-            },
-          },
-        ]}
-      />
+    <div className="h-dvh bg-background flex overflow-hidden">
+      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
 
+      <div className="flex-1 flex flex-col">
+        <nav className="border-b bg-background sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Settings</h1>
+              <p className="text-sm text-muted-foreground">Manage your preferences</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <ThemeToggle />
+              <Button variant="default" size="sm" asChild>
+                <Link href="/capstone">
+                  <FlaskConical className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Capstone</span>
+                </Link>
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  notify.auth.signOutSuccess();
+                  signOut({ callbackUrl: '/auth/signin' });
+                }}
+              >
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            </div>
+          </div>
+        </nav>
+
+        <main className="flex-1 overflow-auto">
       <div className="max-w-4xl mx-auto p-4 pt-8">
 
         {/* Default Weightages */}
@@ -366,6 +381,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+        </main>
       </div>
     </div>
   );

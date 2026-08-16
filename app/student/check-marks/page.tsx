@@ -114,7 +114,12 @@ export default function StudentCheckMarks() {
   }, [isGoogleVerified, adminOverride, parsedStudentId]);
 
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen overflow-hidden">
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl motion-safe:animate-blob" />
+        <div className="absolute top-1/3 -right-16 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl motion-safe:animate-blob [animation-delay:2s]" />
+      </div>
+
       <AppHeader
         title="Check Your Marks"
         subtitle="Student Self-Service Portal"
@@ -125,7 +130,7 @@ export default function StudentCheckMarks() {
         ]}
       />
 
-      <div className="max-w-6xl mx-auto p-4 pt-8">
+      <div className="relative max-w-6xl mx-auto p-4 pt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {!canSearch ? (
           <AuthGate onAdminOverride={handleAdminOverride} loading={loading} error={error} />
         ) : isGoogleVerified && !adminOverride ? (
@@ -168,15 +173,20 @@ export default function StudentCheckMarks() {
             <StudentSummary studentName={studentName} studentId={studentId} courseCount={courses.length} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {courses.map((courseData) => (
-                <CourseCard
+              {courses.map((courseData, i) => (
+                <div
                   key={courseData.course._id}
-                  courseData={courseData}
-                  onSelect={() => {
-                    setSelectedCourse(courseData);
-                    setShowCourseModal(true);
-                  }}
-                />
+                  className="animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards"
+                  style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationDuration: '400ms' }}
+                >
+                  <CourseCard
+                    courseData={courseData}
+                    onSelect={() => {
+                      setSelectedCourse(courseData);
+                      setShowCourseModal(true);
+                    }}
+                  />
+                </div>
               ))}
             </div>
           </>

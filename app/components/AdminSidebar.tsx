@@ -23,17 +23,39 @@ interface AdminSidebarProps {
   onToggle?: () => void;
 }
 
+/** The item whose href best matches the current path — exact match wins, otherwise the longest path-prefix match (so `/dashboard` doesn't also light up on `/dashboard/archived`). */
+function getActiveHref(items: SidebarItem[], pathname: string): string | null {
+  let bestHref: string | null = null;
+  let bestLength = -1;
+
+  for (const item of items) {
+    // Query-string hrefs (e.g. admin dashboard tabs) aren't reflected in usePathname(),
+    // so they can't be matched this way — leave their active state to the page itself.
+    if (item.href.includes('?')) continue;
+
+    const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (matches && item.href.length > bestLength) {
+      bestHref = item.href;
+      bestLength = item.href.length;
+    }
+  }
+
+  return bestHref;
+}
+
 function SidebarNav({ items, isOpen, pathname, onNavigate }: {
   items: SidebarItem[];
   isOpen: boolean;
   pathname: string;
   onNavigate?: () => void;
 }) {
+  const activeHref = getActiveHref(items, pathname);
+
   return (
     <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
       {items.map((item) => {
         const Icon = item.icon;
-        const isActive = pathname === item.href || pathname.startsWith(item.href);
+        const isActive = item.href === activeHref;
 
         return (
           <Link key={item.href} href={item.href} onClick={onNavigate}>

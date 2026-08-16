@@ -2,20 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { Chrome, X } from 'lucide-react';
+import { resolveExtensionId, URMS_EXTENSION_STORE_URL } from '@/lib/urmsExtensionImport';
 
 const STORAGE_KEY = 'mms-chrome-extension-promo-dismissed';
-const EXTENSION_URL =
-  'https://chromewebstore.google.com/detail/ulab-faculty-companion/ajpnbeaggcpfdidjpmlioakibolcfnho';
 
 export default function ChromeExtensionPromo() {
-  // Default to hidden until the localStorage check resolves, to avoid a
-  // flash of the badge for users who already dismissed it.
+  // Default to hidden until the localStorage + extension-detection checks
+  // resolve, to avoid a flash of the badge for users who don't need it.
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY) !== 'true') {
-      setVisible(true);
-    }
+    let cancelled = false;
+    if (localStorage.getItem(STORAGE_KEY) === 'true') return;
+
+    resolveExtensionId().then((id) => {
+      if (!cancelled && !id) setVisible(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleDismiss = () => {
@@ -26,15 +32,17 @@ export default function ChromeExtensionPromo() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 hidden sm:flex items-center gap-1 rounded-full border bg-background/95 backdrop-blur shadow-lg pl-1 pr-1 py-1 animate-in fade-in slide-in-from-bottom-2">
+    <div className="fixed bottom-6 left-6 z-40 hidden sm:flex items-center gap-1 rounded-full border bg-background/95 backdrop-blur shadow-lg p-1 animate-in fade-in slide-in-from-bottom-2 group">
       <a
-        href={EXTENSION_URL}
+        href={URMS_EXTENSION_STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+        className="flex items-center gap-0 rounded-full py-1.5 pl-1.5 pr-1.5 text-xs font-medium transition-all duration-300 ease-out group-hover:gap-2 group-hover:bg-muted group-hover:pl-2 group-hover:pr-3"
       >
         <Chrome className="h-4 w-4 text-blue-500 shrink-0" />
-        <span className="whitespace-nowrap">Get our Chrome Extension</span>
+        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out group-hover:max-w-[12rem] group-hover:opacity-100">
+          Get our Chrome Extension
+        </span>
       </a>
       <button
         type="button"

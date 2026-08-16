@@ -9,6 +9,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft, ArchiveRestore, BookOpen, FlaskConical } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { AdminSidebar } from '@/app/components/AdminSidebar';
+import { teacherSidebarItems } from '@/app/components/teacherNav';
 
 interface Course {
   _id: string;
@@ -109,24 +112,30 @@ export default function ArchivedCoursesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-dvh bg-background flex overflow-hidden">
+      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+
+      <div className="flex-1 flex flex-col">
+        <nav className="border-b bg-background sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6">
+            <h1 className="text-xl font-bold">Archived Courses</h1>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Button variant="default" size="sm" asChild>
+                <Link href="/capstone">
+                  <FlaskConical className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Capstone</span>
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </nav>
+
+        <main className="flex-1 overflow-auto">
       <div className="max-w-7xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <Button
-              variant="ghost"
-              asChild
-              className="mb-4"
-            >
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
-            <h2 className="text-3xl font-bold mb-2">
-              Archived Courses
-            </h2>
             <p className="text-muted-foreground">
               Past semester courses organized by term
             </p>
@@ -226,6 +235,8 @@ export default function ArchivedCoursesPage() {
             ))}
           </div>
         )}
+      </div>
+        </main>
       </div>
     </div>
   );

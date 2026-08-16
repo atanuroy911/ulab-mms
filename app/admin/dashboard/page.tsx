@@ -116,7 +116,7 @@ function AdminDashboardContent() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="h-dvh flex overflow-hidden">
       {/* Sidebar */}
       <AdminSidebar items={sidebarItems} title="Admin Portal" />
 

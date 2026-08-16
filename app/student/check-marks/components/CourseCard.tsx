@@ -24,11 +24,13 @@ export function CourseCard({ courseData, onSelect }: CourseCardProps) {
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect()}
-      className="cursor-pointer transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <CardHeader>
         <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white ${
+            courseData.course.courseType === 'Theory' ? 'from-blue-600 to-cyan-600' : 'from-purple-600 to-pink-600'
+          }`}>
             <Icon className="h-5 w-5" />
           </span>
           <div className="flex-1 min-w-0">

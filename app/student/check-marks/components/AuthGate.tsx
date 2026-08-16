@@ -42,7 +42,12 @@ export function AuthGate({ onAdminOverride, loading, error }: AuthGateProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button type="button" onClick={handleGoogleSignIn} disabled={signingIn} className="w-full sm:w-auto">
+        <Button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={signingIn}
+          className="w-full gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white transition-transform hover:from-blue-500 hover:to-cyan-500 hover:scale-[1.01] active:scale-[0.99] sm:w-auto"
+        >
           {signingIn ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

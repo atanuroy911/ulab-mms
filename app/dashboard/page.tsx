@@ -20,7 +20,8 @@ import { CourseCombobox } from '@/app/components/CourseCombobox';
 import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pdfStudentImport';
 import { parseCSV } from '@/app/utils/csv';
 import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
-import { AppHeader } from '@/app/components/AppHeader';
+import { AdminSidebar } from '@/app/components/AdminSidebar';
+import { teacherSidebarItems } from '@/app/components/teacherNav';
 
 interface Course {
   _id: string;
@@ -639,29 +640,57 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <ChromeExtensionPromo />
-      <AppHeader
-        title="Marks Management System"
-        subtitle={`Welcome, ${session?.user?.name}`}
-        gradient="blue"
-        actions={[
-          { key: 'resources', label: 'Resources', icon: FileStack, href: '/resources', variant: 'default' },
-          { key: 'capstone', label: 'Capstone', icon: FlaskConical, href: '/capstone', variant: 'default' },
-          { key: 'settings', label: 'Settings', icon: Settings, href: '/settings', variant: 'outline' },
-          {
-            key: 'signout',
-            label: 'Sign Out',
-            icon: LogOut,
-            variant: 'destructive',
-            onClick: () => {
-              notify.auth.signOutSuccess();
-              signOut({ callbackUrl: '/auth/signin' });
-            },
-          },
-        ]}
-      />
+    <div className="h-dvh bg-background flex overflow-hidden">
+      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
 
+      <div className="flex-1 flex flex-col">
+        <ChromeExtensionPromo />
+
+        {/* Top Navigation Bar */}
+        <nav className="border-b bg-background sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
+            <div className="flex items-center gap-4 min-w-0">
+              <Image
+                src="/ulab.svg"
+                alt="ULAB Logo"
+                width={40}
+                height={40}
+                className="drop-shadow-lg shrink-0"
+              />
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold truncate bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  Marks Management System
+                </h1>
+                <p className="text-sm text-muted-foreground truncate">
+                  Welcome, {session?.user?.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <ThemeToggle />
+              <Button variant="default" size="sm" asChild>
+                <Link href="/capstone">
+                  <FlaskConical className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Capstone</span>
+                </Link>
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  notify.auth.signOutSuccess();
+                  signOut({ callbackUrl: '/auth/signin' });
+                }}
+              >
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            </div>
+          </div>
+        </nav>
+
+        <main className="flex-1 overflow-auto">
       <div className="max-w-7xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
@@ -674,16 +703,6 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex gap-3 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-            >
-              <Link href="/dashboard/archived">
-                <Archive className="h-4 w-4 mr-2" />
-                View Archived
-              </Link>
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1676,6 +1695,8 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </main>
+      </div>
     </div>
   );
 }

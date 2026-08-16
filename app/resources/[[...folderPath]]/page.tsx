@@ -5,12 +5,14 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, ChevronRight, Download, Folder, File, FlaskConical, LayoutDashboard } from 'lucide-react';
+import { Loader2, LogOut, ChevronRight, Download, Folder, File, FlaskConical } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { notify } from '@/app/utils/notifications';
-import { AppHeader } from '@/app/components/AppHeader';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { AdminSidebar } from '@/app/components/AdminSidebar';
+import { teacherSidebarItems } from '@/app/components/teacherNav';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -354,28 +356,40 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader
-        title="Resources"
-        subtitle={`Welcome, ${session?.user?.name}`}
-        gradient="blue"
-        actions={[
-          { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', variant: 'default' },
-          { key: 'capstone', label: 'Capstone', icon: FlaskConical, href: '/capstone', variant: 'default' },
-          { key: 'settings', label: 'Settings', icon: Settings, href: '/settings', variant: 'outline' },
-          {
-            key: 'signout',
-            label: 'Sign Out',
-            icon: LogOut,
-            variant: 'destructive',
-            onClick: () => {
-              notify.auth.signOutSuccess();
-              signOut({ callbackUrl: '/auth/signin' });
-            },
-          },
-        ]}
-      />
+    <div className="h-dvh bg-background flex overflow-hidden">
+      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
 
+      <div className="flex-1 flex flex-col">
+        <nav className="border-b bg-background sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Resources</h1>
+              <p className="text-sm text-muted-foreground">Welcome, {session?.user?.name}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <ThemeToggle />
+              <Button variant="default" size="sm" asChild>
+                <Link href="/capstone">
+                  <FlaskConical className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Capstone</span>
+                </Link>
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  notify.auth.signOutSuccess();
+                  signOut({ callbackUrl: '/auth/signin' });
+                }}
+              >
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            </div>
+          </div>
+        </nav>
+
+        <main className="flex-1 overflow-auto">
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumb Navigation */}
@@ -522,6 +536,8 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
             </div>
           )}
         </div>
+      </div>
+        </main>
       </div>
     </div>
   );

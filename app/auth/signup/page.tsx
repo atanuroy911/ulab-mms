@@ -6,13 +6,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { notify } from '@/app/utils/notifications';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Mail, Lock, User, UserPlus } from 'lucide-react';
 import { GOOGLE_AUTH_ERROR_MESSAGES } from '@/lib/googleAccount';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { AuthShell } from '@/app/auth/components/AuthShell';
 
 export default function SignUp() {
   return (
@@ -106,22 +107,22 @@ function SignUpForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8">
-        {/* Logo and Title */}
-        <div className="text-center space-y-4">
+    <AuthShell>
+      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Logo and Title — shown on mobile / tablet, brand panel covers this on desktop */}
+        <div className="space-y-4 text-center lg:hidden">
           <div className="flex justify-center">
             <Image
               src="/ulab.svg"
               alt="ULAB Logo"
-              width={120}
-              height={120}
+              width={90}
+              height={90}
               className="drop-shadow-lg"
               priority
             />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               Marks Management System
             </h1>
             <p className="text-sm text-muted-foreground mt-2">
@@ -131,7 +132,7 @@ function SignUpForm() {
         </div>
 
         {/* Sign Up Card */}
-        <Card>
+        <Card className="border-border/60 shadow-xl shadow-blue-500/5 dark:shadow-black/40">
           <CardHeader>
             <CardTitle>Create an Account</CardTitle>
             <CardDescription>
@@ -148,40 +149,49 @@ function SignUpForm() {
             {!settingsLoaded || credentialsLoginEnabled ? (
               <>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75 fill-mode-backwards">
                     <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="Enter your full name"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      required
-                      disabled={loading}
-                    />
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="name"
+                        type="text"
+                        placeholder="Enter your full name"
+                        value={formData.name}
+                        onChange={(e) =>
+                          setFormData({ ...formData, name: e.target.value })
+                        }
+                        required
+                        disabled={loading}
+                        className="pl-9"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-backwards">
                     <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="yourname@ulab.edu.bd"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                      required
-                      disabled={loading}
-                    />
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="yourname@ulab.edu.bd"
+                        value={formData.email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
+                        required
+                        disabled={loading}
+                        className="pl-9"
+                      />
+                    </div>
                     <p className="text-xs text-muted-foreground">Use your @ulab.edu.bd email</p>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-backwards">
                     <Label htmlFor="password">Password</Label>
                     <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
@@ -192,7 +202,7 @@ function SignUpForm() {
                         }
                         required
                         disabled={loading}
-                        className="pr-10"
+                        className="pl-9 pr-10"
                       />
                       <Button
                         type="button"
@@ -214,9 +224,10 @@ function SignUpForm() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200 fill-mode-backwards">
                     <Label htmlFor="confirmPassword">Confirm Password</Label>
                     <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="confirmPassword"
                         type={showPassword ? "text" : "password"}
@@ -227,7 +238,7 @@ function SignUpForm() {
                         }
                         required
                         disabled={loading}
-                        className="pr-10"
+                        className="pl-9 pr-10"
                       />
                       <Button
                         type="button"
@@ -249,14 +260,21 @@ function SignUpForm() {
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button
+                    type="submit"
+                    className="w-full gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white transition-transform hover:from-blue-500 hover:to-cyan-500 hover:scale-[1.01] active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2 duration-500 delay-[250ms] fill-mode-backwards"
+                    disabled={loading}
+                  >
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Creating account...
                       </>
                     ) : (
-                      'Sign Up'
+                      <>
+                        <UserPlus className="h-4 w-4" />
+                        Sign Up
+                      </>
                     )}
                   </Button>
                 </form>
@@ -279,7 +297,7 @@ function SignUpForm() {
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="w-full transition-transform hover:scale-[1.01] active:scale-[0.99]"
               onClick={handleGoogleSignUp}
               disabled={googleLoading}
             >
@@ -306,6 +324,6 @@ function SignUpForm() {
           </CardFooter>
         </Card>
       </div>
-    </div>
+    </AuthShell>
   );
 }

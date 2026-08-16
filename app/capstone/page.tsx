@@ -7,9 +7,10 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, ArrowLeft, User, BarChart3 } from 'lucide-react';
-import Image from 'next/image';
-import { AppHeader } from '@/app/components/AppHeader';
+import { Loader2, User, BarChart3 } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { AdminSidebar } from '@/app/components/AdminSidebar';
+import { teacherSidebarItems } from '@/app/components/teacherNav';
 
 export default function CapstonePage() {
   const { data: session, status } = useSession();
@@ -33,16 +34,21 @@ export default function CapstonePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader
-        title="Capstone Marks Management"
-        subtitle="Submit capstone project marks"
-        gradient="blue"
-        actions={[
-          { key: 'dashboard', label: 'Back to Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline', alwaysShowLabel: true },
-        ]}
-      />
+    <div className="h-dvh bg-background flex overflow-hidden">
+      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
 
+      <div className="flex-1 flex flex-col">
+        <nav className="border-b bg-background sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Capstone Marks Management</h1>
+              <p className="text-sm text-muted-foreground">Submit capstone project marks</p>
+            </div>
+            <ThemeToggle />
+          </div>
+        </nav>
+
+        <main className="flex-1 overflow-auto">
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="mb-8">
@@ -116,6 +122,8 @@ export default function CapstonePage() {
             </Card>
           </div>
         </div>
+      </div>
+        </main>
       </div>
     </div>
   );

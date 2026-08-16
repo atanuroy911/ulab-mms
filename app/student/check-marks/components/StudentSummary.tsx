@@ -12,10 +12,10 @@ interface StudentSummaryProps {
 
 export function StudentSummary({ studentName, studentId, courseCount }: StudentSummaryProps) {
   return (
-    <Card className="mb-6 border-primary/20 bg-primary/5">
+    <Card className="mb-6 border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <CardContent className="pt-6">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+          <div className="w-14 h-14 shrink-0 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 text-white flex items-center justify-center shadow-md">
             <GraduationCap className="h-7 w-7" />
           </div>
           <div>

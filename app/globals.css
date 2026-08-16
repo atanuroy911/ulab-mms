@@ -240,3 +240,16 @@ body {
   margin: 0.5rem 0;
 }
 
+/* Ambient background blobs used on the auth (sign in / sign up) pages */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes blob-float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(24px, -32px) scale(1.08); }
+    66% { transform: translate(-18px, 18px) scale(0.94); }
+  }
+
+  .animate-blob {
+    animation: blob-float 14s ease-in-out infinite;
+  }
+}
+

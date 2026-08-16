@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation';
 import { notify } from '@/app/utils/notifications';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Loader2, Shield } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Shield, Lock } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AuthShell, ADMIN_FEATURES } from '@/app/auth/components/AuthShell';
 
 export default function AdminSignIn() {
   const router = useRouter();
@@ -112,32 +112,39 @@ export default function AdminSignIn() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      {/* Theme Toggle - Fixed Position */}
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-      
-      <div className="max-w-md w-full space-y-8">
-        {/* Logo and Title */}
-        <div className="text-center space-y-4">
+    <AuthShell
+      variant="purple"
+      eyebrow="Admin"
+      title={
+        <>
+          Run the system,
+          <br />
+          securely.
+        </>
+      }
+      tagline="Full control over courses, accounts, backups, and capstone data — for authorized administrators only."
+      features={ADMIN_FEATURES}
+    >
+      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Logo and Title — shown on mobile / tablet, brand panel covers this on desktop */}
+        <div className="space-y-4 text-center lg:hidden">
           <div className="flex justify-center">
             <div className="relative inline-block">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
-                width={120}
-                height={120}
+                width={90}
+                height={90}
                 className="drop-shadow-lg"
                 priority
               />
               <div className="absolute bottom-0 right-0 z-10 translate-x-1/3 translate-y-1/3 rounded-full bg-primary p-2 text-primary-foreground ring-4 ring-background">
-                <Shield className="h-6 w-6" />
+                <Shield className="h-5 w-5" />
               </div>
             </div>
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               Admin Portal
             </h1>
             <p className="text-sm text-muted-foreground mt-2">
@@ -147,7 +154,7 @@ export default function AdminSignIn() {
         </div>
 
         {/* Sign In Card */}
-        <Card>
+        <Card className="border-border/60 shadow-xl shadow-purple-500/5 dark:shadow-black/40">
           <CardHeader>
             <CardTitle>
               {requireSetup ? 'Set Up Admin Password' : 'Admin Sign In'}
@@ -186,11 +193,12 @@ export default function AdminSignIn() {
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-backwards">
                 <Label htmlFor="password">
                   {requireSetup ? 'New Password' : 'Password'}
                 </Label>
                 <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
@@ -199,7 +207,7 @@ export default function AdminSignIn() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loading}
-                    className="pr-10"
+                    className="pl-9 pr-10"
                     minLength={requireSetup ? 8 : undefined}
                   />
                   <Button
@@ -228,9 +236,10 @@ export default function AdminSignIn() {
               </div>
 
               {requireSetup && (
-                <div className="space-y-2">
+                <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-backwards">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
@@ -239,7 +248,7 @@ export default function AdminSignIn() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                       disabled={loading}
-                      className="pr-10"
+                      className="pl-9 pr-10"
                       minLength={8}
                     />
                     <Button
@@ -263,7 +272,11 @@ export default function AdminSignIn() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white transition-transform hover:from-purple-500 hover:to-pink-500 hover:scale-[1.01] active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200 fill-mode-backwards"
+                disabled={loading}
+              >
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -287,6 +300,6 @@ export default function AdminSignIn() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
