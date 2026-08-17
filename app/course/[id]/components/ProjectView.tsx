@@ -606,19 +606,31 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
   const activeRubricExam = editingRubric ? projectExams.find(e => e._id === editingRubric.examId) : null;
   const activeRubricGroup = editingRubric ? state.groups.find(g => g._id === editingRubric.groupId) : null;
   const activeRubricTemplate = activeRubricExam ? getRubricTemplate(activeRubricExam) : null;
+  // A saved total exists (from the actual Marks collection) but the draft above came up empty —
+  // most likely this mark was entered before the section's rubric was configured, so there's no
+  // per-criterion breakdown to restore. Surface the old total instead of just looking blank.
+  const activeRubricStaleTotal = editingRubric && rubricDraft.c1 === null
+    ? savedMarks[editingRubric.groupId]?.[editingRubric.examId]
+    : undefined;
   const hasPresentationRubricExam = projectExams.some(e => getRubricTemplate(e)?.slug === 'presentation');
 
   const activeDirectMarkExam = editingDirectMark ? projectExams.find(e => e._id === editingDirectMark.examId) : null;
   const activeDirectMarkGroup = editingDirectMark ? state.groups.find(g => g._id === editingDirectMark.groupId) : null;
 
-  /** Open the direct-mark modal — seed the draft from the saved mark if not already drafted */
+  /** Open the direct-mark modal — seed the draft from the saved mark if not already drafted.
+   *  Falls back to the actual saved Marks total (`savedMarks`) when the rubric-entry's own
+   *  `directMark` is missing/stale — e.g. a mark entered before this section's rubric config
+   *  changed — so a group that's genuinely marked doesn't open to an empty box. */
   const handleOpenDirectMarkModal = (group: GroupEntry, exam: ProjectExam) => {
     const entry = getExamRubric(group, exam._id);
+    const entryValue = entry?.directMark !== undefined && entry?.directMark !== null ? entry.directMark : undefined;
+    const savedTotal = savedMarks[group._id]?.[exam._id];
+    const fallbackValue = entryValue ?? savedTotal;
     setDirectMarkDrafts(prev => ({
       ...prev,
       [group._id]: {
         ...prev[group._id],
-        [exam._id]: prev[group._id]?.[exam._id] ?? (entry?.directMark !== undefined && entry?.directMark !== null ? String(entry.directMark) : ''),
+        [exam._id]: prev[group._id]?.[exam._id] ?? (fallbackValue !== undefined ? String(fallbackValue) : ''),
       },
     }));
     setEditingDirectMark({ groupId: group._id, examId: exam._id });
@@ -888,12 +900,14 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                           </td>
 
                           {projectExams.map(exam => {
-                            const entry = getExamRubric(group, exam._id);
                             const template = getRubricTemplate(exam);
                             const savedMark = groupSaved[exam._id];
-                            const isScored = template
-                              ? !!entry && entry.markMode === 'rubric'
-                              : entry?.directMark !== undefined && entry?.directMark !== null;
+                            // `savedMark` comes straight from the actual saved Marks collection, so it's
+                            // the source of truth for "is this scored" — the rubric entry's `markMode` can
+                            // go stale relative to it (e.g. a section's rubric template was reconfigured
+                            // after the mark was entered), which used to make already-marked groups appear
+                            // as "Not marked" even though a mark existed.
+                            const isMarked = savedMark !== undefined;
 
                             return (
                               <td key={exam._id} className="px-4 py-3 text-sm">
@@ -901,10 +915,10 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                                   onClick={() => template ? handleOpenRubric(group, exam._id) : handleOpenDirectMarkModal(group, exam)}
                                   className="w-full text-left"
                                 >
-                                  {isScored ? (
+                                  {isMarked ? (
                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded font-medium text-xs bg-green-500/15 text-green-700 dark:text-green-300">
                                       <Check className="w-3 h-3" />
-                                      {savedMark !== undefined ? `${savedMark} pts` : 'Scored'}
+                                      {savedMark} pts
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/70 transition-colors">
@@ -979,6 +993,14 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
               Score each criterion 0–3. The final mark is calculated automatically from these scores.
             </DialogDescription>
           </DialogHeader>
+
+          {activeRubricStaleTotal !== undefined && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              This group already has a saved mark of <strong>{activeRubricStaleTotal} pts</strong> from before this
+              section&apos;s rubric was set up, so there&apos;s no per-criterion breakdown to show here. Scoring the
+              criteria below will replace it with the new total.
+            </div>
+          )}
 
           <div className="space-y-4 py-2">
             {(activeRubricTemplate?.criteria ?? []).map(criterion => (
