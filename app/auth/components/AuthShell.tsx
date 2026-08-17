@@ -20,9 +20,19 @@ const ADMIN_FEATURES = [
 
 type Variant = 'blue' | 'purple';
 
-const VARIANT_STYLES: Record<Variant, { gradient: string; blobs: [string, string, string]; text: string; textMuted: string; textFooter: string }> = {
+const VARIANT_STYLES: Record<Variant, {
+  gradient: string;
+  overlay: string;
+  image: string;
+  blobs: [string, string, string];
+  text: string;
+  textMuted: string;
+  textFooter: string;
+}> = {
   blue: {
     gradient: 'from-blue-600 via-blue-700 to-cyan-600',
+    overlay: 'from-blue-950/78 via-blue-950/58 to-blue-900/68',
+    image: '/backgrounds/bg.webp',
     blobs: ['bg-blue-500/20', 'bg-cyan-400/20', 'bg-purple-400/10'],
     text: 'text-blue-100',
     textMuted: 'text-blue-50/90',
@@ -30,6 +40,8 @@ const VARIANT_STYLES: Record<Variant, { gradient: string; blobs: [string, string
   },
   purple: {
     gradient: 'from-purple-600 via-purple-700 to-pink-600',
+    overlay: 'from-purple-950/78 via-purple-950/58 to-purple-900/68',
+    image: '/backgrounds/bg2.webp',
     blobs: ['bg-purple-500/20', 'bg-pink-400/20', 'bg-blue-400/10'],
     text: 'text-purple-100',
     textMuted: 'text-purple-50/90',
@@ -78,6 +90,14 @@ export function AuthShell({
 
       {/* Brand panel — desktop only */}
       <div className={`relative hidden overflow-hidden bg-gradient-to-br ${styles.gradient} p-12 text-white lg:flex lg:flex-col lg:justify-between`}>
+        <Image
+          src={styles.image}
+          alt=""
+          fill
+          priority
+          className="object-cover"
+        />
+        <div aria-hidden className={`absolute inset-0 bg-gradient-to-br ${styles.overlay}`} />
         <div
           aria-hidden
           className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:24px_24px]"
@@ -100,8 +120,8 @@ export function AuthShell({
               {eyebrow}
             </span>
           )}
-          <h2 className="text-4xl font-bold leading-tight">{title}</h2>
-          <p className={`max-w-sm text-lg ${styles.text}`}>{tagline}</p>
+          <h2 className="text-4xl font-bold leading-tight [text-shadow:0_2px_12px_rgb(0_0_0_/_0.35)]">{title}</h2>
+          <p className={`max-w-sm text-lg ${styles.text} [text-shadow:0_1px_8px_rgb(0_0_0_/_0.3)]`}>{tagline}</p>
           <ul className="space-y-3 pt-4">
             {features.map((feature, i) => (
               <li
