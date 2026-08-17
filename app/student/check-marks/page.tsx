@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { ArrowLeft, ClipboardList, UserX } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
-import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { Button } from '@/components/ui/button';
 import { AppHeader } from '@/app/components/AppHeader';
@@ -135,18 +136,43 @@ export default function StudentCheckMarks() {
           <AuthGate onAdminOverride={handleAdminOverride} loading={loading} error={error} />
         ) : isGoogleVerified && !adminOverride ? (
           loading ? (
-            <Card className="mb-6">
-              <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
-                <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                <CardDescription>Loading your marks…</CardDescription>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Card key={i}>
+                    <CardHeader>
+                      <div className="flex items-start gap-3">
+                        <Skeleton className="h-11 w-11 shrink-0 rounded-lg" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-5 w-24" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
           ) : (
             (nameIdMissing || error) && (
-              <Card className="mb-6">
+              <Card className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
-                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                    <UserX className="h-7 w-7 text-muted-foreground" />
+                  <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                    <UserX className="h-7 w-7 text-amber-600 dark:text-amber-400" />
                   </div>
                   <CardTitle>{nameIdMissing ? "Couldn't identify your Student ID" : 'Unable to load your marks'}</CardTitle>
                   <CardDescription>

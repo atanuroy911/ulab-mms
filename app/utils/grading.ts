@@ -170,36 +170,26 @@ export function validateGradingScale(grades: GradeThreshold[]): string | null {
  */
 export function getGradeColor(letter: string): string {
   switch (letter) {
-    case 'A': return 'text-green-400';
-    case 'B': return 'text-blue-400';
-    case 'C': return 'text-yellow-400';
-    case 'D': return 'text-orange-400';
-    case 'F': return 'text-red-400';
-    default: return 'text-gray-400';
+    case 'A': return 'text-green-600 dark:text-green-400';
+    case 'B': return 'text-blue-600 dark:text-blue-400';
+    case 'C': return 'text-yellow-600 dark:text-yellow-400';
+    case 'D': return 'text-orange-600 dark:text-orange-400';
+    case 'F': return 'text-red-600 dark:text-red-400';
+    default: return 'text-muted-foreground';
   }
 }
 
 /**
- * Get grade background color for styling
+ * Get grade background color for styling. Returns a theme-aware pair
+ * (light/dark variants baked in), so callers no longer need to track theme.
  */
-export function getGradeBgColor(letter: string, isDark: boolean = true): string {
-  if (isDark) {
-    switch (letter) {
-      case 'A': return 'bg-green-900/30';
-      case 'B': return 'bg-blue-900/30';
-      case 'C': return 'bg-yellow-900/30';
-      case 'D': return 'bg-orange-900/30';
-      case 'F': return 'bg-red-900/30';
-      default: return 'bg-gray-900/30';
-    }
-  } else {
-    switch (letter) {
-      case 'A': return 'bg-green-100';
-      case 'B': return 'bg-blue-100';
-      case 'C': return 'bg-yellow-100';
-      case 'D': return 'bg-orange-100';
-      case 'F': return 'bg-red-100';
-      default: return 'bg-gray-100';
-    }
+export function getGradeBgColor(letter: string): string {
+  switch (letter) {
+    case 'A': return 'bg-green-100 dark:bg-green-900/30';
+    case 'B': return 'bg-blue-100 dark:bg-blue-900/30';
+    case 'C': return 'bg-yellow-100 dark:bg-yellow-900/30';
+    case 'D': return 'bg-orange-100 dark:bg-orange-900/30';
+    case 'F': return 'bg-red-100 dark:bg-red-900/30';
+    default: return 'bg-muted';
   }
 }

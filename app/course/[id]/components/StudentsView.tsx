@@ -316,48 +316,48 @@ export default function StudentsView({
                   </th>
                 ))}
                 {hasQuizzes && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-900/20 border-l-2 border-amber-500/50 min-w-[150px] whitespace-nowrap">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-500/10 border-l-2 border-amber-500/50 min-w-[150px] whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <span>📝 Quiz (Agg)</span>
                     </div>
-                    <div className="text-[10px] font-normal mt-0.5 text-amber-400">
+                    <div className="text-[10px] font-normal mt-0.5 text-amber-600 dark:text-amber-400">
                       {course?.quizAggregation === 'best' ? 'Best' : 'Avg'} → Score / {course?.quizWeightage || 0}%
                     </div>
                   </th>
                 )}
                 {hasAssignments && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-900/20 border-l-2 border-blue-500/50 min-w-[170px] whitespace-nowrap">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-500/10 border-l-2 border-blue-500/50 min-w-[170px] whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <span>📋 {course?.courseType === 'Lab' ? 'CLA' : 'Assignment'} (Agg)</span>
                     </div>
-                    <div className="text-[10px] font-normal mt-0.5 text-blue-400">
+                    <div className="text-[10px] font-normal mt-0.5 text-blue-600 dark:text-blue-400">
                       {course?.assignmentAggregation === 'best' ? 'Best' : course?.assignmentAggregation === 'sum' ? 'Sum' : 'Avg'} → Score / {course?.assignmentWeightage || 0}%
                     </div>
                   </th>
                 )}
                 {hasProjects && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-900/20 border-l-2 border-violet-500/50 min-w-[190px] whitespace-nowrap">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-500/10 border-l-2 border-violet-500/50 min-w-[190px] whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <span>{course?.courseType === 'Lab' ? '🚀 OEL / CE Project' : '🎓 Project'} (Agg)</span>
                     </div>
-                    <div className="text-[10px] font-normal mt-0.5 text-violet-400">
+                    <div className="text-[10px] font-normal mt-0.5 text-violet-600 dark:text-violet-400">
                       Sum of sections → Score / {course?.projectWeightage || 0}%
                     </div>
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-l-2 border-green-500/50 min-w-[160px] whitespace-nowrap">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-l-2 border-green-500/50 min-w-[160px] whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     <span>🎯 Final Grade (Est.)</span>
                   </div>
-                  <div className="text-[10px] font-normal mt-0.5 text-green-400">
+                  <div className="text-[10px] font-normal mt-0.5 text-green-600 dark:text-green-400">
                     Weighted Total
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-900/20 to-violet-900/20 border-l-2 border-purple-500/50 min-w-[140px] whitespace-nowrap">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-l-2 border-purple-500/50 min-w-[140px] whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     <span>🏆 Letter Grade</span>
                   </div>
-                  <div className="text-[10px] font-normal mt-0.5 text-purple-400">
+                  <div className="text-[10px] font-normal mt-0.5 text-purple-600 dark:text-purple-400">
                     Based on %
                   </div>
                 </th>
@@ -436,12 +436,12 @@ export default function StudentsView({
                     );
                   })}
                   {hasQuizzes && (
-                    <td className="px-4 py-3 text-sm bg-amber-900/10 border-l-2 border-amber-500/30">
+                    <td className="px-4 py-3 text-sm bg-amber-500/5 border-l-2 border-amber-500/30">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Quiz');
-                        if (!aggMark) return <span className="text-gray-600">—</span>;
+                        if (!aggMark) return <span className="text-muted-foreground">—</span>;
                         return (
-                          <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
+                          <span className="px-2 py-1 rounded font-medium text-xs bg-amber-500/15 text-amber-700 dark:text-amber-200">
                             {aggMark.rawMark.toFixed(2)} / {course?.quizWeightage || 0}
                           </span>
                         );
@@ -449,12 +449,12 @@ export default function StudentsView({
                     </td>
                   )}
                   {hasAssignments && (
-                    <td className="px-4 py-3 text-sm bg-blue-900/10 border-l-2 border-blue-500/30">
+                    <td className="px-4 py-3 text-sm bg-blue-500/5 border-l-2 border-blue-500/30">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Assignment');
-                        if (!aggMark) return <span className="text-gray-600">—</span>;
+                        if (!aggMark) return <span className="text-muted-foreground">—</span>;
                         return (
-                          <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
+                          <span className="px-2 py-1 rounded font-medium text-xs bg-blue-500/15 text-blue-700 dark:text-blue-200">
                             {aggMark.rawMark.toFixed(2)} / {course?.assignmentWeightage || 0}
                           </span>
                         );
@@ -462,16 +462,16 @@ export default function StudentsView({
                     </td>
                   )}
                   {hasProjects && (
-                    <td className="px-4 py-3 text-sm bg-violet-900/10 border-l-2 border-violet-500/30">
+                    <td className="px-4 py-3 text-sm bg-violet-500/5 border-l-2 border-violet-500/30">
                       {(() => {
                         const aggMark = getProjectAggregatedMark(student._id);
-                        if (!aggMark) return <span className="text-gray-600">—</span>;
+                        if (!aggMark) return <span className="text-muted-foreground">—</span>;
                         return (
                           <div className="flex flex-col gap-1">
-                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-900/40 text-violet-200">
+                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-500/15 text-violet-700 dark:text-violet-200">
                               {aggMark.sumRaw} / {aggMark.sumTotal} pts
                             </span>
-                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-700/30 text-violet-300">
+                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300">
                               → {aggMark.rawMark.toFixed(2)} / {course?.projectWeightage || 0}%
                             </span>
                           </div>
@@ -479,32 +479,32 @@ export default function StudentsView({
                       })()}
                     </td>
                   )}
-                  <td className="px-4 py-3 text-sm bg-gradient-to-r from-green-900/10 to-emerald-900/10 border-l-2 border-green-500/30">
+                  <td className="px-4 py-3 text-sm bg-gradient-to-r from-green-500/5 to-emerald-500/5 border-l-2 border-green-500/30">
                     {(() => {
                       if (student.withdrawn) {
-                        return <span className="text-gray-600 font-semibold italic">Withdrawn</span>;
+                        return <span className="text-muted-foreground font-semibold italic">Withdrawn</span>;
                       }
 
                       const gradeData = calculateFinalGrade(student._id);
                       if (gradeData.breakdown.length === 0) {
-                        return <span className="text-gray-600">0</span>;
+                        return <span className="text-muted-foreground">0</span>;
                       }
-                      
+
                       return (
                         <div className="flex items-center gap-2">
                           <div className="flex-1">
                             <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-green-900/40 text-green-200">
+                              <span className="px-2 py-1 rounded font-medium text-xs bg-green-500/15 text-green-700 dark:text-green-200">
                                 Total: {gradeData.total.toFixed(2)}%
                               </span>
-                              <span className="text-[10px] italic text-gray-500">
+                              <span className="text-[10px] italic text-muted-foreground">
                                 Out of 100%
                               </span>
                             </div>
                           </div>
                           <button
                             onClick={() => onShowGradeBreakdown(student)}
-                            className="px-2 py-1 bg-blue-900/40 hover:bg-blue-900/60 text-blue-300 text-xs rounded transition-all"
+                            className="px-2 py-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 text-xs rounded transition-all"
                             title="View breakdown"
                           >
                             ℹ️
@@ -513,15 +513,15 @@ export default function StudentsView({
                       );
                     })()}
                   </td>
-                  <td className="px-4 py-3 text-sm bg-gradient-to-r from-purple-900/10 to-violet-900/10 border-l-2 border-purple-500/30">
+                  <td className="px-4 py-3 text-sm bg-gradient-to-r from-purple-500/5 to-violet-500/5 border-l-2 border-purple-500/30">
                     {(() => {
                       if (student.withdrawn) {
                         return (
                           <div className="flex items-center gap-2">
-                            <span className="px-3 py-1.5 rounded-lg font-bold text-sm bg-red-900/40 text-red-300 border border-red-500/30">
+                            <span className="px-3 py-1.5 rounded-lg font-bold text-sm bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30">
                               W
                             </span>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                               (Withdrawn)
                             </span>
                           </div>
@@ -530,21 +530,21 @@ export default function StudentsView({
 
                       const gradeData = calculateFinalGrade(student._id);
                       if (gradeData.breakdown.length === 0) {
-                        return <span className="text-gray-600">0</span>;
+                        return <span className="text-muted-foreground">0</span>;
                       }
-                      
+
                       const letterGrade = calculateLetterGrade(gradeData.total, course?.gradingScale);
-                      
+
                       if (!letterGrade) {
-                        return <span className="text-gray-600">0</span>;
+                        return <span className="text-muted-foreground">0</span>;
                       }
-                      
+
                       return (
                         <div className="flex items-center gap-2">
                           <span className={`px-3 py-1.5 rounded-lg font-bold text-sm ${getGradeBgColor(letterGrade.letter)} ${getGradeColor(letterGrade.letter)} border ${letterGrade.letter === 'A' ? 'border-green-500/30' : letterGrade.letter === 'B' ? 'border-blue-500/30' : letterGrade.letter === 'C' ? 'border-yellow-500/30' : letterGrade.letter === 'D' ? 'border-orange-500/30' : 'border-red-500/30'}`}>
                             {getGradeDisplay(letterGrade.letter, letterGrade.modifier)}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-muted-foreground">
                             ({gradeData.total.toFixed(2)}%)
                           </span>
                         </div>

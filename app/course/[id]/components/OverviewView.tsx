@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles } from 'lucide-react';
+import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles, Users, PenLine, PieChart } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
 
@@ -149,9 +149,37 @@ export default function OverviewView({
     setShowUrmsModal(true);
   };
 
+  const completionPct = students.length > 0 && exams.length > 0
+    ? Math.round((marks.length / (students.length * exams.length)) * 100)
+    : 0;
+
+  const STAT_CARDS = [
+    {
+      label: 'Students',
+      value: students.length,
+      hint: `${studentsWithMarks} with marks`,
+      icon: Users,
+      gradient: 'from-blue-600 to-cyan-600',
+    },
+    {
+      label: 'Exams',
+      value: exams.length,
+      hint: `${totalWeightage}% total weightage`,
+      icon: ClipboardList,
+      gradient: 'from-purple-600 to-pink-600',
+    },
+    {
+      label: 'Marks Recorded',
+      value: marks.length,
+      hint: 'Total entries',
+      icon: PenLine,
+      gradient: 'from-emerald-600 to-teal-600',
+    },
+  ] as const;
+
   return (
     <div className="space-y-6">
-      <div>
+      <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
         <h1 className="text-3xl font-bold">Course Overview</h1>
         <p className="text-sm mt-1 text-muted-foreground">
           Manage your course structure and view statistics
@@ -160,69 +188,44 @@ export default function OverviewView({
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Students</CardTitle>
-            <span className="text-2xl">👨‍🎓</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{students.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {studentsWithMarks} with marks
-            </p>
-          </CardContent>
-        </Card>
+        {STAT_CARDS.map((stat, i) => (
+          <Card
+            key={stat.label}
+            className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards"
+            style={{ animationDelay: `${i * 75}ms`, animationDuration: '400ms' }}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br text-white ${stat.gradient}`}>
+                <stat.icon className="h-4 w-4" />
+              </span>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stat.value}</div>
+              <p className="text-xs text-muted-foreground">{stat.hint}</p>
+            </CardContent>
+          </Card>
+        ))}
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Exams</CardTitle>
-            <span className="text-2xl">📝</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{exams.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {totalWeightage}% total weightage
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Marks Recorded</CardTitle>
-            <span className="text-2xl">✏️</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{marks.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Total entries
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
+        <Card
+          className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards"
+          style={{ animationDelay: '225ms', animationDuration: '400ms' }}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completion</CardTitle>
-            <span className="text-2xl">📊</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+              <PieChart className="h-4 w-4" />
+            </span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {students.length > 0 && exams.length > 0
-                ? Math.round((marks.length / (students.length * exams.length)) * 100)
-                : 0}%
-            </div>
-            <Progress 
-              value={students.length > 0 && exams.length > 0
-                ? (marks.length / (students.length * exams.length)) * 100
-                : 0
-              } 
-              className="mt-2"
-            />
+            <div className="text-2xl font-bold">{completionPct}%</div>
+            <Progress value={completionPct} className="mt-2" />
           </CardContent>
         </Card>
       </div>
 
       {/* Quick Actions */}
-      <Card>
+      <Card className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-backwards">
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>Common tasks and operations</CardDescription>
@@ -371,14 +374,18 @@ export default function OverviewView({
       </Card>
 
       {/* Course Info */}
-      <Card>
+      <Card className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200 fill-mode-backwards">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {course.courseType === 'Theory' ? (
-              <BookOpen className="w-5 h-5" />
-            ) : (
-              <FlaskConical className="w-5 h-5" />
-            )}
+            <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br text-white ${
+              course.courseType === 'Theory' ? 'from-blue-600 to-cyan-600' : 'from-purple-600 to-pink-600'
+            }`}>
+              {course.courseType === 'Theory' ? (
+                <BookOpen className="w-4 h-4" />
+              ) : (
+                <FlaskConical className="w-4 h-4" />
+              )}
+            </span>
             Course Information
           </CardTitle>
         </CardHeader>

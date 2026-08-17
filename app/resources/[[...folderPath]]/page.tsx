@@ -9,6 +9,7 @@ import { Loader2, LogOut, ChevronRight, Download, Folder, File, FlaskConical } f
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { notify } from '@/app/utils/notifications';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
@@ -519,9 +520,11 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
 
           {/* Empty State - only once we're sure there's genuinely nothing here, not mid-fetch */}
           {!loading && folders.length === 0 && files.length === 0 && (
-            <div className="text-center py-12">
-              <Folder className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-600 dark:text-gray-400">
+            <div className="text-center py-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 text-white shadow-md">
+                <Folder className="h-7 w-7" />
+              </div>
+              <p className="text-muted-foreground">
                 {currentFolderId ? 'This folder is empty' : 'No resources available yet'}
               </p>
             </div>
@@ -531,8 +534,13 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
               navigations are covered by the small inline spinner next to the breadcrumb above,
               so the current folder's contents stay on screen until the new ones are ready. */}
           {loading && folders.length === 0 && files.length === 0 && (
-            <div className="text-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
+                  <Skeleton className="h-8 w-8 rounded shrink-0" />
+                  <Skeleton className="h-4 flex-1 max-w-xs" />
+                </div>
+              ))}
             </div>
           )}
         </div>

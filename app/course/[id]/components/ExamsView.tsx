@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Plus, Settings, Trash2, Layers3 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Settings, Trash2, Layers3, ClipboardList } from 'lucide-react';
 
 interface Exam {
   _id: string;
@@ -381,9 +381,9 @@ export default function ExamsView({
         </CardContent>
 
         {exams.length === 0 ? (
-          <CardContent className="pt-12 pb-12 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted text-3xl">
-              📝
+          <CardContent className="pt-12 pb-12 text-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-md">
+              <ClipboardList className="h-7 w-7" />
             </div>
             <CardTitle className="text-xl mb-2">No exams yet</CardTitle>
             <CardDescription className="mb-6">

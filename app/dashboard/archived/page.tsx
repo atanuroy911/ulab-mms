@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ArrowLeft, ArchiveRestore, BookOpen, FlaskConical } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2, ArrowLeft, Archive, ArchiveRestore, BookOpen, FlaskConical } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
@@ -105,8 +106,27 @@ export default function ArchivedCoursesPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="h-dvh bg-background flex overflow-hidden">
+        <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+        <div className="flex-1 flex flex-col">
+          <div className="border-b px-4 sm:px-6 py-4 pl-16 md:pl-6">
+            <Skeleton className="h-6 w-40" />
+          </div>
+          <div className="flex-1 overflow-auto p-4 pt-8">
+            <div className="max-w-7xl mx-auto space-y-8">
+              <Skeleton className="h-4 w-56" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border p-6 space-y-4">
+                    <Skeleton className="h-12 w-12 rounded-lg" />
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -144,10 +164,10 @@ export default function ArchivedCoursesPage() {
 
         {/* Archived Courses by Semester */}
         {courses.length === 0 ? (
-          <Card className="text-center py-12">
+          <Card className="text-center py-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
             <CardContent>
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <span className="text-4xl">📦</span>
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 text-white flex items-center justify-center mx-auto mb-4 shadow-md">
+                <Archive className="h-8 w-8" />
               </div>
               <CardTitle className="mb-2">
                 No Archived Courses

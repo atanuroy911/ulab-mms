@@ -35,6 +35,7 @@ import {
 } from '@/app/utils/grading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -1436,10 +1437,44 @@ export default function CoursePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading course data...</p>
+      <div className="min-h-screen">
+        <div className="border-b bg-background/80">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-[50px] w-[50px] rounded-md shrink-0" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-64" />
+                <Skeleton className="h-3 w-48" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex h-[calc(100dvh-72px)]">
+          <div className="hidden md:block w-64 border-r bg-card p-3 space-y-2">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+          <div className="flex-1 p-6">
+            <div className="max-w-7xl mx-auto space-y-6">
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-4 w-72" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-9 w-9 rounded-lg" />
+                    </div>
+                    <Skeleton className="h-7 w-16" />
+                  </div>
+                ))}
+              </div>
+              <Skeleton className="h-64 w-full rounded-xl" />
+            </div>
+          </div>
         </div>
       </div>
     );

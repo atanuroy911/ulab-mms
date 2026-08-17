@@ -163,7 +163,7 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-background">
       <AppHeader
         title="Available Files"
         subtitle="Download resources uploaded by administrators"
@@ -176,28 +176,28 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
       {/* Main Content */}
       <div className="p-8">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="bg-card border rounded-lg shadow-lg p-8">
             <div className="mb-8">
-              <h2 className="text-3xl font-bold text-slate-900 mb-2">Download Resources</h2>
-              <p className="text-slate-600">All files uploaded by administrators are available below</p>
+              <h2 className="text-3xl font-bold mb-2">Download Resources</h2>
+              <p className="text-muted-foreground">All files uploaded by administrators are available below</p>
             </div>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-red-700">{error}</p>
+              <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-destructive">{error}</p>
               </div>
             )}
 
             {deleteError && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-red-700">{deleteError}</p>
+              <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-destructive">{deleteError}</p>
               </div>
             )}
 
             {/* Breadcrumb Navigation */}
-            <div className="mb-6 p-3 bg-slate-100 rounded-lg">
+            <div className="mb-6 p-3 bg-muted rounded-lg">
               <div className="flex items-center gap-2 flex-wrap">
                 {breadcrumbs.map((crumb, index) => (
                   <div key={crumb.id || 'root'} className="flex items-center gap-2">
@@ -206,13 +206,13 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
                       className={`px-3 py-1 rounded-md transition-colors ${
                         index === breadcrumbs.length - 1
                           ? 'bg-blue-600 text-white font-semibold'
-                          : 'text-blue-600 hover:bg-blue-100'
+                          : 'text-blue-600 dark:text-blue-400 hover:bg-blue-500/10'
                       }`}
                     >
                       {crumb.name}
                     </button>
                     {index < breadcrumbs.length - 1 && (
-                      <span className="text-slate-400">/</span>
+                      <span className="text-muted-foreground">/</span>
                     )}
                   </div>
                 ))}
@@ -222,55 +222,55 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
             {/* Folders Display */}
             {folders.length > 0 && (
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Folders</h3>
+                <h3 className="text-lg font-semibold mb-4">Folders</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {folders.map((folder) => (
                     <button
                       key={folder.id}
                       onClick={() => navigateToFolder(folder.id, folder.name)}
-                      className="p-4 border-2 border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors text-center group"
+                      className="p-4 border-2 border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors text-center group"
                     >
                       <div className="text-4xl mb-2">📁</div>
-                      <p className="font-medium text-slate-900 truncate group-hover:text-blue-600">
+                      <p className="font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
                         {folder.name}
                       </p>
                     </button>
                   ))}
                 </div>
-                <hr className="my-8" />
+                <hr className="my-8 border-border" />
               </div>
             )}
 
             <div>
               {isLoading ? (
-                <div className="text-center py-8 text-slate-600">Loading files...</div>
+                <div className="text-center py-8 text-muted-foreground">Loading files...</div>
               ) : files.length === 0 ? (
                 <div className="text-center py-12">
-                  <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-600">No files available yet</p>
+                  <FileText className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="text-muted-foreground">No files available yet</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-100 dark:bg-slate-800">
-                      <TableHead className="text-black dark:text-white font-bold">Filename</TableHead>
-                      <TableHead className="text-black dark:text-white font-bold">Size</TableHead>
-                      <TableHead className="text-black dark:text-white font-bold">Uploaded By</TableHead>
-                      <TableHead className="text-black dark:text-white font-bold">Uploaded At</TableHead>
-                      <TableHead className="text-right text-black dark:text-white font-bold">Actions</TableHead>
+                    <TableRow className="bg-muted">
+                      <TableHead className="font-bold">Filename</TableHead>
+                      <TableHead className="font-bold">Size</TableHead>
+                      <TableHead className="font-bold">Uploaded By</TableHead>
+                      <TableHead className="font-bold">Uploaded At</TableHead>
+                      <TableHead className="text-right font-bold">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                     <TableBody>
                       {files.map((file) => (
                         <TableRow key={file.id}>
-                          <TableCell className="font-medium text-slate-900">
+                          <TableCell className="font-medium">
                             <span className="mr-2">{getFileIcon(file.mimeType)}</span>
                             {file.originalName}
                           </TableCell>
-                          <TableCell className="text-slate-600">{formatFileSize(file.size)}</TableCell>
-                          <TableCell className="text-slate-600">{file.uploadedBy}</TableCell>
-                          <TableCell className="text-slate-600">{formatDate(file.uploadedAt)}</TableCell>
+                          <TableCell className="text-muted-foreground">{formatFileSize(file.size)}</TableCell>
+                          <TableCell className="text-muted-foreground">{file.uploadedBy}</TableCell>
+                          <TableCell className="text-muted-foreground">{formatDate(file.uploadedAt)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-2 justify-end">
                               <Button

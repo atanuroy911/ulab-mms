@@ -34,7 +34,9 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
       <DialogContent className="w-[95vw] max-w-[1400px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white ${
+              courseData.course.courseType === 'Theory' ? 'from-blue-600 to-cyan-600' : 'from-purple-600 to-pink-600'
+            }`}>
               <Icon className="h-5 w-5" />
             </span>
             <div>
@@ -58,7 +60,7 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
         )}
 
         {courseData.attendance.totalSessions > 0 && (
-          <Card className="mb-6">
+          <Card className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <CalendarCheck className="h-5 w-5 text-primary" />
@@ -67,13 +69,13 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
-                <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                     {courseData.attendance.presentSessions}
                   </div>
                   <div className="text-xs text-muted-foreground">Present</div>
                 </div>
-                <div className="rounded-lg bg-red-50 p-3 dark:bg-red-950">
+                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
                   <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                     {courseData.attendance.absentSessions}
                   </div>
@@ -85,7 +87,7 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
                   </div>
                   <div className="text-xs text-muted-foreground">Total</div>
                 </div>
-                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">
+                <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
                   <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                     {courseData.attendance.percentage.toFixed(1)}%
                   </div>
@@ -102,7 +104,7 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
           </Card>
         )}
 
-        <div>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-backwards">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <ClipboardList className="h-5 w-5 text-primary" />
             Exam Details

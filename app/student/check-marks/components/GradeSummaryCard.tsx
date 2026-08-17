@@ -24,7 +24,7 @@ export function GradeSummaryCard({ courseData, gradeData, projections }: GradeSu
     : null;
 
   return (
-    <Card className="lg:sticky lg:top-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+    <Card className="lg:sticky lg:top-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Target className="h-4 w-4 text-primary" />
@@ -35,7 +35,7 @@ export function GradeSummaryCard({ courseData, gradeData, projections }: GradeSu
         <div className="text-center mb-2">
           {letterGrade && (
             <div>
-              <div className={`text-6xl font-bold mb-2 ${getGradeColor(letterGrade.letter)}`}>
+              <div className={`text-6xl font-bold mb-2 animate-in zoom-in-50 duration-500 delay-100 fill-mode-backwards ${getGradeColor(letterGrade.letter)}`}>
                 {letterGrade.letter}
                 {letterGrade.modifier === '1' ? '-' : letterGrade.modifier === '2' ? '+' : ''}
               </div>
