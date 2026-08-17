@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/atanuroy911/ulab-mms/compare/v1.8.1...v1.9.0) (2026-08-16)
+
+
+### Features
+
+* new stuff and ui changes ([0fdcc61](https://github.com/atanuroy911/ulab-mms/commit/0fdcc61e332dba2f9520af02b8bdc777e9752021))
+
 ## [1.8.1](https://github.com/atanuroy911/ulab-mms/compare/v1.8.0...v1.8.1) (2026-07-28)
 
 
