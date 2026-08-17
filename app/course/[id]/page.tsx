@@ -62,7 +62,15 @@ import {
   Edit,
   Menu,
   Tag,
-  AlertTriangle
+  AlertTriangle,
+  LayoutDashboard,
+  ClipboardList,
+  Users,
+  PenLine,
+  CalendarCheck,
+  Link2,
+  Rocket,
+  GraduationCap
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -1618,14 +1626,14 @@ export default function CoursePage() {
           <div className="md:hidden bg-background/95 backdrop-blur-md border-b overflow-x-auto">
             <div className="flex items-center gap-1.5 px-3 py-2 min-w-max">
               {([
-                ['overview', '📊', 'Overview'],
-                ['exams', '📝', 'Exams'],
-                ['students', '👥', 'Students'],
-                ['marks', '✏️', 'Marks'],
-                ['attendance', '📍', 'Attendance'],
-                ['copo', '🔗', 'CO PO'],
-                ['project', course?.courseType === 'Lab' ? '🚀' : '🎓', course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'],
-              ] as const).map(([view, icon, label]) => (
+                ['overview', LayoutDashboard, 'Overview'],
+                ['exams', ClipboardList, 'Exams'],
+                ['students', Users, 'Students'],
+                ['marks', PenLine, 'Marks'],
+                ['attendance', CalendarCheck, 'Attendance'],
+                ['copo', Link2, 'CO PO'],
+                ['project', course?.courseType === 'Lab' ? Rocket : GraduationCap, course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'],
+              ] as const).map(([view, Icon, label]) => (
                 <Button
                   key={view}
                   variant={activeView === view ? 'default' : 'outline'}
@@ -1633,7 +1641,7 @@ export default function CoursePage() {
                   onClick={() => setActiveView(view)}
                   className="shrink-0"
                 >
-                  <span className="mr-1.5">{icon}</span>{label}
+                  <Icon className="w-4 h-4 mr-1.5" />{label}
                 </Button>
               ))}
             </div>
@@ -1648,7 +1656,7 @@ export default function CoursePage() {
           sidebarOpen ? 'w-64' : 'w-16'
         } transition-all duration-300 border-r bg-card flex-col`}>
           {/* Sidebar Header */}
-          <div className="p-4 border-b">
+          <div className="h-16 flex items-center px-4 border-b shrink-0">
             <Button
               variant="ghost"
               size="sm"
@@ -1666,19 +1674,19 @@ export default function CoursePage() {
               variant={activeView === 'overview' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('overview')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">📊</span>
+              <LayoutDashboard className="w-5 h-5" />
               {sidebarOpen && <span className="ml-2 font-medium">Overview</span>}
             </Button>
-            
+
             <Button
               variant={activeView === 'exams' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('exams')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">📝</span>
+              <ClipboardList className="w-5 h-5" />
               {sidebarOpen && (
                 <div className="flex-1 flex items-center justify-between ml-2">
                   <span className="font-medium">Exams</span>
@@ -1686,14 +1694,14 @@ export default function CoursePage() {
                 </div>
               )}
             </Button>
-            
+
             <Button
               variant={activeView === 'students' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('students')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">👥</span>
+              <Users className="w-5 h-5" />
               {sidebarOpen && (
                 <div className="flex-1 flex items-center justify-between ml-2">
                   <span className="font-medium">Students</span>
@@ -1701,14 +1709,14 @@ export default function CoursePage() {
                 </div>
               )}
             </Button>
-            
+
             <Button
               variant={activeView === 'marks' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('marks')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">✏️</span>
+              <PenLine className="w-5 h-5" />
               {sidebarOpen && <span className="ml-2 font-medium">Marks</span>}
             </Button>
 
@@ -1716,9 +1724,9 @@ export default function CoursePage() {
               variant={activeView === 'attendance' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('attendance')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">📍</span>
+              <CalendarCheck className="w-5 h-5" />
               {sidebarOpen && <span className="ml-2 font-medium">Attendance</span>}
             </Button>
 
@@ -1726,9 +1734,9 @@ export default function CoursePage() {
               variant={activeView === 'copo' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('copo')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">🔗</span>
+              <Link2 className="w-5 h-5" />
               {sidebarOpen && <span className="ml-2 font-medium">CO PO Mapping</span>}
             </Button>
 
@@ -1736,9 +1744,9 @@ export default function CoursePage() {
               variant={activeView === 'project' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveView('project')}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
-              <span className="text-lg">{course?.courseType === 'Lab' ? '🚀' : '🎓'}</span>
+              {course?.courseType === 'Lab' ? <Rocket className="w-5 h-5" /> : <GraduationCap className="w-5 h-5" />}
               {sidebarOpen && <span className="ml-2 font-medium">
                 {course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}
               </span>}
@@ -1765,7 +1773,7 @@ export default function CoursePage() {
                 });
                 setShowCourseSettings(true);
               }}
-              className="w-full justify-start"
+              className="w-full justify-start h-11"
             >
               <Settings className="w-5 h-5" />
               {sidebarOpen && <span className="ml-2 font-medium">Course Settings</span>}
@@ -3073,273 +3081,269 @@ export default function CoursePage() {
       />
 
       {/* Grade Breakdown Modal */}
-      {showGradeBreakdown && selectedStudentForGrade && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-3xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-100">Final Grade Breakdown</h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId}) {selectedStudentForGrade.withdrawn && <span className="text-red-400 font-bold ml-2">(Withdrawn)</span>}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowGradeBreakdown(false);
-                  setSelectedStudentForGrade(null);
-                }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all"
-              >
-                ✕ Close
-              </button>
-            </div>
+      <Dialog
+        open={showGradeBreakdown && !!selectedStudentForGrade}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowGradeBreakdown(false);
+            setSelectedStudentForGrade(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {selectedStudentForGrade && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Final Grade Breakdown</DialogTitle>
+                <DialogDescription>
+                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId}) {selectedStudentForGrade.withdrawn && <span className="text-red-600 dark:text-red-400 font-bold ml-2">(Withdrawn)</span>}
+                </DialogDescription>
+              </DialogHeader>
 
-            {(() => {
-              if (selectedStudentForGrade.withdrawn) {
-                return (
-                  <div className="text-center py-12">
-                    <div className="w-20 h-20 rounded-full bg-red-900/30 flex items-center justify-center mx-auto mb-4 border border-red-500/30">
-                      <span className="text-4xl font-bold text-red-500">W</span>
+              {(() => {
+                if (selectedStudentForGrade.withdrawn) {
+                  return (
+                    <div className="text-center py-12">
+                      <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                        <span className="text-4xl font-bold text-red-600 dark:text-red-400">W</span>
+                      </div>
+                      <h3 className="text-xl font-medium mb-2">Student is Withdrawn</h3>
+                      <p className="text-muted-foreground">
+                        This student&apos;s final grade is recorded as Withdrawn (W).
+                      </p>
                     </div>
-                    <h3 className="text-xl font-medium text-gray-200 mb-2">Student is Withdrawn</h3>
-                    <p className="text-gray-400">
-                      This student&apos;s final grade is recorded as Withdrawn (W).
-                    </p>
-                  </div>
-                );
-              }
+                  );
+                }
 
-              const gradeData = calculateFinalGrade(selectedStudentForGrade._id);
-              
-              if (gradeData.breakdown.length === 0) {
+                const gradeData = calculateFinalGrade(selectedStudentForGrade._id);
+
+                if (gradeData.breakdown.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-muted-foreground">
+                      No marks available for final grade calculation
+                    </div>
+                  );
+                }
+
                 return (
-                  <div className="text-center py-12 text-gray-400">
-                    No marks available for final grade calculation
+                  <div className="space-y-6">
+                    {/* Breakdown Table */}
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Exam / Assessment
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Mark Obtained
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Percentage
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Weightage
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Contribution
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/50">
+                          {gradeData.breakdown.map((item, idx) => {
+                            const percentage = (item.mark / item.totalMarks) * 100;
+                            return (
+                              <tr key={idx} className={`${idx % 2 === 0 ? 'bg-muted/20' : ''} ${item.isAggregated ? 'bg-amber-500/5' : ''}`}>
+                                <td className="px-4 py-3 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    {item.isAggregated && <span className="text-xs">📊</span>}
+                                    <span className={item.isAggregated ? 'font-semibold' : ''}>
+                                      {item.name}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                                    {item.mark.toFixed(2)} / {item.totalMarks}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300">
+                                    {percentage.toFixed(2)}%
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-cyan-500/10 text-cyan-700 dark:text-cyan-300">
+                                    {item.weightage}%
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-green-500/10 text-green-700 dark:text-green-300">
+                                    {item.contribution.toFixed(2)}%
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-muted/70">
+                          <tr>
+                            <td colSpan={4} className="px-4 py-4 text-right text-sm font-semibold">
+                              Final Grade (Estimated):
+                            </td>
+                            <td className="px-4 py-4 text-sm">
+                              <span className="px-3 py-2 rounded-lg font-bold text-lg bg-gradient-to-r from-green-500/15 to-emerald-500/15 text-green-700 dark:text-green-200 border border-green-500/30">
+                                {gradeData.total.toFixed(2)}%
+                              </span>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* Info Box */}
+                    <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        <strong>💡 Calculation Formula:</strong> For each exam/assessment, contribution = (Mark/TotalMarks × 100) × Weightage ÷ 100
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                        • Aggregated columns (Quiz/Assignment) use their configured weightage from Course Settings
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        • When scaling is enabled, scaled marks are used in calculations
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        • Final grade is the sum of all contributions
+                      </p>
+                    </div>
                   </div>
                 );
-              }
-
-              return (
-                <div className="space-y-6">
-                  {/* Breakdown Table */}
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-700">
-                      <thead className="bg-gray-900/50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
-                            Exam / Assessment
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
-                            Mark Obtained
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
-                            Percentage
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
-                            Weightage
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
-                            Contribution
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-700/50">
-                        {gradeData.breakdown.map((item, idx) => {
-                          const percentage = (item.mark / item.totalMarks) * 100;
-                          return (
-                            <tr key={idx} className={`${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'} ${item.isAggregated ? 'bg-amber-900/10' : ''}`}>
-                              <td className="px-4 py-3 text-sm text-gray-200">
-                                <div className="flex items-center gap-2">
-                                  {item.isAggregated && <span className="text-xs">📊</span>}
-                                  <span className={item.isAggregated ? 'font-semibold' : ''}>
-                                    {item.name}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/30 text-blue-300">
-                                  {item.mark.toFixed(2)} / {item.totalMarks}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                <span className="px-2 py-1 rounded font-medium text-xs bg-purple-900/30 text-purple-300">
-                                  {percentage.toFixed(2)}%
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                <span className="px-2 py-1 rounded font-medium text-xs bg-cyan-900/30 text-cyan-300">
-                                  {item.weightage}%
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                <span className="px-2 py-1 rounded font-medium text-xs bg-green-900/30 text-green-300">
-                                  {item.contribution.toFixed(2)}%
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-gray-900/70">
-                        <tr>
-                          <td colSpan={4} className="px-4 py-4 text-right text-sm font-semibold text-gray-100">
-                            Final Grade (Estimated):
-                          </td>
-                          <td className="px-4 py-4 text-sm">
-                            <span className="px-3 py-2 rounded-lg font-bold text-lg bg-gradient-to-r from-green-900/50 to-emerald-900/50 text-green-200 border border-green-500/30">
-                              {gradeData.total.toFixed(2)}%
-                            </span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-
-                  {/* Info Box */}
-                  <div className="p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-                    <p className="text-sm text-blue-300">
-                      <strong>💡 Calculation Formula:</strong> For each exam/assessment, contribution = (Mark/TotalMarks × 100) × Weightage ÷ 100
-                    </p>
-                    <p className="text-xs text-blue-400 mt-2">
-                      • Aggregated columns (Quiz/Assignment) use their configured weightage from Course Settings
-                    </p>
-                    <p className="text-xs text-blue-400">
-                      • When scaling is enabled, scaled marks are used in calculations
-                    </p>
-                    <p className="text-xs text-blue-400">
-                      • Final grade is the sum of all contributions
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+              })()}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Import Course Modal */}
-      {showImportCourseModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
-            <h2 className="text-2xl font-bold text-gray-100 mb-6">📥 Import Course Data</h2>
-            
-            <div className="mb-6 p-4 bg-amber-900/20 border border-amber-700/50 rounded-lg">
-              <p className="text-sm text-amber-300 mb-2">
-                <strong>⚠️ Warning:</strong> This will replace all current data in this course!
-              </p>
-              <p className="text-xs text-amber-400">
-                • All students, exams, and marks will be replaced
-                <br />
-                • Course settings will be updated
-                <br />
-                • This action cannot be undone
-                <br />
-                • Make sure to export current data first if needed
-              </p>
-            </div>
+      <Dialog
+        open={showImportCourseModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowImportCourseModal(false);
+            setImportCourseFile(null);
+            setError('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>📥 Import Course Data</DialogTitle>
+          </DialogHeader>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Select Course Backup File (.json)
-              </label>
-              <input
-                type="file"
-                accept=".json"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    setImportCourseFile(file);
-                  }
-                }}
-                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-              />
-              {importCourseFile && (
-                <p className="mt-2 text-sm text-green-400">
-                  ✓ Selected: {importCourseFile.name}
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowImportCourseModal(false);
-                  setImportCourseFile(null);
-                  setError('');
-                }}
-                className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportCourse}
-                disabled={!importCourseFile || importingCourse}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {importingCourse ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Importing...
-                  </>
-                ) : (
-                  'Import Data'
-                )}
-              </button>
-            </div>
-
-            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-              <p className="text-xs text-blue-300">
-                <strong>💡 Tip:</strong> Only import files that were exported from this system to ensure compatibility.
-              </p>
-            </div>
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+              <strong>⚠️ Warning:</strong> This will replace all current data in this course!
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              • All students, exams, and marks will be replaced
+              <br />
+              • Course settings will be updated
+              <br />
+              • This action cannot be undone
+              <br />
+              • Make sure to export current data first if needed
+            </p>
           </div>
-        </div>
-      )}
+
+          {error && (
+            <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Select Course Backup File (.json)
+            </label>
+            <input
+              type="file"
+              accept=".json"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setImportCourseFile(file);
+                }
+              }}
+              className="w-full px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:opacity-90"
+            />
+            {importCourseFile && (
+              <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                ✓ Selected: {importCourseFile.name}
+              </p>
+            )}
+          </div>
+
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              <strong>💡 Tip:</strong> Only import files that were exported from this system to ensure compatibility.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportCourseModal(false);
+                setImportCourseFile(null);
+                setError('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleImportCourse} disabled={!importCourseFile || importingCourse}>
+              {importingCourse ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                'Import Data'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div> {/* Close modals wrapper */}
 
     {/* Student Stats Modal */}
-    {showStudentStatsModal && selectedStudentForStats && (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-        <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-5xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={showStudentStatsModal && !!selectedStudentForStats}
+      onOpenChange={(open) => !open && setShowStudentStatsModal(false)}
+    >
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        {selectedStudentForStats && (
+        <div>
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pr-8">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-2xl">
+              <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-2xl text-white">
                 👨‍🎓
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-100">{selectedStudentForStats.name}</h2>
-                <p className="text-sm text-gray-400 mt-1">Student ID: {selectedStudentForStats.studentId}</p>
-                <p className="text-sm text-emerald-400 mt-1">
+                <h2 className="text-2xl font-bold">{selectedStudentForStats.name}</h2>
+                <p className="text-sm text-muted-foreground mt-1">Student ID: {selectedStudentForStats.studentId}</p>
+                <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">
                   {getStudentMarks(selectedStudentForStats._id).length} / {exams.length} exams completed
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => {
-                setShowStudentStatsModal(false);
-                setSelectedStudentForStats(null);
-              }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm"
-            >
-              Close
-            </button>
           </div>
 
           {/* Exams Grid */}
           {exams.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-4xl mb-3">📭</div>
-              <p className="text-gray-400">No exams configured for this course yet</p>
+              <p className="text-muted-foreground">No exams configured for this course yet</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3351,24 +3355,24 @@ export default function CoursePage() {
                   <div
                     key={exam._id}
                     className={`p-4 rounded-lg border transition-all ${
-                      mark 
-                        ? 'border-blue-700/50 bg-gradient-to-br from-blue-900/20 to-purple-900/20 hover:border-blue-500/70' 
-                        : 'border-gray-700/50 bg-gray-900/30 hover:border-gray-600'
+                      mark
+                        ? 'border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-purple-500/10 hover:border-blue-500/50'
+                        : 'border-border bg-muted/30 hover:border-muted-foreground/30'
                     }`}
                   >
                     {/* Exam Header */}
                     <div className="mb-4">
                       <div className="flex items-start justify-between mb-2">
-                        <h4 className="font-semibold text-gray-100 text-lg flex items-center gap-2">
+                        <h4 className="font-semibold text-lg flex items-center gap-2">
                           {exam.displayName}
                         </h4>
                         {exam.examCategory && (
-                          <span className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300 flex-shrink-0">
+                          <span className="px-2 py-1 text-xs rounded bg-muted text-muted-foreground flex-shrink-0">
                             {exam.examCategory}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400 space-y-1">
+                      <div className="text-xs text-muted-foreground space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>📝 Total: {exam.totalMarks} marks</span>
                         </div>
@@ -3380,17 +3384,17 @@ export default function CoursePage() {
                       <>
                         {/* Marks Display */}
                         <div className="grid grid-cols-2 gap-2 mb-4">
-                          <div className="p-3 rounded-lg bg-blue-900/40 border border-blue-700/50 text-center">
-                            <div className="text-xs text-gray-400 mb-1">Raw</div>
-                            <div className="text-lg font-bold text-blue-300">
+                          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-center">
+                            <div className="text-xs text-muted-foreground mb-1">Raw</div>
+                            <div className="text-lg font-bold text-blue-600 dark:text-blue-300">
                               {mark.rawMark}
                             </div>
-                            <div className="text-xs text-gray-500">/{exam.totalMarks}</div>
+                            <div className="text-xs text-muted-foreground">/{exam.totalMarks}</div>
                           </div>
 
-                          <div className="p-3 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-center">
-                            <div className="text-xs text-gray-400 mb-1">Weighted</div>
-                            <div className="text-lg font-bold text-emerald-300">
+                          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-center">
+                            <div className="text-xs text-muted-foreground mb-1">Weighted</div>
+                            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-300">
                               {(mark.weightedMark !== undefined && mark.weightedMark !== null
                                 ? mark.weightedMark
                                 : (mark.rawMark / exam.totalMarks) * exam.weightage
@@ -3406,19 +3410,19 @@ export default function CoursePage() {
                           const studentPercent = (studentMark / stats.highest) * 100;
 
                           return (
-                            <div className="p-3 rounded-lg bg-indigo-900/20 border border-indigo-700/50">
-                              <div className="text-xs font-medium text-gray-300 mb-3 flex items-center gap-2">
+                            <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
+                              <div className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-2">
                                 <span>📊</span>
                                 <span>Class Performance</span>
-                                <span className="ml-auto text-gray-500">({stats.count} students)</span>
+                                <span className="ml-auto text-muted-foreground">({stats.count} students)</span>
                               </div>
-                              
+
                               <div className="space-y-2">
                                 {/* Highest */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 w-12">High</span>
-                                  <div className="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden">
-                                    <div 
+                                  <span className="text-xs text-muted-foreground w-12">High</span>
+                                  <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                                    <div
                                       className="h-full bg-gradient-to-r from-green-600 to-green-400 flex items-center justify-end pr-2"
                                       style={{ width: '100%' }}
                                     >
@@ -3429,12 +3433,12 @@ export default function CoursePage() {
 
                                 {/* Student */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 w-12 flex items-center gap-1">
+                                  <span className="text-xs text-muted-foreground w-12 flex items-center gap-1">
                                     <span>👤</span>
                                     <span>This</span>
                                   </span>
-                                  <div className="flex-1 h-6 bg-gray-800 rounded-full overflow-hidden border-2 border-blue-500">
-                                    <div 
+                                  <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden border-2 border-blue-500">
+                                    <div
                                       className="h-full bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-end pr-2"
                                       style={{ width: `${studentPercent}%` }}
                                     >
@@ -3445,9 +3449,9 @@ export default function CoursePage() {
 
                                 {/* Average */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 w-12">Avg</span>
-                                  <div className="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden">
-                                    <div 
+                                  <span className="text-xs text-muted-foreground w-12">Avg</span>
+                                  <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                                    <div
                                       className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 flex items-center justify-end pr-2"
                                       style={{ width: `${avgPercent}%` }}
                                     >
@@ -3458,9 +3462,9 @@ export default function CoursePage() {
 
                                 {/* Lowest */}
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 w-12">Low</span>
-                                  <div className="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden">
-                                    <div 
+                                  <span className="text-xs text-muted-foreground w-12">Low</span>
+                                  <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                                    <div
                                       className="h-full bg-gradient-to-r from-red-600 to-red-400 flex items-center justify-end pr-2"
                                       style={{ width: `${(stats.lowest / stats.highest) * 100}%` }}
                                     >
@@ -3473,9 +3477,9 @@ export default function CoursePage() {
                               {/* Performance badge */}
                               <div className="mt-3 text-center">
                                 <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                                  studentMark >= stats.average 
-                                    ? 'bg-green-900/40 text-green-300 border border-green-700/50' 
-                                    : 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50'
+                                  studentMark >= stats.average
+                                    ? 'bg-green-500/15 text-green-700 dark:text-green-300 border border-green-500/30'
+                                    : 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border border-yellow-500/30'
                                 }`}>
                                   {studentMark >= stats.average ? '🎯 Above Average' : '📈 Below Average'}
                                 </span>
@@ -3485,7 +3489,7 @@ export default function CoursePage() {
                         })()}
                       </>
                     ) : (
-                      <div className="text-center py-8 text-gray-500 italic">
+                      <div className="text-center py-8 text-muted-foreground italic">
                         <div className="text-3xl mb-2">📝</div>
                         <div className="text-sm">Marks not recorded yet</div>
                       </div>
@@ -3503,38 +3507,38 @@ export default function CoursePage() {
             const studentMarksCount = getStudentMarks(selectedStudentForStats._id).length;
             
             return (
-              <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/50">
-                <h4 className="text-lg font-semibold text-gray-100 mb-3">📈 Final Grade</h4>
-                
+              <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30">
+                <h4 className="text-lg font-semibold mb-3">📈 Final Grade</h4>
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
                   <div>
-                    <div className="text-xs text-gray-400">Exams Taken</div>
-                    <div className="text-xl font-bold text-blue-300">
+                    <div className="text-xs text-muted-foreground">Exams Taken</div>
+                    <div className="text-xl font-bold text-blue-600 dark:text-blue-300">
                       {studentMarksCount} / {exams.length}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-400">Total Weightage</div>
-                    <div className="text-xl font-bold text-emerald-300">
+                    <div className="text-xs text-muted-foreground">Total Weightage</div>
+                    <div className="text-xl font-bold text-emerald-600 dark:text-emerald-300">
                       {totalWeightage}%
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-400">Points Earned</div>
-                    <div className="text-xl font-bold text-purple-300">
+                    <div className="text-xs text-muted-foreground">Points Earned</div>
+                    <div className="text-xl font-bold text-purple-600 dark:text-purple-300">
                       {gradeData.total.toFixed(2)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-400">Current Grade</div>
-                    <div className="text-2xl font-bold text-cyan-300">
-                      {totalWeightage > 0 
+                    <div className="text-xs text-muted-foreground">Current Grade</div>
+                    <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-300">
+                      {totalWeightage > 0
                         ? `${((gradeData.total / totalWeightage) * 100).toFixed(1)}%`
                         : 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-400">Letter Grade</div>
+                    <div className="text-xs text-muted-foreground">Letter Grade</div>
                     <div className="text-2xl font-bold">
                       {totalWeightage > 0 ? (() => {
                         const percentage = (gradeData.total / totalWeightage) * 100;
@@ -3551,36 +3555,36 @@ export default function CoursePage() {
 
                 {/* Breakdown Details */}
                 {gradeData.breakdown.length > 0 && (
-                  <div className="mt-4 p-3 bg-gray-900/50 rounded-lg">
-                    <div className="text-sm font-medium text-gray-300 mb-3">Grade Breakdown</div>
+                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                    <div className="text-sm font-medium text-muted-foreground mb-3">Grade Breakdown</div>
                     <div className="space-y-2">
                       {gradeData.breakdown.map((item: any, idx: number) => (
                         <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded ${
-                          item.isAggregated ? 'bg-amber-900/20 border border-amber-700/30' : 'bg-gray-800/50'
+                          item.isAggregated ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-muted/50'
                         }`}>
                           <div className="flex items-center gap-2">
                             {item.isAggregated && <span>📊</span>}
-                            <span className="text-gray-300">{item.name}</span>
+                            <span className="text-muted-foreground">{item.name}</span>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-blue-400">
+                            <span className="text-blue-600 dark:text-blue-400">
                               {item.mark.toFixed(2)}/{item.totalMarks}
                             </span>
-                            <span className="text-purple-400">
+                            <span className="text-purple-600 dark:text-purple-400">
                               {((item.mark / item.totalMarks) * 100).toFixed(1)}%
                             </span>
-                            <span className="text-gray-500">×</span>
-                            <span className="text-cyan-400">{item.weightage}%</span>
-                            <span className="text-gray-500">=</span>
-                            <span className="text-green-400 font-semibold min-w-[3rem] text-right">
+                            <span className="text-muted-foreground">×</span>
+                            <span className="text-cyan-600 dark:text-cyan-400">{item.weightage}%</span>
+                            <span className="text-muted-foreground">=</span>
+                            <span className="text-green-600 dark:text-green-400 font-semibold min-w-[3rem] text-right">
                               {item.contribution.toFixed(2)}
                             </span>
                           </div>
                         </div>
                       ))}
-                      <div className="flex items-center justify-between text-sm p-2 bg-green-900/20 border border-green-700/50 rounded font-semibold mt-3">
-                        <span className="text-gray-200">Total Contribution:</span>
-                        <span className="text-green-300 text-lg">{gradeData.total.toFixed(2)}%</span>
+                      <div className="flex items-center justify-between text-sm p-2 bg-green-500/10 border border-green-500/30 rounded font-semibold mt-3">
+                        <span>Total Contribution:</span>
+                        <span className="text-green-600 dark:text-green-300 text-lg">{gradeData.total.toFixed(2)}%</span>
                       </div>
                     </div>
                   </div>
@@ -3595,88 +3599,88 @@ export default function CoursePage() {
             if (!estimate) return null;
 
             return (
-              <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-700/50">
-                <h4 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
+              <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30">
+                <h4 className="text-lg font-semibold mb-3 flex items-center gap-2">
                   <span>🎯</span>
                   <span>Grade Estimator</span>
                 </h4>
-                
+
                 <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 bg-purple-900/20 rounded-lg">
-                    <div className="text-xs text-gray-400">Current Progress</div>
-                    <div className="text-lg font-bold text-purple-300">
+                  <div className="p-3 bg-purple-500/10 rounded-lg">
+                    <div className="text-xs text-muted-foreground">Current Progress</div>
+                    <div className="text-lg font-bold text-purple-600 dark:text-purple-300">
                       {estimate.completedExams}/{estimate.totalExams}
                     </div>
-                    <div className="text-xs text-gray-500">exams</div>
+                    <div className="text-xs text-muted-foreground">exams</div>
                   </div>
-                  <div className="p-3 bg-blue-900/20 rounded-lg">
-                    <div className="text-xs text-gray-400">Current Points</div>
-                    <div className="text-lg font-bold text-blue-300">
+                  <div className="p-3 bg-blue-500/10 rounded-lg">
+                    <div className="text-xs text-muted-foreground">Current Points</div>
+                    <div className="text-lg font-bold text-blue-600 dark:text-blue-300">
                       {estimate.currentPoints.toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-500">out of {estimate.completedWeightage}%</div>
+                    <div className="text-xs text-muted-foreground">out of {estimate.completedWeightage}%</div>
                   </div>
-                  <div className="p-3 bg-amber-900/20 rounded-lg">
-                    <div className="text-xs text-gray-400">Remaining Exams</div>
-                    <div className="text-lg font-bold text-amber-300">
+                  <div className="p-3 bg-amber-500/10 rounded-lg">
+                    <div className="text-xs text-muted-foreground">Remaining Exams</div>
+                    <div className="text-lg font-bold text-amber-600 dark:text-amber-300">
                       {estimate.remainingExams}
                     </div>
-                    <div className="text-xs text-gray-500">exams</div>
+                    <div className="text-xs text-muted-foreground">exams</div>
                   </div>
-                  <div className="p-3 bg-emerald-900/20 rounded-lg">
-                    <div className="text-xs text-gray-400">Remaining Weight</div>
-                    <div className="text-lg font-bold text-emerald-300">
+                  <div className="p-3 bg-emerald-500/10 rounded-lg">
+                    <div className="text-xs text-muted-foreground">Remaining Weight</div>
+                    <div className="text-lg font-bold text-emerald-600 dark:text-emerald-300">
                       {estimate.remainingWeightage.toFixed(0)}%
                     </div>
-                    <div className="text-xs text-gray-500">weightage</div>
+                    <div className="text-xs text-muted-foreground">weightage</div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-gray-300 mb-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-3">
                     Average % needed in remaining exams to achieve:
                   </div>
                   {estimate.estimates.map((est: any, idx: number) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className={`p-3 rounded-lg border ${
-                        est.achievable 
-                          ? 'bg-gray-800/50 border-gray-700/50' 
-                          : 'bg-red-900/20 border-red-700/30 opacity-50'
+                        est.achievable
+                          ? 'bg-muted/50 border-border'
+                          : 'bg-red-500/10 border-red-500/30 opacity-50'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className={`text-2xl font-bold ${
-                            est.grade === 'A' ? 'text-green-400' :
-                            est.grade === 'B' ? 'text-blue-400' :
-                            est.grade === 'C' ? 'text-yellow-400' :
-                            'text-orange-400'
+                            est.grade === 'A' ? 'text-green-600 dark:text-green-400' :
+                            est.grade === 'B' ? 'text-blue-600 dark:text-blue-400' :
+                            est.grade === 'C' ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-orange-600 dark:text-orange-400'
                           }`}>
                             {est.grade}
                           </span>
                           <div>
-                            <div className="text-sm text-gray-300">
+                            <div className="text-sm">
                               Grade {est.grade} (≥{est.targetPercentage}%)
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-muted-foreground">
                               Need {(est.targetPercentage - estimate.currentPoints).toFixed(1)} more points
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className={`text-2xl font-bold ${
-                            est.achievable ? 'text-cyan-300' : 'text-red-400'
+                            est.achievable ? 'text-cyan-600 dark:text-cyan-300' : 'text-red-600 dark:text-red-400'
                           }`}>
                             {est.averageNeeded.toFixed(1)}%
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-muted-foreground">
                             {est.achievable ? 'avg needed' : 'not possible'}
                           </div>
                         </div>
                       </div>
                       {!est.achievable && (
-                        <div className="mt-2 text-xs text-red-400">
+                        <div className="mt-2 text-xs text-red-600 dark:text-red-400">
                           ⚠️ Target not achievable with remaining weightage
                         </div>
                       )}
@@ -3684,10 +3688,10 @@ export default function CoursePage() {
                   ))}
                 </div>
 
-                <div className="mt-4 p-3 bg-cyan-900/20 border border-cyan-700/50 rounded-lg">
-                  <p className="text-xs text-cyan-300">
-                    <strong>💡 How to read:</strong> If this student scores the shown percentage (average) in all remaining exams, 
-                    they'll achieve that grade. For example, if "Grade B" shows "75%", scoring an average of 75% 
+                <div className="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+                  <p className="text-xs text-cyan-700 dark:text-cyan-300">
+                    <strong>💡 How to read:</strong> If this student scores the shown percentage (average) in all remaining exams,
+                    they'll achieve that grade. For example, if "Grade B" shows "75%", scoring an average of 75%
                     in the remaining {estimate.remainingExams} exam(s) will result in a B grade overall.
                   </p>
                 </div>
@@ -3695,8 +3699,9 @@ export default function CoursePage() {
             );
           })()}
         </div>
-      </div>
-    )}
+        )}
+      </DialogContent>
+    </Dialog>
 
     {/* Set Empty Marks to Zero Modal */}
     <Dialog open={showSetZeroModal} onOpenChange={(open) => {

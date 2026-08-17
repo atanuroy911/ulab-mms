@@ -5,6 +5,7 @@ import AuthProvider from "./components/AuthProvider";
 import ThemeProvider from "./components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import AppFooter from "@/components/AppFooter";
+import ConditionalFooter from "@/components/ConditionalFooter";
 import BugReportButton from "@/components/BugReportButton";
 
 const geistSans = Geist({
@@ -36,7 +37,9 @@ export default function RootLayout({
           <ThemeProvider>
             <div className="flex min-h-screen flex-col">
               <div className="flex-1">{children}</div>
-              <AppFooter />
+              <ConditionalFooter>
+                <AppFooter />
+              </ConditionalFooter>
             </div>
             <Toaster richColors position="top-right" />
             <BugReportButton />

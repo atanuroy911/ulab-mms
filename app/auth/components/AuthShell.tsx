@@ -118,7 +118,10 @@ export function AuthShell({
           </ul>
         </div>
 
-        <p className={`relative text-xs ${styles.textFooter}`}>University of Liberal Arts Bangladesh</p>
+        <div className={`relative text-xs ${styles.textFooter} space-y-0.5`}>
+          <p>University of Liberal Arts Bangladesh</p>
+          <p>Made at ULAB by Atanu Roy and Kaviul Hossain</p>
+        </div>
       </div>
 
       {/* Form panel */}

@@ -637,11 +637,11 @@ export default function Dashboard() {
       <div className="h-dvh bg-background flex overflow-hidden">
         <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
         <div className="flex-1 flex flex-col">
-          <div className="border-b px-4 sm:px-6 py-4 pl-16 md:pl-6">
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-10 w-10 rounded-md shrink-0" />
+          <div className="h-16 border-b px-4 sm:px-6 pl-16 md:pl-6 flex items-center">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-md shrink-0" />
               <div className="space-y-2">
-                <Skeleton className="h-5 w-56" />
+                <Skeleton className="h-4 w-56" />
                 <Skeleton className="h-3 w-32" />
               </div>
             </div>
@@ -686,26 +686,26 @@ export default function Dashboard() {
 
         {/* Top Navigation Bar */}
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
-            <div className="flex items-center gap-4 min-w-0">
+          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
+            <div className="flex items-center gap-3 min-w-0">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
-                width={40}
-                height={40}
+                width={36}
+                height={36}
                 className="drop-shadow-lg shrink-0"
               />
               <div className="min-w-0">
-                <h1 className="text-xl font-bold truncate bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                <h1 className="text-base sm:text-lg font-bold truncate bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
                   Marks Management System
                 </h1>
-                <p className="text-sm text-muted-foreground truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   Welcome, {session?.user?.name}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <ThemeToggle />
               <Button variant="default" size="sm" asChild>
                 <Link href="/capstone">

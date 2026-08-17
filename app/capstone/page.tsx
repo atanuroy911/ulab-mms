@@ -39,10 +39,10 @@ export default function CapstonePage() {
 
       <div className="flex-1 flex flex-col">
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Capstone Marks Management</h1>
-              <p className="text-sm text-muted-foreground">Submit capstone project marks</p>
+          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold truncate bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Capstone Marks Management</h1>
+              <p className="text-xs text-muted-foreground truncate">Submit capstone project marks</p>
             </div>
             <ThemeToggle />
           </div>

@@ -606,7 +606,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const settingsSummary = [course?.classTime, course?.classRoom, `${students.length} students`, course?.classRepresentativeId ? 'Representative set' : ''].filter(Boolean);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="text-2xl font-semibold">Attendance</h3>

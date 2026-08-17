@@ -109,8 +109,8 @@ export default function ArchivedCoursesPage() {
       <div className="h-dvh bg-background flex overflow-hidden">
         <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
         <div className="flex-1 flex flex-col">
-          <div className="border-b px-4 sm:px-6 py-4 pl-16 md:pl-6">
-            <Skeleton className="h-6 w-40" />
+          <div className="h-16 border-b px-4 sm:px-6 pl-16 md:pl-6 flex items-center">
+            <Skeleton className="h-5 w-40" />
           </div>
           <div className="flex-1 overflow-auto p-4 pt-8">
             <div className="max-w-7xl mx-auto space-y-8">
@@ -137,8 +137,8 @@ export default function ArchivedCoursesPage() {
 
       <div className="flex-1 flex flex-col">
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6">
-            <h1 className="text-xl font-bold">Archived Courses</h1>
+          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
+            <h1 className="text-base sm:text-lg font-bold">Archived Courses</h1>
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <Button variant="default" size="sm" asChild>

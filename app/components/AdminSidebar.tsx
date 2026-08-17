@@ -126,7 +126,7 @@ export function AdminSidebar({
       <aside className={`hidden md:flex ${
         isOpen ? 'w-64' : 'w-16'
       } transition-all duration-300 border-r bg-card flex-col`}>
-        <div className="p-4 border-b">
+        <div className="h-16 flex items-center px-4 border-b shrink-0">
           <Button variant="ghost" size="sm" onClick={handleToggle} className="w-full justify-start">
             <Menu className="w-5 h-5" />
             {isOpen && <span className="ml-2 font-medium">{title}</span>}

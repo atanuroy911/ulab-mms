@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Sparkles, Search } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Search, MoreVertical, Printer, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateProjectMark } from '@/app/utils/projectRubric';
 import type { IRubricScores } from '@/app/utils/projectRubric';
@@ -621,51 +625,125 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <Skeleton className="h-9 w-28" />
+      </div>
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-xl border p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-lg" />
+              <Skeleton className="h-5 w-40" />
+            </div>
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-2xl font-bold">{title || 'Project Groups'}</h2>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-2xl font-bold">{title || 'Project Groups'}</h2>
+            {projectExams.length > 0 && (
+              <button
+                onClick={() => setShowSectionsManager(true)}
+                className="text-xs font-medium text-muted-foreground hover:text-primary bg-muted/60 hover:bg-muted rounded-full px-2.5 py-1 transition-colors"
+              >
+                {projectExams.length} {sectionLabel}{projectExams.length > 1 ? 's' : ''}
+              </button>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
             {description || 'Score each group\'s project using the rubric. Marks are automatically calculated and pushed to the Marks tab.'}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => { fetchState(); fetchSavedMarks(); }} disabled={loading}>
-            <RefreshCw className="w-4 h-4 mr-2" />Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowSectionsManager(true)}>
-            <ClipboardList className="w-4 h-4 mr-2" />Manage Sections
-          </Button>
-          {state.isActive && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setShowQr(true)}>
-                <QrCode className="w-4 h-4 mr-2" />QR Code
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => window.open(projectUrl, '_blank')}>
-                <ExternalLink className="w-4 h-4 mr-2" />Open URL
-              </Button>
-            </>
-          )}
-          <Button
-            onClick={handleToggle}
-            disabled={toggling}
-            className={state.isActive ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-600 hover:bg-slate-700 text-white'}
-          >
-            {toggling
-              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              : <span className={`w-2 h-2 rounded-full mr-2 ${state.isActive ? 'bg-green-300 animate-pulse' : 'bg-slate-400'}`} />}
-            {state.isActive ? 'Close Project Session' : 'Start Project Work'}
-          </Button>
-        </div>
+
+        <TooltipProvider>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => { fetchState(); fetchSavedMarks(); }} disabled={loading}>
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Refresh</TooltipContent>
+            </Tooltip>
+
+            {state.isActive && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={() => setShowQr(true)}>
+                      <QrCode className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>QR Code</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={() => window.open(projectUrl, '_blank')}>
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Open registration URL</TooltipContent>
+                </Tooltip>
+              </>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreVertical className="w-4 h-4" />
+                  <span className="sr-only">More actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={() => setShowSectionsManager(true)}>
+                  <ClipboardList className="w-4 h-4 mr-2" />Manage Sections
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf-simple`, '_blank')}>
+                  <Printer className="w-4 h-4 mr-2" />Print Simple Grid
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf-blank`, '_blank')}>
+                  <Printer className="w-4 h-4 mr-2" />Print Blank Rubrics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf`, '_blank')}>
+                  <FileDown className="w-4 h-4 mr-2" />Export PDF
+                </DropdownMenuItem>
+                {hasPresentationRubricExam && (
+                  <DropdownMenuItem onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf?rubric=presentation`, '_blank')}>
+                    <FileDown className="w-4 h-4 mr-2" />Export Presentation Marks
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              onClick={handleToggle}
+              disabled={toggling}
+              className={state.isActive ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-600 hover:bg-slate-700 text-white'}
+            >
+              {toggling
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <span className={`w-2 h-2 rounded-full mr-2 ${state.isActive ? 'bg-green-300 animate-pulse' : 'bg-slate-400'}`} />}
+              {state.isActive ? 'Close Session' : 'Start Project Work'}
+            </Button>
+          </div>
+        </TooltipProvider>
       </div>
 
       {/* ── Active session banner ── */}
@@ -683,33 +761,11 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
       )}
 
       {/* ── Settings row ── */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-muted-foreground">Max members per group:</label>
-          <input type="number" min={1} max={20} value={maxInput} onChange={e => setMaxInput(e.target.value)}
-            className="w-16 h-8 rounded-md border bg-background px-2 text-sm text-center" />
-          <Button size="sm" variant="outline" onClick={handleUpdateMaxMembers}>Update</Button>
-        </div>
-        <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf-simple`, '_blank')}
-            className="border-emerald-500/40 hover:bg-emerald-500/10">
-            🖨️ Print Simple Grid
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf-blank`, '_blank')}
-            className="border-indigo-500/40 hover:bg-indigo-500/10">
-            🖨️ Print Blank Rubrics
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf`, '_blank')}
-            className="border-blue-500/40 hover:bg-blue-500/10">
-            📄 Export PDF
-          </Button>
-          {hasPresentationRubricExam && (
-            <Button size="sm" variant="outline" onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf?rubric=presentation`, '_blank')}
-              className="border-purple-500/40 hover:bg-purple-500/10">
-              📄 Export Presentation Marks
-            </Button>
-          )}
-        </div>
+      <div className="flex items-center gap-2 text-sm">
+        <label className="font-medium text-muted-foreground">Max members per group:</label>
+        <input type="number" min={1} max={20} value={maxInput} onChange={e => setMaxInput(e.target.value)}
+          className="w-16 h-8 rounded-md border bg-background px-2 text-sm text-center" />
+        <Button size="sm" variant="outline" onClick={handleUpdateMaxMembers}>Update</Button>
       </div>
 
       {/* ── No sections yet ── */}
@@ -720,19 +776,6 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
           </span>
           <Button size="sm" onClick={() => setShowAddSection(true)}>
             <Plus className="w-4 h-4 mr-2" />Add Section
-          </Button>
-        </div>
-      )}
-
-      {/* ── Sections needing rubric review ── */}
-      {projectExams.length > 0 && (
-        <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-          <span className="text-sm text-muted-foreground">
-            <Sparkles className="w-4 h-4 inline mr-1.5 -mt-0.5 text-primary" />
-            {projectExams.length} {sectionLabel}{projectExams.length > 1 ? 's' : ''} configured — review or change how each one is marked.
-          </span>
-          <Button size="sm" variant="outline" onClick={() => setShowSectionsManager(true)}>
-            <Settings className="w-4 h-4 mr-2" />Review Sections & Rubrics
           </Button>
         </div>
       )}
@@ -778,102 +821,116 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
               No groups match &quot;{groupSearch}&quot;
             </div>
           )}
-          {filteredGroups.map(group => {
-            const groupSaved = savedMarks[group._id] ?? {};
-            const allSaved = projectExams.length > 0 && projectExams.every(e => groupSaved[e._id] !== undefined);
 
-            return (
-              <div key={group._id} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          {filteredGroups.length > 0 && (
+            <Card className="p-6">
+              <div className="overflow-x-auto max-h-[calc(100vh-200px)]">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted sticky top-0 z-20">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[220px]">
+                        Group
+                      </th>
+                      {projectExams.map(exam => (
+                        <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[150px] whitespace-nowrap">
+                          <div>{exam.displayName}</div>
+                          <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">/{exam.totalMarks}</div>
+                        </th>
+                      ))}
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {filteredGroups.map(group => {
+                      const groupSaved = savedMarks[group._id] ?? {};
+                      const allSaved = projectExams.length > 0 && projectExams.every(e => groupSaved[e._id] !== undefined);
 
-                {/* ─ Group header bar ─ */}
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-muted/30">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary">
-                    {group.groupNumber}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {editingTitle === group._id ? (
-                      <div className="flex items-center gap-2">
-                        <input autoFocus type="text" value={titleDraft}
-                          onChange={e => setTitleDraft(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleSaveTitle(group._id)}
-                          className="rounded-md border bg-background px-3 py-1 text-sm w-64" placeholder="Enter project title..." />
-                        <Button size="sm" onClick={() => handleSaveTitle(group._id)}>Save</Button>
-                        <Button size="sm" variant="ghost" onClick={() => setEditingTitle(null)}>✕</Button>
-                      </div>
-                    ) : (
-                      <button onClick={() => { setEditingTitle(group._id); setTitleDraft(group.projectTitle || ''); }}
-                        className="text-left hover:opacity-70 transition-opacity w-full">
-                        <span className="font-semibold truncate block">
-                          {group.projectTitle || <span className="text-muted-foreground/50 italic font-normal text-sm">Click to add title...</span>}
-                        </span>
-                      </button>
-                    )}
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-muted-foreground">{group.studentIds.length}/{state.maxMembersPerGroup} members</span>
-                      {allSaved && <Badge className="text-xs bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/30">✓ All saved</Badge>}
-                    </div>
-                  </div>
-                  <Button size="sm" variant={deletingGroupId === group._id ? 'destructive' : 'ghost'}
-                    onClick={() => handleDeleteGroup(group._id)}>
-                    <Trash2 className="w-4 h-4" />
-                    {deletingGroupId === group._id ? <span className="ml-1 text-xs">Confirm</span> : null}
-                  </Button>
-                </div>
-
-                {/* ─ Members ─ */}
-                <div className="px-5 py-3 flex flex-wrap gap-2 border-b bg-background">
-                  {group.studentIds.length === 0 ? (
-                    <span className="text-sm text-muted-foreground/50 italic">No members yet</span>
-                  ) : group.studentIds.map(s => (
-                    <span key={s._id} className="inline-flex items-center gap-1.5 bg-muted/60 rounded-full px-3 py-1 text-sm">
-                      <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{s.name.charAt(0)}</span>
-                      {s.name} <span className="text-muted-foreground text-xs">({s.studentId})</span>
-                    </span>
-                  ))}
-                </div>
-
-                {/* ─ Section chips — click a section to mark it in its own modal ─ */}
-                {projectExams.length > 0 && (
-                  <div className="px-5 py-4">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Project Marks</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {projectExams.map(exam => {
-                        const entry = getExamRubric(group, exam._id);
-                        const template = getRubricTemplate(exam);
-                        const savedMark = groupSaved[exam._id];
-                        const isScored = template
-                          ? !!entry && entry.markMode === 'rubric'
-                          : entry?.directMark !== undefined && entry?.directMark !== null;
-
-                        return (
-                          <button
-                            key={exam._id}
-                            onClick={() => template ? handleOpenRubric(group, exam._id) : handleOpenDirectMarkModal(group, exam)}
-                            className={`text-left rounded-lg border p-3 transition-all hover:border-primary/50 hover:bg-muted/30 ${
-                              isScored ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-muted/10'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold truncate">{exam.displayName}</span>
-                              {isScored
-                                ? <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0" />
-                                : <span className="text-[10px] text-muted-foreground shrink-0">Not marked</span>}
+                      return (
+                        <tr key={group._id} className="transition-colors hover:bg-muted/50 bg-background">
+                          <td className="px-4 py-3 text-sm sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r bg-background min-w-[220px]">
+                            <div className="flex items-start gap-2">
+                              <div className="w-8 h-8 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
+                                {group.groupNumber}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                {editingTitle === group._id ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <input autoFocus type="text" value={titleDraft}
+                                      onChange={e => setTitleDraft(e.target.value)}
+                                      onKeyDown={e => e.key === 'Enter' && handleSaveTitle(group._id)}
+                                      className="rounded-md border bg-background px-2 py-1 text-xs w-32" placeholder="Project title..." />
+                                    <Button size="sm" className="h-7 px-2 text-xs" onClick={() => handleSaveTitle(group._id)}>Save</Button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => { setEditingTitle(group._id); setTitleDraft(group.projectTitle || ''); }}
+                                    className="text-left hover:opacity-70 transition-opacity w-full">
+                                    <span className="font-semibold truncate block text-sm">
+                                      {group.projectTitle || <span className="text-muted-foreground/50 italic font-normal">Add title…</span>}
+                                    </span>
+                                  </button>
+                                )}
+                                <div className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {group.studentIds.length === 0
+                                    ? 'No members'
+                                    : group.studentIds.map(s => s.name).join(', ')}
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant={deletingGroupId === group._id ? 'destructive' : 'ghost'}
+                                  className="h-6 px-1.5 mt-1 text-xs"
+                                  onClick={() => handleDeleteGroup(group._id)}
+                                >
+                                  <Trash2 className="w-3 h-3 mr-1" />
+                                  {deletingGroupId === group._id ? 'Confirm delete' : 'Delete group'}
+                                </Button>
+                              </div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1 flex items-center justify-between gap-2">
-                              <span className="truncate">{template ? template.name : 'Direct mark'} · /{exam.totalMarks}</span>
-                              {savedMark !== undefined && (
-                                <span className="font-medium text-green-600 dark:text-green-400 shrink-0">{savedMark} pts</span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                          </td>
+
+                          {projectExams.map(exam => {
+                            const entry = getExamRubric(group, exam._id);
+                            const template = getRubricTemplate(exam);
+                            const savedMark = groupSaved[exam._id];
+                            const isScored = template
+                              ? !!entry && entry.markMode === 'rubric'
+                              : entry?.directMark !== undefined && entry?.directMark !== null;
+
+                            return (
+                              <td key={exam._id} className="px-4 py-3 text-sm">
+                                <button
+                                  onClick={() => template ? handleOpenRubric(group, exam._id) : handleOpenDirectMarkModal(group, exam)}
+                                  className="w-full text-left"
+                                >
+                                  {isScored ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded font-medium text-xs bg-green-500/15 text-green-700 dark:text-green-300">
+                                      <Check className="w-3 h-3" />
+                                      {savedMark !== undefined ? `${savedMark} pts` : 'Scored'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/70 transition-colors">
+                                      Not marked
+                                    </span>
+                                  )}
+                                </button>
+                              </td>
+                            );
+                          })}
+
+                          <td className="px-4 py-3 text-sm">
+                            {allSaved ? (
+                              <Badge className="text-xs bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30">✓ All saved</Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Pending</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            );
-          })}
+            </Card>
+          )}
         </div>
       )}
 

@@ -122,7 +122,7 @@ export default function MarksView({
     : students;
 
   return (
-    <div className="space-y-6 pb-24 sm:pb-0">
+    <div className="space-y-6 pb-24 sm:pb-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
       {/* CO Warning Banner */}
       {examsWithMissingCO.length > 0 && onGoToCoPo && onIgnoreCOWarning && (
         <COMarksWarningBanner

@@ -65,7 +65,7 @@ export default function ExamsView({
   const [openGroup, setOpenGroup] = useState<'quiz' | 'assignment' | 'project' | null>('quiz');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <Card className="overflow-hidden border-border/60 bg-card/80 shadow-sm backdrop-blur">
         <CardHeader className="border-b border-border/60 bg-muted/30">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

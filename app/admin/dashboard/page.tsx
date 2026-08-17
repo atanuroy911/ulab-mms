@@ -124,22 +124,22 @@ function AdminDashboardContent() {
       <div className="flex-1 flex flex-col">
         {/* Top Navigation Bar */}
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 pl-16 md:pl-6 flex-wrap">
-            <div className="flex items-center gap-4 min-w-0">
+          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
+            <div className="flex items-center gap-3 min-w-0">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
-                width={40}
-                height={40}
+                width={36}
+                height={36}
                 className="drop-shadow-lg shrink-0"
               />
               <div className="min-w-0">
-                <h1 className="text-xl font-bold truncate">Admin Dashboard</h1>
-                <p className="text-sm text-muted-foreground truncate">Marks Management System</p>
+                <h1 className="text-base sm:text-lg font-bold truncate">Admin Dashboard</h1>
+                <p className="text-xs text-muted-foreground truncate">Marks Management System</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <ThemeToggle />
               <Button variant="outline" size="sm" asChild>
                 <Link href="/admin/settings">

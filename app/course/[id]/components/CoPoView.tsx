@@ -84,7 +84,7 @@ export default function CoPoView({ course, exams, onUpdate }: CoPoViewProps) {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold tracking-tight">CO-PO Mapping</h3>
