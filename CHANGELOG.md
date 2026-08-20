@@ -1,3 +1,15 @@
+# [1.10.0](https://github.com/atanuroy911/ulab-mms/compare/v1.9.1...v1.10.0) (2026-08-20)
+
+
+### Bug Fixes
+
+* marks tab ui fix + attendance fix ([5ba4e1b](https://github.com/atanuroy911/ulab-mms/commit/5ba4e1bb4d2addf7457a51ca709bc6672cadc7f0))
+
+
+### Features
+
+* CO for project ([85dfc28](https://github.com/atanuroy911/ulab-mms/commit/85dfc282b5fd16c403f6598f8103d250bc6ffad2))
+
 ## [1.9.1](https://github.com/atanuroy911/ulab-mms/compare/v1.9.0...v1.9.1) (2026-08-17)
 
 
