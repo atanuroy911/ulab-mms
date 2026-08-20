@@ -37,6 +37,7 @@ interface BulkMarkEntryModalProps {
   marks: Mark[];
   courseId: string;
   onMarksSaved: () => void;
+  initialExamId?: string;
   // CO validation props
   coPoMaxMarks?: Record<string, number[]>;
   onGoToCoPo?: () => void;
@@ -60,6 +61,7 @@ export default function BulkMarkEntryModal({
   marks,
   courseId,
   onMarksSaved,
+  initialExamId,
   coPoMaxMarks = {},
   onGoToCoPo,
   ignoredCoWarnings = new Set(),
@@ -475,6 +477,14 @@ export default function BulkMarkEntryModal({
       setShowCoWarning(false);
     }
   };
+
+  // Jump straight into entry for a specific exam when opened from a column shortcut
+  useEffect(() => {
+    if (isOpen && initialExamId && exams.some(e => e._id === initialExamId)) {
+      handleExamSelect(initialExamId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialExamId]);
 
   const handleClose = () => {
     setSelectedExamId('');

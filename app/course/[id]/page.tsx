@@ -187,6 +187,7 @@ export default function CoursePage() {
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
+  const [bulkMarkInitialExamId, setBulkMarkInitialExamId] = useState<string | undefined>(undefined);
   const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
   const [showDictationModal, setShowDictationModal] = useState(false);
   const [aliasCandidates, setAliasCandidates] = useState<Array<{ _id: string; studentId: string; name: string }>>([]);
@@ -1969,7 +1970,10 @@ export default function CoursePage() {
                   setInitialStudentId(studentId);
                   setShowMarkModal(true);
                 }}
-                onShowBulkMarkModal={() => setShowBulkMarkModal(true)}
+                onShowBulkMarkModal={(examId) => {
+                  setBulkMarkInitialExamId(examId);
+                  setShowBulkMarkModal(true);
+                }}
                 onShowBulkPasteModal={() => setShowBulkPasteModal(true)}
                 onShowDictationModal={() => setShowDictationModal(true)}
                 onShowSetZeroModal={() => {
@@ -1977,9 +1981,14 @@ export default function CoursePage() {
                   setConfirmationStep(0);
                   setShowSetZeroModal(true);
                 }}
-                onShowResetMarksModal={() => {
-                  setSelectedExamsForAction([]);
-                  setConfirmationStep(0);
+                onShowResetMarksModal={(examId) => {
+                  if (examId) {
+                    setSelectedExamsForAction([examId]);
+                    setConfirmationStep(1);
+                  } else {
+                    setSelectedExamsForAction([]);
+                    setConfirmationStep(0);
+                  }
                   setShowResetMarksModal(true);
                 }}
                 onAutoAttendanceMarks={handleAutoAttendanceMarks}
@@ -2382,12 +2391,16 @@ export default function CoursePage() {
       {/* Bulk Mark Entry Modal */}
       <BulkMarkEntryModal
         isOpen={showBulkMarkModal}
-        onClose={() => setShowBulkMarkModal(false)}
+        onClose={() => {
+          setShowBulkMarkModal(false);
+          setBulkMarkInitialExamId(undefined);
+        }}
         students={students}
         exams={exams}
         marks={marks}
         courseId={courseId}
         onMarksSaved={fetchCourseData}
+        initialExamId={bulkMarkInitialExamId}
         coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
         onGoToCoPo={() => { setShowBulkMarkModal(false); setActiveView('copo'); }}
         ignoredCoWarnings={ignoredCoWarnings}

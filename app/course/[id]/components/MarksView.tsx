@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, ChevronDown, Search } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, Search, MoreVertical } from 'lucide-react';
 import COMarksWarningBanner from './COMarksWarningBanner';
 
 interface Student {
@@ -39,11 +39,11 @@ interface MarksViewProps {
   marks: Mark[];
   getMark: (studentId: string, examId: string) => Mark | undefined;
   onShowMarkModal: (examId: string | undefined, studentId: string | undefined) => void;
-  onShowBulkMarkModal: () => void;
+  onShowBulkMarkModal: (examId?: string) => void;
   onShowBulkPasteModal: () => void;
   onShowDictationModal: () => void;
   onShowSetZeroModal: () => void;
-  onShowResetMarksModal: () => void;
+  onShowResetMarksModal: (examId?: string) => void;
   onAutoAttendanceMarks: (examId: string) => void;
   isAutoCalculatingAttendance?: boolean;
   onGetProjectMarks?: (() => void) | null;
@@ -78,7 +78,9 @@ export default function MarksView({
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const [search, setSearch] = useState('');
+  const [openColumnMenu, setOpenColumnMenu] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -86,16 +88,19 @@ export default function MarksView({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
       }
+      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
+        setOpenColumnMenu(null);
+      }
     };
 
-    if (showDropdown) {
+    if (showDropdown || openColumnMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDropdown]);
+  }, [showDropdown, openColumnMenu]);
 
   // Show floating buttons on scroll
   useEffect(() => {
@@ -113,6 +118,25 @@ export default function MarksView({
 
   const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
   const hasProjectExam = exams.some(e => e.examCategory === 'Project');
+
+  // Group columns the same way the Exams tab groups exam cards, so the two views read consistently.
+  const CATEGORY_ORDER: { key: string; label: string }[] = [
+    { key: 'MainExam', label: 'Main Exams' },
+    { key: 'Quiz', label: 'Quizzes' },
+    { key: 'Assignment', label: 'Assignments' },
+    { key: 'Project', label: 'Project' },
+    { key: 'ClassPerformance', label: 'Class Performance' },
+    { key: 'Attendance', label: 'Attendance' },
+    { key: 'Others', label: 'Others' },
+  ];
+  const examGroups = CATEGORY_ORDER
+    .map(({ key, label }) => ({
+      key,
+      label,
+      exams: exams.filter(e => (e.examCategory || 'Others') === key),
+    }))
+    .filter(group => group.exams.length > 0);
+  const orderedExams = examGroups.flatMap(group => group.exams);
 
   const filteredStudents = search.trim()
     ? students.filter(s =>
@@ -235,7 +259,7 @@ export default function MarksView({
           </Button>
         ))}
         <Button
-          onClick={onShowResetMarksModal}
+          onClick={() => onShowResetMarksModal()}
           variant="outline"
           className="gap-2 border-red-500/50 hover:bg-red-500/10"
         >
@@ -284,20 +308,86 @@ export default function MarksView({
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted sticky top-0 z-20">
               <tr>
-                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r w-[50px]">#</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r min-w-[200px]">Student</th>
-                {exams.map(exam => (
-                  <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                    <div>{exam.displayName}</div>
-                    <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">{exam.totalMarks} marks</div>
+                <th rowSpan={2} className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r w-[50px] align-middle">#</th>
+                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r min-w-[200px] align-middle">Student</th>
+                {examGroups.map((group, gIdx) => (
+                  <th
+                    key={group.key}
+                    colSpan={group.exams.length}
+                    className={`px-4 py-1.5 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/60 border-b ${gIdx > 0 ? 'border-l-2 border-border' : ''}`}
+                  >
+                    {group.label}
                   </th>
                 ))}
+              </tr>
+              <tr>
+                {examGroups.map((group, gIdx) =>
+                  group.exams.map((exam, eIdx) => {
+                    const enteredCount = marks.filter(m => m.examId === exam._id).length;
+                    const remainingCount = students.length - enteredCount;
+                    const isGroupStart = gIdx > 0 && eIdx === 0;
+                    return (
+                      <th
+                        key={exam._id}
+                        className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider align-top ${isGroupStart ? 'border-l-2 border-border' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <div>
+                            <div>{exam.displayName}</div>
+                            <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">{exam.totalMarks} marks</div>
+                            <div className={`text-[10px] font-normal mt-0.5 ${remainingCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {remainingCount > 0 ? `${remainingCount} remaining` : 'All entered'}
+                            </div>
+                          </div>
+                          <div className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setOpenColumnMenu(openColumnMenu === exam._id ? null : exam._id)}
+                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                              aria-label={`Options for ${exam.displayName}`}
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                            {openColumnMenu === exam._id && (
+                              <div
+                                ref={columnMenuRef}
+                                className="absolute right-0 mt-1 w-48 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden normal-case font-normal"
+                              >
+                                <button
+                                  onClick={() => {
+                                    setOpenColumnMenu(null);
+                                    onShowBulkMarkModal(exam._id);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Bulk grade this column
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOpenColumnMenu(null);
+                                    onShowResetMarksModal(exam._id);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs hover:bg-accent text-destructive transition-colors flex items-center gap-2"
+                                  disabled={enteredCount === 0}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Remove marks for this column
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </th>
+                    );
+                  })
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={exams.length + 2} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={orderedExams.length + 2} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No students match &quot;{search}&quot;
                   </td>
                 </tr>
@@ -313,10 +403,12 @@ export default function MarksView({
                       </span>
                     </div>
                   </td>
-                  {exams.map(exam => {
+                  {examGroups.map((group, gIdx) =>
+                    group.exams.map((exam, eIdx) => {
                     const mark = getMark(student._id, exam._id);
+                    const isGroupStart = gIdx > 0 && eIdx === 0;
                     return (
-                      <td key={exam._id} className={`px-4 py-3 text-sm`}>
+                      <td key={exam._id} className={`px-4 py-3 text-sm ${isGroupStart ? 'border-l-2 border-border' : ''}`}>
                         <Button
                           onClick={() => onShowMarkModal(exam._id, student._id)}
                           variant={mark ? "secondary" : "outline"}
@@ -331,7 +423,8 @@ export default function MarksView({
                         </Button>
                       </td>
                     );
-                  })}
+                  })
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -343,7 +436,7 @@ export default function MarksView({
       {showFloatingButtons && (
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
           <Button
-            onClick={onShowBulkMarkModal}
+            onClick={() => onShowBulkMarkModal()}
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"
           >
@@ -360,7 +453,7 @@ export default function MarksView({
             Set Empty to 0
           </Button>
           <Button
-            onClick={onShowResetMarksModal}
+            onClick={() => onShowResetMarksModal()}
             variant="destructive"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"

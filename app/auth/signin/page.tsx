@@ -25,7 +25,7 @@ export default function SignIn() {
 }
 
 function SignInForm() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
@@ -41,11 +41,17 @@ function SignInForm() {
   const [credentialsLoginEnabled, setCredentialsLoginEnabled] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
+  const isScopedOnly = !!(
+    session?.user?.checkinOnly ||
+    session?.user?.marksOnly ||
+    session?.user?.projectOnly
+  );
+
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && !isScopedOnly) {
       router.replace('/dashboard');
     }
-  }, [status, router]);
+  }, [status, isScopedOnly, router]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -67,7 +73,7 @@ function SignInForm() {
     signIn('google', { callbackUrl: '/dashboard' });
   };
 
-  if (status === 'loading' || status === 'authenticated') {
+  if (status === 'loading' || (status === 'authenticated' && !isScopedOnly)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
