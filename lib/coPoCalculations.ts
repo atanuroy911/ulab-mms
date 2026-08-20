@@ -161,16 +161,28 @@ export interface StudentRow {
   poAttained: number[]; // 0/1, 12 entries
 }
 
-export function computeStudentRows(course: any, students: any[], exams: any[], marks: any[]): StudentRow[] {
+export function computeStudentRows(
+  course: any,
+  students: any[],
+  exams: any[],
+  marks: any[],
+  // Combined Project-category CO marks, keyed by studentId — see getProjectCoMarksByStudent().
+  // Only used when course.coPoMapping.projectNumberOfCOs is set; otherwise falls back to the
+  // legacy per-exam CO marks on the first Project exam, same as before this existed.
+  projectCoMarksByStudent?: Record<string, number[]>
+): StudentRow[] {
   const midtermExam = findMidtermExam(exams);
   const finalExam = findFinalExam(exams);
   const projectExam = findProjectExam(exams);
 
   const coPoMapping: boolean[][] = course?.coPoMapping?.mapping || [];
   const maxMarks: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
+  const hasCombinedProjectCO = !!course?.coPoMapping?.projectNumberOfCOs;
   const midMax = midtermExam ? maxMarks[midtermExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
   const finalMax = finalExam ? maxMarks[finalExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const projectMax = projectExam ? maxMarks[projectExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  const projectMax = hasCombinedProjectCO
+    ? maxMarks['Project'] || [0, 0, 0, 0, 0, 0]
+    : projectExam ? maxMarks[projectExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
   const coMaxTotal = [0, 1, 2, 3, 4, 5].map((i) => (midMax[i] || 0) + (finalMax[i] || 0) + (projectMax[i] || 0));
   const poMappedCoCount = Array.from({ length: 12 }, (_, po) =>
     coPoMapping.reduce((sum, coRow) => sum + (coRow?.[po] ? 1 : 0), 0)
@@ -193,7 +205,12 @@ export function computeStudentRows(course: any, students: any[], exams: any[], m
 
     const coMidterm = [0, 1, 2, 3, 4, 5].map((i) => getCOMarkValue(student, midtermExam, marks, i));
     const coFinal = [0, 1, 2, 3, 4, 5].map((i) => getCOMarkValue(student, finalExam, marks, i));
-    const coProject = [0, 1, 2, 3, 4, 5].map((i) => getCOMarkValue(student, projectExam, marks, i));
+    const combinedProjectCoMarks = hasCombinedProjectCO ? projectCoMarksByStudent?.[student._id.toString()] : undefined;
+    const coProject = [0, 1, 2, 3, 4, 5].map((i) =>
+      hasCombinedProjectCO
+        ? combinedProjectCoMarks?.[i] ?? 0
+        : getCOMarkValue(student, projectExam, marks, i)
+    );
 
     const coPercentage = [0, 1, 2, 3, 4, 5].map((i) => {
       const raw = coMidterm[i] + coFinal[i] + coProject[i];
@@ -215,6 +232,21 @@ export function computeStudentRows(course: any, students: any[], exams: any[], m
       coMidterm, coFinal, coProject, coPercentage, coAttained, poPercentage, poAttained,
     };
   });
+}
+
+/**
+ * Expands per-group combined Project CO marks (ProjectGroup.groups[].coMarks) into a
+ * studentId -> coMarks[] map, since every member of a group shares the same combined score.
+ */
+export function getProjectCoMarksByStudent(projectGroups: any[]): Record<string, number[]> {
+  const byStudent: Record<string, number[]> = {};
+  for (const group of projectGroups || []) {
+    if (!group.coMarks || !group.coMarks.some((m: number) => m > 0)) continue;
+    for (const studentId of group.studentIds || []) {
+      byStudent[studentId.toString()] = group.coMarks;
+    }
+  }
+  return byStudent;
 }
 
 export interface AttendanceStat { present: number; total: number }

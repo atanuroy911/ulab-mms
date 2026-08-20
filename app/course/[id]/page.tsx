@@ -127,6 +127,8 @@ interface Course {
   coPoMapping?: {
     maxMarks: Record<string, number[]>;
     mapping: boolean[][];
+    projectNumberOfCOs?: number;
+    projectCoAutoDistribute?: boolean;
   };
   aliasEnabled?: boolean;
   alternateCode?: string;
@@ -236,6 +238,13 @@ export default function CoursePage() {
     category: 'Quiz' | 'Assignment' | 'Project';
     thenOpenAddExam: boolean;
   } | null>(null);
+  // Mirrors categoryConfigDialog's category but only updates while it's non-null, so the dialog's
+  // content (which category-specific fields to show) stays stable during the close animation
+  // instead of flashing to the "no category selected" state as categoryConfigDialog clears to null.
+  const [displayedCategoryConfig, setDisplayedCategoryConfig] = useState<'Quiz' | 'Assignment' | 'Project' | null>(null);
+  useEffect(() => {
+    if (categoryConfigDialog) setDisplayedCategoryConfig(categoryConfigDialog.category);
+  }, [categoryConfigDialog]);
   const [categoryConfigForm, setCategoryConfigForm] = useState({
     weightage: '',
     aggregation: 'average' as 'average' | 'best' | 'sum',
@@ -259,6 +268,19 @@ export default function CoursePage() {
       aggregation,
     });
     setCategoryConfigDialog({ category, thenOpenAddExam });
+
+    if (category === 'Project' && course) {
+      const savedNumberOfCOs = course.coPoMapping?.projectNumberOfCOs || 0;
+      const savedAutoDistribute = course.coPoMapping?.projectCoAutoDistribute !== false;
+      const savedMaxMarks = course.coPoMapping?.maxMarks?.['Project'] || [0, 0, 0, 0, 0, 0];
+      setProjectCoForm({
+        numberOfCOs: savedNumberOfCOs ? String(savedNumberOfCOs) : '',
+        autoDistribute: savedAutoDistribute,
+        maxMarks: savedAutoDistribute && savedNumberOfCOs
+          ? distributeEvenly(Number(course.projectWeightage || 0), savedNumberOfCOs)
+          : savedMaxMarks,
+      });
+    }
   };
 
   const handleSaveCategoryConfig = async (e: React.FormEvent) => {
@@ -318,6 +340,25 @@ export default function CoursePage() {
     examCategory: '',
     rubricTemplateId: '',
   });
+  // Combined CO configuration shared across every Project-category exam (not per-exam like other categories).
+  const [projectCoForm, setProjectCoForm] = useState<{ numberOfCOs: string; autoDistribute: boolean; maxMarks: number[] }>({
+    numberOfCOs: '',
+    autoDistribute: true,
+    maxMarks: [0, 0, 0, 0, 0, 0],
+  });
+  const [savingProjectCo, setSavingProjectCo] = useState(false);
+
+  const distributeEvenly = (weightage: number, n: number): number[] => {
+    const marks = [0, 0, 0, 0, 0, 0];
+    if (n <= 0) return marks;
+    const share = Math.floor((weightage / n) * 100) / 100;
+    for (let i = 0; i < n; i++) marks[i] = share;
+    // put the rounding remainder on the last CO so the total exactly matches the weightage
+    const remainder = Math.round((weightage - share * n) * 100) / 100;
+    marks[n - 1] = Math.round((marks[n - 1] + remainder) * 100) / 100;
+    return marks;
+  };
+
   const [courseSettingsData, setCourseSettingsData] = useState({
     quizAggregation: 'average' as 'average' | 'best',
     assignmentAggregation: 'average' as 'average' | 'best' | 'sum',
@@ -877,6 +918,58 @@ export default function CoursePage() {
     }
   };
 
+  const handleProjectCoNumberChange = (value: string) => {
+    const n = parseInt(value) || 0;
+    setProjectCoForm(prev => ({
+      ...prev,
+      numberOfCOs: value,
+      maxMarks: prev.autoDistribute ? distributeEvenly(parseFloat(categoryConfigForm.weightage) || 0, n) : prev.maxMarks,
+    }));
+  };
+
+  const handleProjectCoAutoDistributeToggle = (checked: boolean) => {
+    setProjectCoForm(prev => ({
+      ...prev,
+      autoDistribute: checked,
+      maxMarks: checked ? distributeEvenly(parseFloat(categoryConfigForm.weightage) || 0, parseInt(prev.numberOfCOs) || 0) : prev.maxMarks,
+    }));
+  };
+
+  const handleProjectCoMaxMarkChange = (coIndex: number, value: string) => {
+    setProjectCoForm(prev => {
+      const maxMarks = [...prev.maxMarks];
+      maxMarks[coIndex] = value === '' ? 0 : parseFloat(value) || 0;
+      return { ...prev, maxMarks };
+    });
+  };
+
+  const handleSaveProjectCoSettings = async () => {
+    if (!course) return;
+    setSavingProjectCo(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/copo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          maxMarks: { ...(course.coPoMapping?.maxMarks || {}), Project: projectCoForm.maxMarks },
+          projectNumberOfCOs: parseInt(projectCoForm.numberOfCOs) || 0,
+          projectCoAutoDistribute: projectCoForm.autoDistribute,
+        }),
+      });
+      if (response.ok) {
+        await fetchCourseData();
+        notify.exam.settingsUpdated();
+      } else {
+        const data = await response.json();
+        notify.exam.settingsError(data.error);
+      }
+    } catch (err) {
+      notify.exam.settingsError('Error saving combined CO settings');
+    } finally {
+      setSavingProjectCo(false);
+    }
+  };
+
   const handleDeleteExam = async (examId: string) => {
     const exam = exams.find(e => e._id === examId);
     
@@ -1189,7 +1282,8 @@ export default function CoursePage() {
   const getExamsWithMissingCOMarks = () => {
     if (!course) return [];
     const coPoMaxMarks = course.coPoMapping?.maxMarks || {};
-    return exams.filter(exam => {
+    const perExam = exams.filter(exam => {
+      if (exam.examCategory === 'Project') return false; // handled by the combined check below
       if (!exam.numberOfCOs || exam.numberOfCOs < 1) return false;
       // Ignored for this session
       if (ignoredCoWarnings.has(exam._id)) return false;
@@ -1198,6 +1292,18 @@ export default function CoursePage() {
       const configured = maxMarksForExam && maxMarksForExam.slice(0, exam.numberOfCOs).some(m => m > 0);
       return !configured;
     }).map(e => ({ _id: e._id, displayName: e.displayName }));
+
+    const projectNumberOfCOs = course.coPoMapping?.projectNumberOfCOs || 0;
+    const hasProjectExams = exams.some(e => e.examCategory === 'Project');
+    if (hasProjectExams && projectNumberOfCOs > 0 && !ignoredCoWarnings.has('__project-combined-co__')) {
+      const projectMax = coPoMaxMarks['Project'];
+      const configured = projectMax && projectMax.slice(0, projectNumberOfCOs).some((m: number) => m > 0);
+      if (!configured) {
+        perExam.push({ _id: '__project-combined-co__', displayName: `Combined ${course.courseType === 'Lab' ? 'OEL/CE' : 'Project'} COs` });
+      }
+    }
+
+    return perExam;
   };
 
   const handleIgnoreCOWarning = (examId: string) => {
@@ -1226,11 +1332,18 @@ export default function CoursePage() {
     if (!hasAnyMapping) return 'no-mapping';
     // Check if any CO-enabled exam is missing max marks
     const hasMissingMaxMarks = exams.some(exam => {
+      if (exam.examCategory === 'Project') return false; // handled by the combined check below
       if (!exam.numberOfCOs || exam.numberOfCOs < 1) return false;
       const examMaxMarks = maxMarks[exam._id];
       return !examMaxMarks || !examMaxMarks.slice(0, exam.numberOfCOs).some((m: number) => m > 0);
     });
     if (hasMissingMaxMarks) return 'no-max-marks';
+    const projectNumberOfCOs = course.coPoMapping?.projectNumberOfCOs || 0;
+    if (exams.some(e => e.examCategory === 'Project') && projectNumberOfCOs > 0) {
+      const projectMax = maxMarks['Project'];
+      const configured = projectMax && projectMax.slice(0, projectNumberOfCOs).some((m: number) => m > 0);
+      if (!configured) return 'no-max-marks';
+    }
     return 'ok';
   };
 
@@ -1326,11 +1439,14 @@ export default function CoursePage() {
     ? exams.find(exam => exam._id === showExamSettings)
     : null;
 
+  // Project-category exams use a combined CO configuration (shared across all Project exams,
+  // scaled to the project weightage) instead of a per-exam CO count — see the Project CO panel.
   const canEditCOs =
-    course?.courseType === 'Theory' ||
-    (course?.courseType === 'Lab' &&
-      (selectedExamForSettings?.examType === 'labFinal' ||
-        selectedExamForSettings?.examType === 'oel'));
+    examSettings.examCategory !== 'Project' &&
+    (course?.courseType === 'Theory' ||
+      (course?.courseType === 'Lab' &&
+        (selectedExamForSettings?.examType === 'labFinal' ||
+          selectedExamForSettings?.examType === 'oel')));
 
   // Check if we should show aggregated columns
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
@@ -2012,6 +2128,7 @@ export default function CoursePage() {
                 examFilter={(e) => e.examCategory === 'Project'}
                 courseType={course?.courseType}
                 defaultProjectWeightage={course?.projectWeightage ?? 25}
+                projectNumberOfCOs={course?.coPoMapping?.projectNumberOfCOs || 0}
                 onExamsChanged={fetchCourseData}
               />
             )}
@@ -2230,7 +2347,7 @@ export default function CoursePage() {
               </p>
             </div>
 
-            {course?.courseType === 'Theory' && (
+            {course?.courseType === 'Theory' && examFormData.examCategory !== 'Project' && (
               <div>
                 <Label>Number of COs (Optional)</Label>
                 <Input
@@ -2244,6 +2361,11 @@ export default function CoursePage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1">For exams with CO-wise marks breakdown</p>
               </div>
+            )}
+            {examFormData.examCategory === 'Project' && (
+              <p className="text-xs text-muted-foreground -mt-2">
+                💡 Project COs are configured once for the whole {course?.courseType === 'Lab' ? 'OEL/CE' : 'project'} group — use the gear icon on the {course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} section header in the Exams tab.
+              </p>
             )}
 
             <div>
@@ -2300,14 +2422,14 @@ export default function CoursePage() {
 
       {/* Configure Quiz / Assignment(CLA) / Project group settings */}
       <Dialog open={!!categoryConfigDialog} onOpenChange={(open) => !open && setCategoryConfigDialog(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className={displayedCategoryConfig === 'Project' ? 'max-w-lg' : 'max-w-md'}>
           <DialogHeader>
             <DialogTitle>
-              Configure {categoryConfigDialog?.category === 'Assignment' && course?.courseType === 'Lab'
+              Configure {displayedCategoryConfig === 'Assignment' && course?.courseType === 'Lab'
                 ? 'CLA'
-                : categoryConfigDialog?.category === 'Project' && course?.courseType === 'Lab'
+                : displayedCategoryConfig === 'Project' && course?.courseType === 'Lab'
                 ? 'OEL / CE Project'
-                : categoryConfigDialog?.category} Settings
+                : displayedCategoryConfig} Settings
             </DialogTitle>
             <DialogDescription>
               {categoryConfigDialog?.thenOpenAddExam
@@ -2331,11 +2453,11 @@ export default function CoursePage() {
                 className="mt-2"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Shared across all {categoryConfigDialog?.category === 'Project' ? 'items in this group (summed)' : 'items in this group'}.
+                Shared across all {displayedCategoryConfig === 'Project' ? 'items in this group (summed)' : 'items in this group'}.
               </p>
             </div>
 
-            {categoryConfigDialog?.category !== 'Project' && (
+            {displayedCategoryConfig !== 'Project' && (
               <div>
                 <Label>Aggregation Method</Label>
                 <select
@@ -2344,14 +2466,88 @@ export default function CoursePage() {
                   className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
                 >
                   <option value="average">Average of all items</option>
-                  {categoryConfigDialog?.category === 'Quiz' && <option value="best">Best item only</option>}
-                  {categoryConfigDialog?.category === 'Assignment' && course?.courseType === 'Lab' && (
+                  {displayedCategoryConfig === 'Quiz' && <option value="best">Best item only</option>}
+                  {displayedCategoryConfig === 'Assignment' && course?.courseType === 'Lab' && (
                     <option value="sum">Sum of all items</option>
                   )}
-                  {categoryConfigDialog?.category === 'Assignment' && course?.courseType !== 'Lab' && (
+                  {displayedCategoryConfig === 'Assignment' && course?.courseType !== 'Lab' && (
                     <option value="best">Best item only</option>
                   )}
                 </select>
+              </div>
+            )}
+
+            {displayedCategoryConfig === 'Project' && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div>
+                  <Label>Combined Course Outcomes</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Shared across every {course?.courseType === 'Lab' ? 'OEL/CE' : 'project'} exam. Max marks are scaled to the weightage above, not raw marks — enter combined CO scores per group in the Project tab.
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Number of COs</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="6"
+                    value={projectCoForm.numberOfCOs}
+                    onChange={(e) => handleProjectCoNumberChange(e.target.value)}
+                    placeholder="e.g., 4"
+                    className="mt-1"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={projectCoForm.autoDistribute}
+                    onChange={(e) => handleProjectCoAutoDistributeToggle(e.target.checked)}
+                  />
+                  Auto-distribute weightage evenly across COs
+                </label>
+
+                {(parseInt(projectCoForm.numberOfCOs) || 0) > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: parseInt(projectCoForm.numberOfCOs) || 0 }).map((_, i) => (
+                      <div key={i}>
+                        <Label className="text-[10px] text-muted-foreground">CO {i + 1}</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          disabled={projectCoForm.autoDistribute}
+                          value={projectCoForm.maxMarks[i] || ''}
+                          onChange={(e) => handleProjectCoMaxMarkChange(i, e.target.value)}
+                          placeholder="0"
+                          className="mt-1 h-8 text-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(parseInt(projectCoForm.numberOfCOs) || 0) > 0 && (
+                  <p className={`text-xs ${
+                    Math.round(projectCoForm.maxMarks.slice(0, parseInt(projectCoForm.numberOfCOs) || 0).reduce((s, m) => s + m, 0) * 100) / 100
+                      === Math.round((parseFloat(categoryConfigForm.weightage) || 0) * 100) / 100
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}>
+                    Total: {projectCoForm.maxMarks.slice(0, parseInt(projectCoForm.numberOfCOs) || 0).reduce((s, m) => s + m, 0).toFixed(2)} / {(parseFloat(categoryConfigForm.weightage) || 0).toFixed(2)}
+                  </p>
+                )}
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleSaveProjectCoSettings}
+                  disabled={savingProjectCo}
+                >
+                  {savingProjectCo ? 'Saving...' : 'Save Combined CO Settings'}
+                </Button>
               </div>
             )}
 

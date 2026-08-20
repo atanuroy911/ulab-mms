@@ -91,9 +91,10 @@ export async function buildDynamicCoPoWorkbook(params: {
   exams: any[];
   marks: any[];
   attendanceSessions?: any[];
+  projectCoMarksByStudent?: Record<string, number[]>;
   instructorName: string;
 }): Promise<Buffer> {
-  const { course, students, exams, marks, instructorName } = params;
+  const { course, students, exams, marks, instructorName, projectCoMarksByStudent } = params;
   const attendanceSessions = params.attendanceSessions || [];
 
   const templatePath = path.join(process.cwd(), 'public', 'templates', 'Sample CO PO.xlsx');
@@ -113,7 +114,7 @@ export async function buildDynamicCoPoWorkbook(params: {
   }
 
   const n = students.length;
-  const rows = computeStudentRows(course, students, exams, marks);
+  const rows = computeStudentRows(course, students, exams, marks, projectCoMarksByStudent);
   const summary = computeCoPoSummary(course, students, exams, marks, attendanceSessions, rows);
 
   const gradeShift = await resizeStudentBlock(gradeSheet, GRADE_SHEET_FIRST_ROW, n);

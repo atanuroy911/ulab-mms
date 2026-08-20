@@ -21,8 +21,10 @@ export interface ICourse extends Document {
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
   excelExportMapping?: ExcelExportMapping | null;
   coPoMapping?: {
-    maxMarks: Record<string, number[]>;
+    maxMarks: Record<string, number[]>; // keyed by exam._id, except 'Project' which holds the combined Project-category CO max marks (summing to projectWeightage)
     mapping: boolean[][];
+    projectNumberOfCOs?: number; // combined CO count shared across all Project-category exams
+    projectCoAutoDistribute?: boolean; // when true, projectMaxMarks['Project'] is kept as an even split of projectWeightage
   };
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived

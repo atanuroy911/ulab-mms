@@ -18,8 +18,11 @@ export default function CoPoView({ course, exams, onUpdate }: CoPoViewProps) {
   const [mapping, setMapping] = useState<boolean[][]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Filter exams that have COs enabled
-  const examsWithCOs = exams.filter(e => e.numberOfCOs && e.numberOfCOs >= 1);
+  // Filter exams that have COs enabled. Project-category exams are excluded here — they share
+  // one combined CO configuration (set via a Project exam's gear icon) instead of a per-exam one.
+  const examsWithCOs = exams.filter(e => e.numberOfCOs && e.numberOfCOs >= 1 && e.examCategory !== 'Project');
+  const projectNumberOfCOs = course.coPoMapping?.projectNumberOfCOs || 0;
+  const hasProjectExams = exams.some(e => e.examCategory === 'Project');
 
   useEffect(() => {
     // Initialize max marks
@@ -95,6 +98,24 @@ export default function CoPoView({ course, exams, onUpdate }: CoPoViewProps) {
           Save Mapping
         </Button>
       </div>
+
+      {hasProjectExams && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center text-base">
+              <GitMerge className="mr-2 h-5 w-5 text-primary" />
+              Combined {course.courseType === 'Lab' ? 'OEL/CE' : 'Project'} COs
+            </CardTitle>
+            <CardDescription>
+              {projectNumberOfCOs > 0 ? (
+                <>{projectNumberOfCOs} CO(s) configured, shared across every {course.courseType === 'Lab' ? 'OEL/CE' : 'project'} exam and scaled to the {Number(course.projectWeightage || 0)}% weightage. Configure from any project exam's gear icon in the Exams tab.</>
+              ) : (
+                <>Not configured yet — open any {course.courseType === 'Lab' ? 'OEL/CE' : 'project'} exam's gear icon in the Exams tab to set combined COs.</>
+              )}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

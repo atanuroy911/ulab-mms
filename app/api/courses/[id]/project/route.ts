@@ -111,7 +111,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { groupId, projectTitle, rubricScores, examRubricScores, maxMembersPerGroup } = body;
+    const { groupId, projectTitle, rubricScores, examRubricScores, coMarks, maxMembersPerGroup } = body;
 
     const projectGroup = await ProjectGroup.findOne({ courseId: id });
     if (!projectGroup) {
@@ -132,6 +132,12 @@ export async function PATCH(
       // Legacy single-rubric save
       if (rubricScores !== undefined) {
         group.rubricScores = rubricScores;
+        group.markedAt = new Date();
+      }
+
+      // Combined Project-category CO marks (shared across all Project exams, entered once per group)
+      if (coMarks !== undefined) {
+        group.coMarks = coMarks;
         group.markedAt = new Date();
       }
 

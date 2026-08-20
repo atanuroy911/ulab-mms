@@ -16,9 +16,9 @@ export async function PUT(
     }
 
     const { id: courseId } = await params;
-    const { maxMarks, mapping } = await request.json();
+    const { maxMarks, mapping, projectNumberOfCOs, projectCoAutoDistribute } = await request.json();
 
-    if (!maxMarks || !mapping) {
+    if (maxMarks === undefined && mapping === undefined && projectNumberOfCOs === undefined && projectCoAutoDistribute === undefined) {
       return NextResponse.json(
         { error: 'Missing required mapping data' },
         { status: 400 }
@@ -27,10 +27,24 @@ export async function PUT(
 
     await dbConnect();
 
-    // Verify course exists and update it
+    const existing = await Course.findOne({ _id: courseId, userId: session.user.id });
+    if (!existing) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    // Merge onto the existing coPoMapping so a partial save (e.g. just the combined Project CO
+    // settings from the exam gear button) never wipes out unrelated fields like the mapping matrix.
+    const nextCoPoMapping = {
+      ...(existing.coPoMapping || {}),
+      ...(maxMarks !== undefined ? { maxMarks } : {}),
+      ...(mapping !== undefined ? { mapping } : {}),
+      ...(projectNumberOfCOs !== undefined ? { projectNumberOfCOs } : {}),
+      ...(projectCoAutoDistribute !== undefined ? { projectCoAutoDistribute } : {}),
+    };
+
     const course = await Course.findOneAndUpdate(
       { _id: courseId, userId: session.user.id },
-      { $set: { coPoMapping: { maxMarks, mapping } } },
+      { $set: { coPoMapping: nextCoPoMapping } },
       { new: true }
     );
 

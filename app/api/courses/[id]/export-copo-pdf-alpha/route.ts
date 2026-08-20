@@ -7,7 +7,9 @@ import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
 import AttendanceSession from '@/models/AttendanceSession';
+import ProjectGroup from '@/models/ProjectGroup';
 import { buildCoPoReportData, buildCoPoPdfHtml } from '@/lib/coPoPdfReport';
+import { getProjectCoMarksByStudent } from '@/lib/coPoCalculations';
 
 // Renders the full course file (GradeSheet, GradingPolicy, CourseSummary,
 // CO_PO_AttainmentAnalysis, ContinuousQualityImprovement) as one print-ready HTML document -
@@ -46,6 +48,8 @@ export async function GET(
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
     const attendanceSessions = await AttendanceSession.find({ courseId });
+    const projectGroupDoc = await ProjectGroup.findOne({ courseId });
+    const projectCoMarksByStudent = getProjectCoMarksByStudent(projectGroupDoc?.groups || []);
 
     const courseForExport = useSplit && group === 'alias'
       ? { ...course.toObject(), code: course.alternateCode }
@@ -57,6 +61,7 @@ export async function GET(
       exams,
       marks,
       attendanceSessions,
+      projectCoMarksByStudent,
       instructorName: session.user?.name || '',
     });
 

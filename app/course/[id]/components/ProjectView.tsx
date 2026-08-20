@@ -30,6 +30,7 @@ interface GroupEntry {
   projectTitle: string;
   studentIds: StudentInfo[];
   examRubricScores: { examId: string; scores: IRubricScores; markMode: 'rubric' | 'direct'; reasoning?: string; directMark?: number | null }[];
+  coMarks?: number[];
   markedAt?: string | null;
 }
 
@@ -72,6 +73,8 @@ interface ProjectViewProps {
   description?: string;
   courseType?: 'Theory' | 'Lab';
   defaultProjectWeightage?: number;
+  /** Combined CO count shared across all Project exams (0/undefined = combined COs not configured). */
+  projectNumberOfCOs?: number;
   /** Called after a section (Project exam) is created or its rubric is changed, so the parent can refresh its exam list. */
   onExamsChanged?: () => void | Promise<void>;
 }
@@ -144,7 +147,7 @@ function RubricDetail({ scores, criteria }: { scores: IRubricScores; criteria: R
 
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function ProjectView({ courseId, students, exams, examFilter, title, description, courseType, defaultProjectWeightage, onExamsChanged }: ProjectViewProps) {
+export default function ProjectView({ courseId, students, exams, examFilter, title, description, courseType, defaultProjectWeightage, projectNumberOfCOs = 0, onExamsChanged }: ProjectViewProps) {
   const [state, setState] = useState<ProjectState>({ isActive: false, maxMembersPerGroup: 4, groups: [] });
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -159,6 +162,11 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
   // Group delete
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+
+  // Combined Project CO marks editing (shared across all Project exams for this group)
+  const [editingCoMarks, setEditingCoMarks] = useState<string | null>(null); // groupId
+  const [coMarksDraft, setCoMarksDraft] = useState<string[]>([]);
+  const [savingCoMarks, setSavingCoMarks] = useState<Record<string, boolean>>({});
 
   // Search/filter groups by group number, title, or member name/ID
   const [groupSearch, setGroupSearch] = useState('');
@@ -405,6 +413,29 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
       if (res.ok) { setState(data); setEditingTitle(null); toast.success('Title updated'); }
       else toast.error(data.error || 'Failed to update title');
     } catch { toast.error('Network error'); }
+  };
+
+  const handleOpenCoMarks = (group: GroupEntry) => {
+    const existing = group.coMarks && group.coMarks.length > 0 ? group.coMarks : [0, 0, 0, 0, 0, 0];
+    setCoMarksDraft(Array.from({ length: projectNumberOfCOs }, (_, i) => String(existing[i] ?? 0)));
+    setEditingCoMarks(group._id);
+  };
+
+  const handleSaveCoMarks = async (groupId: string) => {
+    setSavingCoMarks(prev => ({ ...prev, [groupId]: true }));
+    try {
+      const coMarks = [0, 0, 0, 0, 0, 0];
+      coMarksDraft.forEach((v, i) => { coMarks[i] = v === '' ? 0 : parseFloat(v) || 0; });
+      const res = await fetch(`/api/courses/${courseId}/project`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId, coMarks }),
+      });
+      const data = await res.json();
+      if (res.ok) { setState(data); setEditingCoMarks(null); toast.success('Combined CO marks saved'); }
+      else toast.error(data.error || 'Failed to save CO marks');
+    } catch { toast.error('Network error'); }
+    finally { setSavingCoMarks(prev => ({ ...prev, [groupId]: false })); }
   };
 
   // ─── Rubric + mode persistence ──────────────────────────────────────────────
@@ -849,6 +880,11 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                           <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">/{exam.totalMarks}</div>
                         </th>
                       ))}
+                      {projectNumberOfCOs > 0 && (
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[160px] whitespace-nowrap">
+                          Combined COs
+                        </th>
+                      )}
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
@@ -929,6 +965,47 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                               </td>
                             );
                           })}
+
+                          {projectNumberOfCOs > 0 && (
+                            <td className="px-4 py-3 text-sm">
+                              {editingCoMarks === group._id ? (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {coMarksDraft.map((v, i) => (
+                                    <input
+                                      key={i}
+                                      type="number"
+                                      min="0"
+                                      step="0.1"
+                                      value={v}
+                                      onChange={e => setCoMarksDraft(prev => prev.map((p, pi) => pi === i ? e.target.value : p))}
+                                      placeholder={`CO${i + 1}`}
+                                      className="w-14 h-7 rounded border bg-background px-1 text-xs text-center"
+                                    />
+                                  ))}
+                                  <Button
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => handleSaveCoMarks(group._id)}
+                                    disabled={savingCoMarks[group._id]}
+                                  >
+                                    {savingCoMarks[group._id] ? '...' : 'Save'}
+                                  </Button>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleOpenCoMarks(group)} className="text-left hover:opacity-70 transition-opacity">
+                                  {group.coMarks && group.coMarks.some(m => m > 0) ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded font-medium text-xs bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                      {group.coMarks.slice(0, projectNumberOfCOs).map((m, i) => `CO${i + 1}: ${m}`).join(' · ')}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/70 transition-colors">
+                                      Not scored
+                                    </span>
+                                  )}
+                                </button>
+                              )}
+                            </td>
+                          )}
 
                           <td className="px-4 py-3 text-sm">
                             {allSaved ? (

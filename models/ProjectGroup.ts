@@ -20,6 +20,7 @@ export interface IProjectGroupEntry {
   studentIds: mongoose.Types.ObjectId[];
   rubricScores: IRubricScores; // legacy: single rubric for group
   examRubricScores: IExamRubricEntry[]; // per-exam rubric scores + mode
+  coMarks?: number[]; // combined Project-category CO marks (index 0-5 = CO1-CO6), shared across all Project exams
   markedAt?: Date;
 }
 
@@ -66,6 +67,7 @@ const ProjectGroupEntrySchema = new Schema({
     default: () => ({ c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 }),
   },
   examRubricScores: { type: [ExamRubricEntrySchema], default: [] },
+  coMarks: { type: [Number], default: () => [0, 0, 0, 0, 0, 0] },
   markedAt: { type: Date, default: null },
 });
 

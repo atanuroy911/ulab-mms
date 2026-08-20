@@ -56,12 +56,13 @@ export function buildCoPoReportData(params: {
   exams: any[];
   marks: any[];
   attendanceSessions?: any[];
+  projectCoMarksByStudent?: Record<string, number[]>;
   instructorName: string;
 }): CoPoReportData {
-  const { course, students, exams, marks, instructorName } = params;
+  const { course, students, exams, marks, instructorName, projectCoMarksByStudent } = params;
   const attendanceSessions = params.attendanceSessions || [];
 
-  const rows = computeStudentRows(course, students, exams, marks);
+  const rows = computeStudentRows(course, students, exams, marks, projectCoMarksByStudent);
   const summary = computeCoPoSummary(course, students, exams, marks, attendanceSessions, rows);
   const gradingScale = decodeGradingScale(course?.gradingScale);
 

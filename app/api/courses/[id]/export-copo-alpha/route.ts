@@ -7,7 +7,9 @@ import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
 import AttendanceSession from '@/models/AttendanceSession';
+import ProjectGroup from '@/models/ProjectGroup';
 import { buildDynamicCoPoWorkbook } from '@/lib/coPoDynamicExport';
+import { getProjectCoMarksByStudent } from '@/lib/coPoCalculations';
 
 // Alpha export: same CO-PO course file as the Beta export, but the student table grows or
 // shrinks to the real roster size instead of being capped at 50 rows. See
@@ -43,6 +45,8 @@ export async function POST(
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
     const attendanceSessions = await AttendanceSession.find({ courseId });
+    const projectGroupDoc = await ProjectGroup.findOne({ courseId });
+    const projectCoMarksByStudent = getProjectCoMarksByStudent(projectGroupDoc?.groups || []);
 
     const courseForExport = useSplit && group === 'alias'
       ? { ...course.toObject(), code: course.alternateCode }
@@ -54,6 +58,7 @@ export async function POST(
       exams,
       marks,
       attendanceSessions,
+      projectCoMarksByStudent,
       instructorName: session.user?.name || '',
     });
 
