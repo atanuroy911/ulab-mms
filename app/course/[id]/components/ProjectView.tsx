@@ -875,9 +875,9 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                         Group
                       </th>
                       {projectExams.map(exam => (
-                        <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[150px] whitespace-nowrap">
-                          <div>{exam.displayName}</div>
-                          <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">/{exam.totalMarks}</div>
+                        <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider w-[150px] max-w-[150px]">
+                          <div className="truncate" title={exam.displayName}>{exam.displayName}</div>
+                          <div className="text-[10px] font-normal mt-0.5 text-muted-foreground whitespace-nowrap">/{exam.totalMarks}</div>
                         </th>
                       ))}
                       {projectNumberOfCOs > 0 && (

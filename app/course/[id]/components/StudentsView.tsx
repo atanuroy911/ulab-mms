@@ -7,8 +7,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Plus, Upload, Trash2, Tag, Search } from 'lucide-react';
+import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
 interface Student {
   _id: string;
@@ -92,6 +93,8 @@ interface StudentsViewProps {
   onBulkDeleteStudents?: (studentIds: string[]) => Promise<void> | void;
   onToggleWithdrawStudent: (student: Student) => void;
   onToggleAlias: (student: Student) => void;
+  onBulkToggleWithdraw?: (studentIds: string[], withdrawn: boolean) => Promise<void> | void;
+  onBulkToggleAlias?: (studentIds: string[], useAlias: boolean) => Promise<void> | void;
   onAutoCategorizeAlias: () => void;
 }
 
@@ -121,6 +124,8 @@ export default function StudentsView({
   onBulkDeleteStudents,
   onToggleWithdrawStudent,
   onToggleAlias,
+  onBulkToggleWithdraw,
+  onBulkToggleAlias,
   onAutoCategorizeAlias,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -135,6 +140,7 @@ export default function StudentsView({
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleteConfirmationStep, setBulkDeleteConfirmationStep] = useState(0);
   const [deletingBulkStudents, setDeletingBulkStudents] = useState(false);
+  const [bulkActionPending, setBulkActionPending] = useState(false);
 
   const toggleStudentSelection = (studentId: string) => {
     const newSelected = new Set(selectedStudentIds);
@@ -152,6 +158,25 @@ export default function StudentsView({
         s.name.toLowerCase().includes(search.toLowerCase())
       )
     : students;
+
+  // Group columns the same way the Marks tab groups exam columns, so the two views read consistently.
+  const CATEGORY_ORDER: { key: string; label: string }[] = [
+    { key: 'MainExam', label: 'Main Exams' },
+    { key: 'Quiz', label: 'Quizzes' },
+    { key: 'Assignment', label: 'Assignments' },
+    { key: 'Project', label: 'Project' },
+    { key: 'ClassPerformance', label: 'Class Performance' },
+    { key: 'Attendance', label: 'Attendance' },
+    { key: 'Others', label: 'Others' },
+  ];
+  const examGroups = CATEGORY_ORDER
+    .map(({ key, label }) => ({
+      key,
+      label,
+      exams: exams.filter(e => (e.examCategory || 'Others') === key),
+    }))
+    .filter(group => group.exams.length > 0);
+  const orderedExams = examGroups.flatMap(group => group.exams);
 
   const toggleAllSelection = () => {
     if (selectedStudentIds.size === filteredStudents.length && filteredStudents.length > 0) {
@@ -176,6 +201,28 @@ export default function StudentsView({
       setSelectedStudentIds(new Set());
     } finally {
       setDeletingBulkStudents(false);
+    }
+  };
+
+  const handleBulkWithdraw = async (withdrawn: boolean) => {
+    if (!onBulkToggleWithdraw) return;
+    setBulkActionPending(true);
+    try {
+      await onBulkToggleWithdraw(Array.from(selectedStudentIds), withdrawn);
+      setSelectedStudentIds(new Set());
+    } finally {
+      setBulkActionPending(false);
+    }
+  };
+
+  const handleBulkAlias = async (useAlias: boolean) => {
+    if (!onBulkToggleAlias) return;
+    setBulkActionPending(true);
+    try {
+      await onBulkToggleAlias(Array.from(selectedStudentIds), useAlias);
+      setSelectedStudentIds(new Set());
+    } finally {
+      setBulkActionPending(false);
     }
   };
 
@@ -221,14 +268,49 @@ export default function StudentsView({
         </div>
         <div className="flex gap-2 flex-wrap">
           {selectedStudentIds.size > 0 && (
-            <Button
-              onClick={() => setShowBulkDeleteModal(true)}
-              variant="destructive"
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected ({selectedStudentIds.size})
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2" disabled={bulkActionPending}>
+                  Bulk Actions ({selectedStudentIds.size})
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {onBulkToggleWithdraw && (
+                  <>
+                    <DropdownMenuItem onClick={() => handleBulkWithdraw(true)}>
+                      <UserX className="w-4 h-4 mr-2" />
+                      Mark as Withdrawn
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkWithdraw(false)}>
+                      <UserCheck className="w-4 h-4 mr-2" />
+                      Un-mark Withdrawn
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {onBulkToggleAlias && course?.aliasEnabled && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleBulkAlias(true)}>
+                      <Tag className="w-4 h-4 mr-2" />
+                      Add to New Code
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkAlias(false)}>
+                      <Tag className="w-4 h-4 mr-2" />
+                      Remove from New Code
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Selected
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <Button
             onClick={onShowAddStudentModal}
@@ -296,27 +378,26 @@ export default function StudentsView({
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted sticky top-0 z-20">
               <tr>
-                <th className="px-3 py-3 text-center sticky left-0 z-30 bg-muted border-r w-[40px]">
+                <th rowSpan={2} className="px-3 py-3 text-center sticky left-0 z-30 bg-muted border-r w-[40px] align-middle">
                   <Checkbox
                     checked={filteredStudents.length > 0 && selectedStudentIds.size === filteredStudents.length}
                     onCheckedChange={toggleAllSelection}
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-[40px] z-30 bg-muted border-r w-[50px]">#</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[90px] z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px]">Student</th>
-                {exams.map(exam => (
-                  <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap">
-                    <div>{exam.displayName}</div>
-                    {exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project' ? (
-                      <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw Mark</div>
-                    ) : (
-                      <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Weighted</div>
-                    )}
+                <th rowSpan={2} className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-[40px] z-30 bg-muted border-r w-[50px] align-middle">#</th>
+                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[90px] z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px] align-middle">Student</th>
+                {examGroups.map((group, gIdx) => (
+                  <th
+                    key={group.key}
+                    colSpan={group.exams.length}
+                    className={`px-4 py-1.5 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/60 border-b ${gIdx > 0 ? 'border-l-2 border-border' : ''}`}
+                  >
+                    {group.label}
                   </th>
                 ))}
                 {hasQuizzes && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-500/10 border-l-2 border-amber-500/50 min-w-[150px] whitespace-nowrap">
+                  <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-500/10 border-l-2 border-amber-500/50 min-w-[150px] whitespace-nowrap align-middle">
                     <div className="flex items-center gap-1">
                       <span>📝 Quiz (Agg)</span>
                     </div>
@@ -326,7 +407,7 @@ export default function StudentsView({
                   </th>
                 )}
                 {hasAssignments && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-500/10 border-l-2 border-blue-500/50 min-w-[170px] whitespace-nowrap">
+                  <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-500/10 border-l-2 border-blue-500/50 min-w-[170px] whitespace-nowrap align-middle">
                     <div className="flex items-center gap-1">
                       <span>📋 {course?.courseType === 'Lab' ? 'CLA' : 'Assignment'} (Agg)</span>
                     </div>
@@ -336,7 +417,7 @@ export default function StudentsView({
                   </th>
                 )}
                 {hasProjects && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-500/10 border-l-2 border-violet-500/50 min-w-[190px] whitespace-nowrap">
+                  <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-500/10 border-l-2 border-violet-500/50 min-w-[190px] whitespace-nowrap align-middle">
                     <div className="flex items-center gap-1">
                       <span>{course?.courseType === 'Lab' ? '🚀 OEL / CE Project' : '🎓 Project'} (Agg)</span>
                     </div>
@@ -345,7 +426,7 @@ export default function StudentsView({
                     </div>
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-l-2 border-green-500/50 min-w-[160px] whitespace-nowrap">
+                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-l-2 border-green-500/50 min-w-[160px] whitespace-nowrap align-middle">
                   <div className="flex items-center gap-1">
                     <span>🎯 Final Grade (Est.)</span>
                   </div>
@@ -353,7 +434,7 @@ export default function StudentsView({
                     Weighted Total
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-l-2 border-purple-500/50 min-w-[140px] whitespace-nowrap">
+                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-l-2 border-purple-500/50 min-w-[140px] whitespace-nowrap align-middle">
                   <div className="flex items-center gap-1">
                     <span>🏆 Letter Grade</span>
                   </div>
@@ -361,7 +442,24 @@ export default function StudentsView({
                     Based on %
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[120px] whitespace-nowrap">Actions</th>
+                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle sticky right-0 z-30 border-l bg-muted">Actions</th>
+              </tr>
+              <tr>
+                {examGroups.map((group, gIdx) =>
+                  group.exams.map((exam, eIdx) => (
+                    <th
+                      key={exam._id}
+                      className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap ${gIdx > 0 && eIdx === 0 ? 'border-l-2 border-border' : ''}`}
+                    >
+                      <div>{exam.displayName}</div>
+                      {exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project' ? (
+                        <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw Mark</div>
+                      ) : (
+                        <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Weighted</div>
+                      )}
+                    </th>
+                  ))
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -399,11 +497,12 @@ export default function StudentsView({
                       )}
                     </div>
                   </td>
-                  {exams.map(exam => {
+                  {orderedExams.map((exam, idx) => {
                     const mark = getMark(student._id, exam._id);
                     const isAggregatedCategory = exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project';
+                    const isGroupStart = idx > 0 && (orderedExams[idx - 1].examCategory || 'Others') !== (exam.examCategory || 'Others');
                     return (
-                      <td key={exam._id} className="px-4 py-3 text-sm">
+                      <td key={exam._id} className={`px-4 py-3 text-sm ${isGroupStart ? 'border-l-2 border-border' : ''}`}>
                         <div className="flex items-center gap-2">
                           <div className="flex-1">
                             {mark ? (
@@ -551,47 +650,38 @@ export default function StudentsView({
                       );
                     })()}
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => onToggleWithdrawStudent(student)}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition-all font-bold ${
-                          student.withdrawn
-                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                            : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border'
-                        }`}
-                        title={student.withdrawn ? "Un-withdraw Student" : "Mark as Withdrawn"}
-                      >
-                        W
-                      </button>
-                      {course?.aliasEnabled && (
-                        <button
-                          onClick={() => onToggleAlias(student)}
-                          className={`px-3 py-1.5 text-xs rounded-lg transition-all font-bold ${
-                            student.useAlias
-                              ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                              : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border'
-                          }`}
-                          title={student.useAlias ? `Remove from New Code (${course.alternateCode})` : `Add to New Code (${course.alternateCode})`}
+                  <td className={`px-4 py-3 text-sm sticky right-0 z-10 border-l bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onClick={() => onToggleWithdrawStudent(student)}>
+                          {student.withdrawn ? <UserCheck className="w-4 h-4 mr-2" /> : <UserX className="w-4 h-4 mr-2" />}
+                          {student.withdrawn ? 'Un-withdraw Student' : 'Mark as Withdrawn'}
+                        </DropdownMenuItem>
+                        {course?.aliasEnabled && (
+                          <DropdownMenuItem onClick={() => onToggleAlias(student)}>
+                            <Tag className="w-4 h-4 mr-2" />
+                            {student.useAlias ? `Remove from New Code (${course.alternateCode})` : `Add to New Code (${course.alternateCode})`}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => onEditStudent(student)}>
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Edit Student
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => onDeleteStudent(student)}
+                          className="text-destructive focus:text-destructive"
                         >
-                          <Tag className="w-3 h-3" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onEditStudent(student)}
-                        className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded-lg transition-all"
-                        title="Edit Student"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => onDeleteStudent(student)}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg transition-all"
-                        title="Delete Student"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Student
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}

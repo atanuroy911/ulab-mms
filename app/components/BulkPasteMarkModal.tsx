@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Save, Loader2, AlertTriangle, Info, Copy, Check } from 'lucide-react';
+import { X, Save, Loader2, AlertTriangle, Info, Copy, Check, FileSpreadsheet, ClipboardPaste } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
+import { computeCoMarks } from '@/app/utils/bulkGridParsing';
+import BulkPasteGridView from './BulkPasteGridView';
 
 const FORMAT_HELP_PROMPT = `I will paste a grade sheet containing student IDs, names, email addresses, and one or more Continuous Lab Assessment (CLA) columns.
 
@@ -111,30 +113,6 @@ function parsePastedText(text: string, students: Student[], totalMarks: number, 
   });
 }
 
-function computeCoMarks(
-  rawMarkNum: number,
-  numberOfCOs: number,
-  totalMarks: number,
-  examMaxMarks?: number[]
-): { coMarks?: number[]; nonCoMark?: number } {
-  if (numberOfCOs <= 0) return {};
-
-  if (rawMarkNum === totalMarks) {
-    const coMarks = Array.from({ length: numberOfCOs }, (_, i) => {
-      const coMax = examMaxMarks?.[i];
-      return coMax !== undefined && coMax > 0 ? coMax : 0;
-    });
-    const configured = examMaxMarks && examMaxMarks.slice(0, numberOfCOs).some(m => m > 0);
-    return configured ? { coMarks } : {};
-  }
-
-  if (rawMarkNum === 0) {
-    return { coMarks: new Array(numberOfCOs).fill(0), nonCoMark: 0 };
-  }
-
-  return {};
-}
-
 export default function BulkPasteMarkModal({
   isOpen,
   onClose,
@@ -145,12 +123,18 @@ export default function BulkPasteMarkModal({
   onMarksSaved,
   coPoMaxMarks = {},
 }: BulkPasteMarkModalProps) {
+  const [mode, setMode] = useState<'single' | 'grid'>('single');
   const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [pasteText, setPasteText] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showFormatHelp, setShowFormatHelp] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [localExams, setLocalExams] = useState(exams);
+
+  useEffect(() => {
+    setLocalExams(exams);
+  }, [exams]);
 
   const copyPrompt = async () => {
     try {
@@ -163,7 +147,7 @@ export default function BulkPasteMarkModal({
     }
   };
 
-  const selectedExams = exams.filter(e => e._id === selectedExamId);
+  const selectedExams = localExams.filter(e => e._id === selectedExamId);
 
   const selectExam = (examId: string) => {
     setSelectedExamId(prev => (prev === examId ? '' : examId));
@@ -173,6 +157,7 @@ export default function BulkPasteMarkModal({
     setSelectedExamId('');
     setPasteText({});
     setError('');
+    setMode('single');
     onClose();
   };
 
@@ -281,12 +266,54 @@ export default function BulkPasteMarkModal({
           </Button>
         </div>
 
+        {/* Mode toggle */}
+        <div className="px-6 pt-4">
+          <div className="inline-flex rounded-lg border border-gray-700 bg-gray-900/60 p-1">
+            <button
+              type="button"
+              onClick={() => setMode('single')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === 'single' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <ClipboardPaste className="w-4 h-4" />
+              Paste one exam
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Paste or import multiple columns
+            </button>
+          </div>
+        </div>
+
+        {mode === 'grid' ? (
+          <BulkPasteGridView
+            students={students}
+            exams={localExams}
+            marks={marks}
+            courseId={courseId}
+            coPoMaxMarks={coPoMaxMarks}
+            onExamCreated={(exam) => setLocalExams(prev => [...prev, exam])}
+            onMarksSaved={() => {
+              onMarksSaved();
+              handleClose();
+            }}
+            onCancel={handleClose}
+          />
+        ) : (
+          <>
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Exam selection */}
           <div>
             <h3 className="text-lg font-semibold text-gray-200 mb-3">Select an exam:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {exams.map(exam => {
+              {localExams.map(exam => {
                 const isSelected = exam._id === selectedExamId;
                 const examMarks = marks.filter(m => m.examId === exam._id).length;
                 return (
@@ -423,6 +450,8 @@ export default function BulkPasteMarkModal({
               )}
             </Button>
           </div>
+        )}
+          </>
         )}
       </div>
 

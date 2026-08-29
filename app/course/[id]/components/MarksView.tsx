@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, ChevronDown, Search, MoreVertical } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, Search, MoreVertical, Settings, Equal, Gauge } from 'lucide-react';
 import COMarksWarningBanner from './COMarksWarningBanner';
 
 interface Student {
@@ -44,6 +44,9 @@ interface MarksViewProps {
   onShowDictationModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: (examId?: string) => void;
+  onShowExamSettings?: (examId: string) => void;
+  onShowSetColumnMarkModal?: (examId: string) => void;
+  onShowStatisticsModal?: () => void;
   onAutoAttendanceMarks: (examId: string) => void;
   isAutoCalculatingAttendance?: boolean;
   onGetProjectMarks?: (() => void) | null;
@@ -66,6 +69,9 @@ export default function MarksView({
   onShowDictationModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
+  onShowExamSettings,
+  onShowSetColumnMarkModal,
+  onShowStatisticsModal,
   onAutoAttendanceMarks,
   isAutoCalculatingAttendance = false,
   onGetProjectMarks = null,
@@ -266,6 +272,16 @@ export default function MarksView({
           <Trash2 className="w-4 h-4" />
           Reset Marks
         </Button>
+        {onShowStatisticsModal && (
+          <Button
+            onClick={onShowStatisticsModal}
+            variant="outline"
+            className="gap-2 border-primary/50 hover:bg-primary/10"
+          >
+            <Gauge className="w-4 h-4" />
+            Statistics
+          </Button>
+        )}
         {hasProjectExam && onGetProjectMarks && (
           <Button
             onClick={onGetProjectMarks}
@@ -363,6 +379,30 @@ export default function MarksView({
                                   <Plus className="w-3.5 h-3.5" />
                                   Bulk grade this column
                                 </button>
+                                {onShowSetColumnMarkModal && (
+                                  <button
+                                    onClick={() => {
+                                      setOpenColumnMenu(null);
+                                      onShowSetColumnMarkModal(exam._id);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                                  >
+                                    <Equal className="w-3.5 h-3.5" />
+                                    Set all marks to...
+                                  </button>
+                                )}
+                                {onShowExamSettings && (
+                                  <button
+                                    onClick={() => {
+                                      setOpenColumnMenu(null);
+                                      onShowExamSettings(exam._id);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                                  >
+                                    <Settings className="w-3.5 h-3.5" />
+                                    Edit marks distribution
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => {
                                     setOpenColumnMenu(null);

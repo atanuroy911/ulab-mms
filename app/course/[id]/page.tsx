@@ -17,6 +17,7 @@ import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import BulkPasteMarkModal from '@/app/components/BulkPasteMarkModal';
+import MarksStatisticsModal from '@/app/components/MarksStatisticsModal';
 import DictationMarkModal from '@/app/components/dictation/DictationMarkModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
@@ -75,6 +76,7 @@ import {
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import { toast } from 'sonner';
+import { computeCoMarks } from '@/app/utils/bulkGridParsing';
 
 interface Student {
   _id: string;
@@ -178,6 +180,11 @@ export default function CoursePage() {
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
   const [showSetZeroModal, setShowSetZeroModal] = useState(false);
   const [showResetMarksModal, setShowResetMarksModal] = useState(false);
+  const [showSetColumnMarkModal, setShowSetColumnMarkModal] = useState(false);
+  const [setColumnMarkExamId, setSetColumnMarkExamId] = useState<string | null>(null);
+  const [columnMarkValue, setColumnMarkValue] = useState('');
+  const [settingColumnMark, setSettingColumnMark] = useState(false);
+  const [showMarksStatsModal, setShowMarksStatsModal] = useState(false);
   const [selectedExamsForAction, setSelectedExamsForAction] = useState<string[]>([]);
   const [confirmationStep, setConfirmationStep] = useState(0);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -628,6 +635,50 @@ export default function CoursePage() {
     }
   };
 
+  const handleBulkToggleWithdraw = async (studentIds: string[], withdrawn: boolean) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/students`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds, withdrawn }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        await fetchCourseData();
+        toast.success(`${data.modifiedCount || studentIds.length} student(s) ${withdrawn ? 'marked as withdrawn' : 'un-withdrawn'}`);
+      } else {
+        toast.error(data.error || 'Failed to update withdraw status');
+      }
+    } catch (err) {
+      console.error('Error bulk toggling withdraw status:', err);
+      toast.error('An error occurred');
+    }
+  };
+
+  const handleBulkToggleAlias = async (studentIds: string[], useAlias: boolean) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/students`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds, useAlias }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        await fetchCourseData();
+        toast.success(`${data.modifiedCount || studentIds.length} student(s) ${useAlias ? 'added to' : 'removed from'} New Code`);
+      } else {
+        toast.error(data.error || 'Failed to update New Code status');
+      }
+    } catch (err) {
+      console.error('Error bulk toggling alias status:', err);
+      toast.error('An error occurred');
+    }
+  };
+
   const handleAddExam = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -795,6 +846,65 @@ export default function CoursePage() {
     } catch (err) {
       console.error('Error setting empty marks to zero:', err);
       notify.mark.emptyMarksError();
+    }
+  };
+
+  const handleSetColumnMark = async () => {
+    if (!setColumnMarkExamId) return;
+    const exam = exams.find(e => e._id === setColumnMarkExamId);
+    if (!exam) return;
+
+    const value = parseFloat(columnMarkValue);
+    if (isNaN(value) || value < 0 || value > exam.totalMarks) {
+      notify.error(`Mark must be between 0 and ${exam.totalMarks}`);
+      return;
+    }
+
+    setSettingColumnMark(true);
+    try {
+      const numberOfCOs = exam.numberOfCOs || 0;
+      const examMaxMarks = course?.coPoMapping?.maxMarks?.[exam._id];
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const student of students) {
+        const { coMarks, nonCoMark } = computeCoMarks(value, numberOfCOs, exam.totalMarks, examMaxMarks);
+        const response = await fetch('/api/marks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId,
+            studentId: student._id,
+            examId: exam._id,
+            rawMark: value,
+            coMarks,
+            nonCoMark,
+          }),
+        });
+
+        if (response.ok) successCount++;
+        else failCount++;
+      }
+
+      await fetchCourseData();
+
+      if (successCount > 0) {
+        notify.mark.bulkSaved(successCount);
+      } else {
+        notify.mark.bulkSaveError();
+      }
+      if (failCount > 0 && successCount > 0) {
+        notify.mark.bulkSaveError(`${failCount} mark(s) failed to save`);
+      }
+
+      setShowSetColumnMarkModal(false);
+      setSetColumnMarkExamId(null);
+      setColumnMarkValue('');
+    } catch (err) {
+      console.error('Error setting column marks:', err);
+      notify.mark.bulkSaveError();
+    } finally {
+      setSettingColumnMark(false);
     }
   };
 
@@ -2070,6 +2180,8 @@ export default function CoursePage() {
                 onBulkDeleteStudents={handleBulkDeleteStudents}
                 onToggleWithdrawStudent={handleToggleWithdrawStudent}
                 onToggleAlias={handleToggleAlias}
+                onBulkToggleWithdraw={handleBulkToggleWithdraw}
+                onBulkToggleAlias={handleBulkToggleAlias}
                 onAutoCategorizeAlias={() => checkAliasCandidates(false)}
               />
             )}
@@ -2107,6 +2219,26 @@ export default function CoursePage() {
                   }
                   setShowResetMarksModal(true);
                 }}
+                onShowExamSettings={(examId) => {
+                  const exam = exams.find((e) => e._id === examId);
+                  if (!exam) return;
+                  setShowExamSettings(examId);
+                  setExamSettings({
+                    displayName: exam.displayName,
+                    weightage: exam.weightage.toString(),
+                    totalMarks: exam.totalMarks.toString(),
+                    numberOfCOs: exam.numberOfCOs?.toString() || '',
+                    numberOfQuestions: exam.numberOfQuestions?.toString() || '',
+                    examCategory: exam.examCategory || '',
+                    rubricTemplateId: exam.rubricTemplateId || '',
+                  });
+                }}
+                onShowSetColumnMarkModal={(examId) => {
+                  setSetColumnMarkExamId(examId);
+                  setColumnMarkValue('');
+                  setShowSetColumnMarkModal(true);
+                }}
+                onShowStatisticsModal={() => setShowMarksStatsModal(true)}
                 onAutoAttendanceMarks={handleAutoAttendanceMarks}
                 isAutoCalculatingAttendance={isAutoCalculatingAttendance}
                 onGetProjectMarks={handleGetProjectMarks}
@@ -4069,6 +4201,76 @@ export default function CoursePage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Set Column Mark Modal */}
+    <Dialog open={showSetColumnMarkModal} onOpenChange={(open) => {
+      if (!open) {
+        setShowSetColumnMarkModal(false);
+        setSetColumnMarkExamId(null);
+        setColumnMarkValue('');
+      }
+    }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span>🎯</span>
+            Set All Marks
+          </DialogTitle>
+          <DialogDescription>
+            {(() => {
+              const exam = exams.find(e => e._id === setColumnMarkExamId);
+              return exam
+                ? `Set every student's mark for "${exam.displayName}" to the same value (out of ${exam.totalMarks}). This overwrites any existing marks for this exam.`
+                : 'Set every student\'s mark for this exam to the same value.';
+            })()}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2">
+          <Label htmlFor="column-mark-value">Mark to apply</Label>
+          <Input
+            id="column-mark-value"
+            type="number"
+            min="0"
+            max={exams.find(e => e._id === setColumnMarkExamId)?.totalMarks}
+            step="0.1"
+            value={columnMarkValue}
+            onChange={(e) => setColumnMarkValue(e.target.value)}
+            placeholder="0"
+            autoFocus
+          />
+        </div>
+
+        <DialogFooter className="flex gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setShowSetColumnMarkModal(false);
+              setSetColumnMarkExamId(null);
+              setColumnMarkValue('');
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSetColumnMark}
+            disabled={settingColumnMark || columnMarkValue === ''}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {settingColumnMark ? 'Applying...' : `Apply to All ${students.length} Students`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Marks Statistics Modal */}
+    <MarksStatisticsModal
+      isOpen={showMarksStatsModal}
+      onClose={() => setShowMarksStatsModal(false)}
+      students={students}
+      exams={exams}
+      marks={marks}
+    />
 
     {/* Reset Marks Modal */}
     <Dialog open={showResetMarksModal} onOpenChange={(open) => {

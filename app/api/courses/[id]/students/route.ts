@@ -12,6 +12,62 @@ type RouteParams = {
   params: Promise<{ id: string }>;
 };
 
+// PUT - Bulk update students (e.g. withdrawn status, New Code/alias membership)
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: courseId } = await params;
+
+    await dbConnect();
+
+    const course = await Course.findOne({
+      _id: courseId,
+      userId: session.user.id,
+    });
+
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    const body = await request.json().catch(() => null);
+    const studentIds = body?.studentIds as string[] | undefined;
+
+    if (!studentIds || studentIds.length === 0) {
+      return NextResponse.json({ error: 'studentIds is required' }, { status: 400 });
+    }
+
+    const update: Record<string, boolean> = {};
+    if (typeof body.withdrawn === 'boolean') update.withdrawn = body.withdrawn;
+    if (typeof body.useAlias === 'boolean') update.useAlias = body.useAlias;
+
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+    }
+
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+    const result = await Student.updateMany(
+      { _id: { $in: studentIds }, courseId: courseObjectId, userId: session.user.id },
+      { $set: update }
+    );
+
+    return NextResponse.json(
+      { message: 'Students updated successfully', modifiedCount: result.modifiedCount || 0 },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    console.error('Bulk update students error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
