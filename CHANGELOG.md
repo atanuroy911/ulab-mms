@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/atanuroy911/ulab-mms/compare/v1.10.0...v1.11.0) (2026-08-29)
+
+
+### Features
+
+* exam settings from marks columns, split CO-PO save, multi-column bulk paste/import, marks stats, and layout fixes ([185d299](https://github.com/atanuroy911/ulab-mms/commit/185d29921be57cd1aa916d070db8dd98b393bcdd))
+
 # [1.10.0](https://github.com/atanuroy911/ulab-mms/compare/v1.9.1...v1.10.0) (2026-08-20)
 
 
