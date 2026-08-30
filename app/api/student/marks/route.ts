@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { isUlabSessionOrAdminAuthorized } from '@/lib/studentAuth';
+import { escapeRegExp } from '@/lib/utils';
 import Student from '@/models/Student';
 import Mark from '@/models/Mark';
 import Exam from '@/models/Exam';
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     // Find all student records with this student ID across all courses
     const studentRecords = await Student.find({ 
-      studentId: { $regex: new RegExp(`^${studentId}$`, 'i') } 
+      studentId: { $regex: new RegExp(`^${escapeRegExp(studentId)}$`, 'i') } 
     }).populate('courseId');
 
     if (!studentRecords || studentRecords.length === 0) {
@@ -120,6 +121,7 @@ export async function POST(request: NextRequest) {
             _id: studentRecord._id,
             studentId: studentRecord.studentId,
             name: studentRecord.name,
+            withdrawn: studentRecord.withdrawn,
           },
           attendance: {
             totalSessions,

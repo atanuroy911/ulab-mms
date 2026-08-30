@@ -6,6 +6,18 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Escapes regex metacharacters so a user-supplied string can be safely interpolated
+ * into a `new RegExp(...)` / `$regex` query. Without this, input like ".*" broadens an
+ * intended exact match to every record, and a crafted pattern can trigger catastrophic
+ * backtracking (ReDoS) inside MongoDB's regex engine.
+ * @param value - Raw user input to be used as a literal inside a regex
+ * @returns The input with all regex special characters escaped
+ */
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Validates email format according to a comprehensive regex pattern
  * @param email - The email address to validate
  * @returns true if email is valid, false otherwise

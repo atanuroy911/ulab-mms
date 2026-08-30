@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { isUlabSessionOrAdminAuthorized } from '@/lib/studentAuth';
+import { escapeRegExp } from '@/lib/utils';
 import AttendanceSession from '@/models/AttendanceSession';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
@@ -53,7 +54,7 @@ export async function POST(
     // taken at write time and goes stale if the roll number is ever edited.
     const studentDoc = await Student.findOne({
       courseId,
-      studentId: { $regex: new RegExp(`^${studentId}$`, 'i') },
+      studentId: { $regex: new RegExp(`^${escapeRegExp(studentId)}$`, 'i') },
     });
 
     const sessions = await AttendanceSession.find({ courseId }).sort({ date: 1 });

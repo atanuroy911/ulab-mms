@@ -4,6 +4,7 @@ import Exam from '@/models/Exam';
 import Student from '@/models/Student';
 import { requireAuth, type GraphQLContext } from '../auth';
 import type { Loaders } from '../dataloaders';
+import { escapeRegExp } from '@/lib/utils';
 
 interface CourseArgs {
   id: string;
@@ -105,7 +106,7 @@ export const courseResolvers = {
       await dbConnect();
 
       const studentRecords = await Student.find({
-        studentId: { $regex: new RegExp(`^${studentId}$`, 'i') },
+        studentId: { $regex: new RegExp(`^${escapeRegExp(studentId)}$`, 'i') },
       });
 
       if (studentRecords.length === 0) {

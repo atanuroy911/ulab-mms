@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import CapstoneMarks from '@/models/CapstoneMarks';
 import mongoose from 'mongoose';
+import { escapeRegExp } from '@/lib/utils';
 
 // GET - Fetch assigned students for current user in a specific course
 export async function GET(request: NextRequest) {
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     if (courseCode) {
       // Need to match using the course's code field
       const coursesMatch = await require('@/models/Course').default
-        .find({ code: new RegExp(courseCode, 'i') })
+        .find({ code: new RegExp(escapeRegExp(courseCode), 'i') })
         .select('_id');
       
       if (coursesMatch.length > 0) {
