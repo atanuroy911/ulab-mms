@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/atanuroy911/ulab-mms/compare/v1.11.0...v1.12.0) (2026-08-30)
+
+
+### Features
+
+* lots of changes to co po files ([a54eaa4](https://github.com/atanuroy911/ulab-mms/commit/a54eaa430049a20fe85538378a1da5d132ba5600))
+
 # [1.11.0](https://github.com/atanuroy911/ulab-mms/compare/v1.10.0...v1.11.0) (2026-08-29)
 
 
