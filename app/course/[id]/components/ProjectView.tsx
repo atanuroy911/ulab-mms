@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Search, MoreVertical, Printer, FileDown, Target } from 'lucide-react';
+import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Search, MoreVertical, Printer, FileDown, Target, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateProjectMark } from '@/app/utils/projectRubric';
 import type { IRubricScores } from '@/app/utils/projectRubric';
@@ -165,6 +165,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
   // Per-group title editing
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [groupColumnExpanded, setGroupColumnExpanded] = useState(false);
   const [savingTitle, setSavingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
@@ -395,8 +396,9 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
     }
   };
 
-  const handleDeleteGroup = async (groupId: string) => {
-    if (deletingGroupId !== groupId) { setDeletingGroupId(groupId); return; }
+  const handleDeleteGroup = async (groupId: string, groupNumber: number) => {
+    if (!confirm(`Delete Group ${groupNumber}? This cannot be undone.`)) return;
+    setDeletingGroupId(groupId);
     try {
       const res = await fetch(`/api/courses/${courseId}/project/groups`, {
         method: 'DELETE',
@@ -404,9 +406,10 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
         body: JSON.stringify({ groupId }),
       });
       const data = await res.json();
-      if (res.ok) { setState(data); toast.success('Group removed'); setDeletingGroupId(null); }
+      if (res.ok) { setState(data); toast.success('Group removed'); }
       else toast.error(data.error || 'Failed to delete group');
     } catch { toast.error('Network error'); }
+    finally { setDeletingGroupId(null); }
   };
 
   const handleSaveTitle = async (groupId: string) => {
@@ -913,8 +916,16 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                 <table className="min-w-full divide-y divide-border">
                   <thead className="bg-muted sticky top-0 z-20">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[220px]">
-                        Group
+                      <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r transition-[width,max-width] duration-200 ${groupColumnExpanded ? 'w-[480px] max-w-[480px]' : 'w-[320px] max-w-[320px]'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setGroupColumnExpanded(v => !v)}
+                          className="flex items-center justify-between gap-1.5 hover:text-foreground transition-colors w-full"
+                          title={groupColumnExpanded ? 'Collapse group column' : 'Expand group column'}
+                        >
+                          Group
+                          <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${groupColumnExpanded ? 'rotate-90' : ''}`} />
+                        </button>
                       </th>
                       {projectExams.map(exam => (
                         <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider w-[150px] max-w-[150px]">
@@ -953,6 +964,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                         </th>
                       )}
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap sticky right-0 z-30 border-l bg-muted">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -962,7 +974,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
                       return (
                         <tr key={group._id} className="transition-colors hover:bg-muted/50 bg-background">
-                          <td className="px-4 py-3 text-sm sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r bg-background min-w-[220px]">
+                          <td className={`px-4 py-3 text-sm sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r bg-background transition-[width,max-width] duration-200 ${groupColumnExpanded ? 'w-[480px] max-w-[480px]' : 'w-[320px] max-w-[320px]'}`}>
                             <div className="flex items-start gap-2">
                               <div className="w-8 h-8 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
                                 {group.groupNumber}
@@ -980,13 +992,16 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                                   </div>
                                 ) : (
                                   <button onClick={() => { setEditingTitle(group._id); setTitleDraft(group.projectTitle || ''); }}
-                                    className="text-left hover:opacity-70 transition-opacity w-full">
-                                    <span className="font-semibold truncate block text-sm">
+                                    className="text-left hover:opacity-70 transition-opacity w-full min-w-0" title={groupColumnExpanded ? undefined : (group.projectTitle || undefined)}>
+                                    <span className={`font-semibold block text-sm ${groupColumnExpanded ? '' : 'truncate'}`}>
                                       {group.projectTitle || <span className="text-muted-foreground/50 italic font-normal">Add title…</span>}
                                     </span>
                                   </button>
                                 )}
-                                <div className="text-xs text-muted-foreground truncate mt-0.5">
+                                <div
+                                  className={`text-xs text-muted-foreground mt-0.5 ${groupColumnExpanded ? '' : 'truncate'}`}
+                                  title={!groupColumnExpanded && group.studentIds.length > 0 ? group.studentIds.map(s => s.name).join(', ') : undefined}
+                                >
                                   {group.studentIds.length === 0 ? (
                                     'No members'
                                   ) : (
@@ -999,15 +1014,6 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                                     ))
                                   )}
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant={deletingGroupId === group._id ? 'destructive' : 'ghost'}
-                                  className="h-6 px-1.5 mt-1 text-xs"
-                                  onClick={() => handleDeleteGroup(group._id)}
-                                >
-                                  <Trash2 className="w-3 h-3 mr-1" />
-                                  {deletingGroupId === group._id ? 'Confirm delete' : 'Delete group'}
-                                </Button>
                               </div>
                             </div>
                           </td>
@@ -1065,6 +1071,30 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                             ) : (
                               <span className="text-xs text-muted-foreground">Pending</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-sm sticky right-0 z-10 border-l bg-background">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => { setEditingTitle(group._id); setTitleDraft(group.projectTitle || ''); }}>
+                                  <Settings className="w-4 h-4 mr-2" />
+                                  Edit group
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteGroup(group._id, group.groupNumber)}
+                                  className="text-destructive focus:text-destructive"
+                                  disabled={deletingGroupId === group._id}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  {deletingGroupId === group._id ? 'Deleting...' : 'Delete group'}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       );
