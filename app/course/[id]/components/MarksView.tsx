@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, ChevronDown, Search, MoreVertical, Settings, Equal, Gauge, ArrowLeftRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Trash2, ChevronDown, Search, MoreVertical, Settings, Equal, Gauge, ArrowLeftRight, Sparkles } from 'lucide-react';
 import COMarksWarningBanner from './COMarksWarningBanner';
 
 interface Student {
@@ -26,6 +27,7 @@ interface Mark {
   studentId: string;
   examId: string;
   rawMark: number;
+  preGraceMark?: number | null;
 }
 
 interface ExamRef {
@@ -41,13 +43,19 @@ interface MarksViewProps {
   onShowMarkModal: (examId: string | undefined, studentId: string | undefined) => void;
   onShowBulkMarkModal: (examId?: string) => void;
   onShowBulkPasteModal: () => void;
-  onShowDictationModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: (examId?: string) => void;
   onShowExamSettings?: (examId: string) => void;
   onShowSetColumnMarkModal?: (examId: string) => void;
   onShowScaleMarksModal?: (examId: string) => void;
   onShowStatisticsModal?: () => void;
+  onShowGraceModal?: () => void;
+  onRemoveGrace?: (examId: string, studentId: string) => void;
+  onRemoveAllGrace?: () => void;
+  calculateFinalGrade?: (studentId: string) => { total: number };
+  calculateLetterGrade?: (percentage: number, gradingScale: string | undefined | null) => { display: string; letter: string };
+  gradingScale?: string;
+  onShowGraceHistory?: (studentId: string) => void;
   onAutoAttendanceMarks: (examId: string) => void;
   isAutoCalculatingAttendance?: boolean;
   onGetProjectMarks?: (() => void) | null;
@@ -67,13 +75,19 @@ export default function MarksView({
   onShowMarkModal,
   onShowBulkMarkModal,
   onShowBulkPasteModal,
-  onShowDictationModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
   onShowExamSettings,
   onShowSetColumnMarkModal,
   onShowScaleMarksModal,
   onShowStatisticsModal,
+  onShowGraceModal,
+  onRemoveGrace,
+  onRemoveAllGrace,
+  calculateFinalGrade,
+  calculateLetterGrade,
+  gradingScale,
+  onShowGraceHistory,
   onAutoAttendanceMarks,
   isAutoCalculatingAttendance = false,
   onGetProjectMarks = null,
@@ -126,6 +140,17 @@ export default function MarksView({
 
   const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
   const hasProjectExam = exams.some(e => e.examCategory === 'Project');
+
+  // Grace nudges a student's total grade, so it must only run once every active student has a
+  // mark in every column - otherwise re-running it as marks trickle in could stack grace on top
+  // of grace for the same student.
+  const activeStudents = students.filter(s => !s.withdrawn);
+  const markKeySet = new Set(marks.map(m => `${m.studentId}_${m.examId}`));
+  const allMarksEntered =
+    activeStudents.length > 0 &&
+    exams.length > 0 &&
+    activeStudents.every(s => exams.every(e => markKeySet.has(`${s._id}_${e._id}`)));
+  const anyGraceApplied = marks.some(m => typeof m.preGraceMark === 'number');
 
   // Group columns the same way the Exams tab groups exam cards, so the two views read consistently.
   const CATEGORY_ORDER: { key: string; label: string }[] = [
@@ -218,28 +243,13 @@ export default function MarksView({
                   setShowDropdown(false);
                   onShowBulkPasteModal();
                 }}
-                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3 border-b"
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
               >
                 <span className="text-xl">📋</span>
                 <div>
                   <div className="font-medium">Bulk Paste (ID + Marks)</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     Paste rows exported from Google Classroom
-                  </div>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setShowDropdown(false);
-                  onShowDictationModal();
-                }}
-                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
-              >
-                <span className="flex items-center justify-center w-6 h-6 rounded bg-purple-600 text-white font-bold text-sm shrink-0">α</span>
-                <div>
-                  <div className="font-medium">Add Marks via Dictation</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Speak student ID and marks, one at a time
                   </div>
                 </div>
               </button>
@@ -282,6 +292,29 @@ export default function MarksView({
           >
             <Gauge className="w-4 h-4" />
             Statistics
+          </Button>
+        )}
+        {onShowGraceModal && !anyGraceApplied && (
+          <Button
+            onClick={onShowGraceModal}
+            variant="outline"
+            className="gap-2 border-violet-500/50 hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!allMarksEntered}
+            title={allMarksEntered ? undefined : 'Enter marks for every student in every exam column before applying grace'}
+          >
+            <Sparkles className="w-4 h-4" />
+            Grace
+          </Button>
+        )}
+        {onRemoveAllGrace && anyGraceApplied && (
+          <Button
+            onClick={onRemoveAllGrace}
+            variant="outline"
+            className="gap-2 border-violet-500/50 bg-violet-500/10 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-600"
+            title="Grace has been applied - click to remove it from every graded student"
+          >
+            <Sparkles className="w-4 h-4" />
+            Remove Grace
           </Button>
         )}
         {hasProjectExam && onGetProjectMarks && (
@@ -337,6 +370,9 @@ export default function MarksView({
                     {group.label}
                   </th>
                 ))}
+                {calculateFinalGrade && calculateLetterGrade && (
+                  <th rowSpan={2} className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider align-middle border-l-2 border-border min-w-[110px]">Grade</th>
+                )}
               </tr>
               <tr>
                 {examGroups.map((group, gIdx) =>
@@ -442,7 +478,7 @@ export default function MarksView({
             <tbody className="divide-y divide-border/50">
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={orderedExams.length + 2} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={orderedExams.length + 2 + (calculateFinalGrade && calculateLetterGrade ? 1 : 0)} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No students match &quot;{search}&quot;
                   </td>
                 </tr>
@@ -464,21 +500,62 @@ export default function MarksView({
                     const isGroupStart = gIdx > 0 && eIdx === 0;
                     return (
                       <td key={exam._id} className={`px-4 py-3 text-sm ${isGroupStart ? 'border-l-2 border-border' : ''}`}>
-                        <Button
-                          onClick={() => onShowMarkModal(exam._id, student._id)}
-                          variant={mark ? "secondary" : "outline"}
-                          size="sm"
-                          className="w-full justify-center"
-                        >
-                          {mark ? (
-                            <span className="font-semibold">{mark.rawMark}</span>
-                          ) : (
-                            <span className="text-muted-foreground">+ Add</span>
+                        <div className="relative">
+                          <Button
+                            onClick={() => onShowMarkModal(exam._id, student._id)}
+                            variant={mark ? "secondary" : "outline"}
+                            size="sm"
+                            className="w-full justify-center"
+                          >
+                            {mark ? (
+                              <span className="font-semibold">{mark.rawMark}</span>
+                            ) : (
+                              <span className="text-muted-foreground">+ Add</span>
+                            )}
+                          </Button>
+                          {mark && typeof mark.preGraceMark === 'number' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveGrace?.(exam._id, student._id);
+                              }}
+                              title={`Grace applied: ${mark.preGraceMark} → ${mark.rawMark}. Click to remove grace.`}
+                              className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-violet-500 text-white shadow hover:bg-red-500 transition-colors"
+                            >
+                              <Sparkles className="w-2.5 h-2.5" />
+                            </button>
                           )}
-                        </Button>
+                        </div>
                       </td>
                     );
                   })
+                  )}
+                  {calculateFinalGrade && calculateLetterGrade && (
+                    <td className="px-4 py-3 text-sm text-center border-l-2 border-border">
+                      {(() => {
+                        const { total } = calculateFinalGrade(student._id);
+                        const { display } = calculateLetterGrade(total, gradingScale);
+                        const studentHasGrace = marks.some(m => m.studentId === student._id && typeof m.preGraceMark === 'number');
+                        return (
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" title={`${Math.round(total * 100) / 100}%`}>
+                              {display}
+                            </Badge>
+                            {studentHasGrace && onShowGraceHistory && (
+                              <button
+                                type="button"
+                                onClick={() => onShowGraceHistory(student._id)}
+                                title="Grace applied - click to see before/after breakdown"
+                                className="flex items-center justify-center w-4 h-4 rounded-full text-violet-500 hover:text-violet-600 transition-colors"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })()}
+                    </td>
                   )}
                 </tr>
               ))}

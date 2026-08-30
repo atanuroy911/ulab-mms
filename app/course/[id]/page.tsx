@@ -18,8 +18,10 @@ import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import BulkPasteMarkModal from '@/app/components/BulkPasteMarkModal';
 import MarksStatisticsModal from '@/app/components/MarksStatisticsModal';
+import GraceMarksModal from './components/GraceMarksModal';
+import GraceHistoryModal from './components/GraceHistoryModal';
+import { GraceCandidate } from '@/lib/graceMarks';
 import ScaleMarksModal from '@/app/components/ScaleMarksModal';
-import DictationMarkModal from '@/app/components/dictation/DictationMarkModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
 import ProjectView from './components/ProjectView';
@@ -110,6 +112,7 @@ interface Mark {
   coMarks?: number[];
   questionMarks?: number[];
   weightedMark?: number;
+  preGraceMark?: number | null;
 }
 
 interface AttendanceSessionSummary {
@@ -192,12 +195,15 @@ export default function CoursePage() {
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
   const [showSetZeroModal, setShowSetZeroModal] = useState(false);
+  const [isSettingEmptyMarksToZero, setIsSettingEmptyMarksToZero] = useState(false);
   const [showResetMarksModal, setShowResetMarksModal] = useState(false);
   const [showSetColumnMarkModal, setShowSetColumnMarkModal] = useState(false);
   const [setColumnMarkExamId, setSetColumnMarkExamId] = useState<string | null>(null);
   const [columnMarkValue, setColumnMarkValue] = useState('');
   const [settingColumnMark, setSettingColumnMark] = useState(false);
   const [showMarksStatsModal, setShowMarksStatsModal] = useState(false);
+  const [showGraceModal, setShowGraceModal] = useState(false);
+  const [graceHistoryStudentId, setGraceHistoryStudentId] = useState<string | null>(null);
   const [scaleMarksExamId, setScaleMarksExamId] = useState<string | null>(null);
   const [scaleMarksInitialFrom, setScaleMarksInitialFrom] = useState<number | undefined>(undefined);
   const [selectedExamsForAction, setSelectedExamsForAction] = useState<string[]>([]);
@@ -213,7 +219,6 @@ export default function CoursePage() {
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
   const [bulkMarkInitialExamId, setBulkMarkInitialExamId] = useState<string | undefined>(undefined);
   const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
-  const [showDictationModal, setShowDictationModal] = useState(false);
   const [aliasCandidates, setAliasCandidates] = useState<Array<{ _id: string; studentId: string; name: string }>>([]);
   const [showAliasCategorizeModal, setShowAliasCategorizeModal] = useState(false);
   const [aliasCategorizing, setAliasCategorizing] = useState(false);
@@ -870,6 +875,7 @@ export default function CoursePage() {
   };
 
   const handleSetEmptyMarksToZero = async (examIds: string[]) => {
+    setIsSettingEmptyMarksToZero(true);
     try {
       const marksToCreate = [];
       const targetExams = examIds.length === 0 ? exams : exams.filter(e => examIds.includes(e._id));
@@ -915,6 +921,111 @@ export default function CoursePage() {
     } catch (err) {
       console.error('Error setting empty marks to zero:', err);
       notify.mark.emptyMarksError();
+    } finally {
+      setIsSettingEmptyMarksToZero(false);
+    }
+  };
+
+  const handleApplyGrace = async (candidates: GraceCandidate[]) => {
+    try {
+      let succeeded = 0;
+      for (const candidate of candidates) {
+        const response = await fetch('/api/marks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: candidate.student._id,
+            examId: candidate.target.exam._id,
+            courseId,
+            rawMark: candidate.target.rawMarkAfter,
+            preGraceMark: candidate.target.rawMarkBefore,
+          }),
+        });
+        if (response.ok) succeeded += 1;
+      }
+
+      await fetchCourseData();
+      setShowGraceModal(false);
+
+      if (succeeded === candidates.length) {
+        toast.success(`Grace applied to ${succeeded} student${succeeded === 1 ? '' : 's'}.`);
+      } else {
+        toast.warning(`Grace applied to ${succeeded} of ${candidates.length} students. Some updates failed.`);
+      }
+    } catch (err) {
+      console.error('Error applying grace marks:', err);
+      toast.error('Failed to apply grace marks.');
+    }
+  };
+
+  const handleRemoveGrace = async (examId: string, studentId: string) => {
+    const mark = marks.find(m => m.studentId === studentId && m.examId === examId);
+    if (!mark || typeof mark.preGraceMark !== 'number') return;
+
+    const student = students.find(s => s._id === studentId);
+    const exam = exams.find(e => e._id === examId);
+    if (!confirm(`Remove grace for ${student?.name || 'this student'}? This restores their original mark of ${mark.preGraceMark} for ${exam?.displayName || 'this exam'}.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/marks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          examId,
+          courseId,
+          rawMark: mark.preGraceMark,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+        toast.success('Grace removed - original mark restored.');
+      } else {
+        toast.error('Failed to remove grace.');
+      }
+    } catch (err) {
+      console.error('Error removing grace:', err);
+      toast.error('Failed to remove grace.');
+    }
+  };
+
+  const handleRemoveAllGrace = async () => {
+    const gracedMarks = marks.filter(m => typeof m.preGraceMark === 'number');
+    if (gracedMarks.length === 0) return;
+
+    if (!confirm(`Remove grace from ${gracedMarks.length} mark${gracedMarks.length === 1 ? '' : 's'}? Every graced student's original mark will be restored.`)) {
+      return;
+    }
+
+    try {
+      let succeeded = 0;
+      for (const mark of gracedMarks) {
+        const response = await fetch('/api/marks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: mark.studentId,
+            examId: mark.examId,
+            courseId,
+            rawMark: mark.preGraceMark,
+          }),
+        });
+        if (response.ok) succeeded += 1;
+      }
+
+      await fetchCourseData();
+
+      if (succeeded === gracedMarks.length) {
+        toast.success(`Grace removed from ${succeeded} mark${succeeded === 1 ? '' : 's'}.`);
+      } else {
+        toast.warning(`Removed grace from ${succeeded} of ${gracedMarks.length} marks. Some updates failed.`);
+      }
+    } catch (err) {
+      console.error('Error removing all grace:', err);
+      toast.error('Failed to remove grace.');
     }
   };
 
@@ -1447,8 +1558,8 @@ export default function CoursePage() {
     }
   };
 
-  const getMark = (studentId: string, examId: string) => {
-    return marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === examId.toString());
+  const getMark = (studentId: string, examId: string, marksOverride?: Mark[]) => {
+    return (marksOverride || marks).find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === examId.toString());
   };
 
   /**
@@ -1535,15 +1646,15 @@ export default function CoursePage() {
   };
 
   // Calculate aggregated mark for a student based on exam category
-  const getAggregatedMark = (studentId: string, category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null => {
+  const getAggregatedMark = (studentId: string, category: 'Quiz' | 'Assignment', marksOverride?: Mark[]): Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null => {
     // Get all exams of this category
     const categoryExams = exams.filter(exam => exam.examCategory === category);
-    
+
     if (categoryExams.length === 0) return null;
 
     // Get all marks for this student in this category
     const categoryMarks = categoryExams
-      .map(exam => getMark(studentId, exam._id))
+      .map(exam => getMark(studentId, exam._id, marksOverride))
       .filter(mark => mark !== undefined);
 
     if (categoryMarks.length === 0) return null;
@@ -1633,11 +1744,11 @@ export default function CoursePage() {
 
   // Calculate project aggregated mark: sum all raw marks, convert to weightage
   // Formula: (sumRaw / sumTotal) × projectWeightage
-  const getProjectAggregatedMark = (studentId: string): { rawMark: number; sumRaw: number; sumTotal: number; isAggregated: boolean } | null => {
+  const getProjectAggregatedMark = (studentId: string, marksOverride?: Mark[]): { rawMark: number; sumRaw: number; sumTotal: number; isAggregated: boolean } | null => {
     const projectExams = exams.filter(e => e.examCategory === 'Project');
     if (projectExams.length === 0) return null;
     const projectMarks = projectExams
-      .map(e => ({ exam: e, mark: marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === e._id.toString()) }))
+      .map(e => ({ exam: e, mark: (marksOverride || marks).find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === e._id.toString()) }))
       .filter(x => x.mark !== undefined);
     if (projectMarks.length === 0) return null;
     const sumRaw = projectMarks.reduce((s, x) => s + Number(x.mark!.rawMark ?? 0), 0);
@@ -1649,7 +1760,7 @@ export default function CoursePage() {
   };
 
   // Calculate final grade for a student
-  const calculateFinalGrade = (studentId: string): { total: number; breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> } => {
+  const calculateFinalGrade = (studentId: string, marksOverride?: Mark[]): { total: number; breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> } => {
     const breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> = [];
     let totalContribution = 0;
 
@@ -1659,7 +1770,7 @@ export default function CoursePage() {
         return; // handled by aggregated columns
       }
 
-      const mark = getMark(studentId, exam._id);
+      const mark = getMark(studentId, exam._id, marksOverride);
       if (mark) {
         const contribution = mark.weightedMark !== undefined && mark.weightedMark !== null
           ? mark.weightedMark
@@ -1679,7 +1790,7 @@ export default function CoursePage() {
 
     // Add Quiz aggregated column if exists
     if (hasQuizzes && course?.quizWeightage) {
-      const aggMark = getAggregatedMark(studentId, 'Quiz');
+      const aggMark = getAggregatedMark(studentId, 'Quiz', marksOverride);
       if (aggMark) {
         const totalMarks = Number(course.quizWeightage);
         const contribution = aggMark.rawMark;
@@ -1699,7 +1810,7 @@ export default function CoursePage() {
 
     // Add Assignment aggregated column if exists
     if (hasAssignments && course?.assignmentWeightage) {
-      const aggMark = getAggregatedMark(studentId, 'Assignment');
+      const aggMark = getAggregatedMark(studentId, 'Assignment', marksOverride);
       if (aggMark) {
         const totalMarks = Number(course.assignmentWeightage);
         const contribution = aggMark.rawMark;
@@ -1717,7 +1828,7 @@ export default function CoursePage() {
 
     // Add Project aggregated column (sum-based)
     if (hasProjects && course?.projectWeightage) {
-      const aggMark = getProjectAggregatedMark(studentId);
+      const aggMark = getProjectAggregatedMark(studentId, marksOverride);
       if (aggMark) {
         const totalMarks = Number(course.projectWeightage);
         breakdown.push({
@@ -1737,6 +1848,20 @@ export default function CoursePage() {
       breakdown: breakdown,
     };
   };
+
+  // Marks with grace applied, substituted back to their pre-grace rawMark - used to reconstruct
+  // "what the grade would have been" for the Grace history view. weightedMark is cleared so
+  // calculateFinalGrade recomputes the contribution from the substituted rawMark instead of
+  // reusing the (now stale, post-grace) stored weightedMark.
+  const getPreGraceMarks = (studentId: string): Mark[] =>
+    marks.map(m =>
+      m.studentId === studentId && typeof m.preGraceMark === 'number'
+        ? { ...m, rawMark: m.preGraceMark, weightedMark: undefined }
+        : m
+    );
+
+  const hasGraceApplied = (studentId: string): boolean =>
+    marks.some(m => m.studentId === studentId && typeof m.preGraceMark === 'number');
 
   if (loading) {
     return (
@@ -2256,6 +2381,7 @@ export default function CoursePage() {
                 onBulkToggleAlias={handleBulkToggleAlias}
                 onAutoCategorizeAlias={() => checkAliasCandidates(false)}
                 onShowStatisticsModal={() => setShowMarksStatsModal(true)}
+                onShowGraceHistory={(studentId) => setGraceHistoryStudentId(studentId)}
               />
             )}
 
@@ -2276,7 +2402,6 @@ export default function CoursePage() {
                   setShowBulkMarkModal(true);
                 }}
                 onShowBulkPasteModal={() => setShowBulkPasteModal(true)}
-                onShowDictationModal={() => setShowDictationModal(true)}
                 onShowSetZeroModal={() => {
                   setSelectedExamsForAction([]);
                   setConfirmationStep(0);
@@ -2312,6 +2437,13 @@ export default function CoursePage() {
                   setShowSetColumnMarkModal(true);
                 }}
                 onShowStatisticsModal={() => setShowMarksStatsModal(true)}
+                onShowGraceModal={() => setShowGraceModal(true)}
+                onRemoveGrace={handleRemoveGrace}
+                onRemoveAllGrace={handleRemoveAllGrace}
+                calculateFinalGrade={calculateFinalGrade}
+                calculateLetterGrade={calculateLetterGrade}
+                gradingScale={course?.gradingScale}
+                onShowGraceHistory={(studentId) => setGraceHistoryStudentId(studentId)}
                 onShowScaleMarksModal={(examId) => {
                   setScaleMarksExamId(examId);
                   setScaleMarksInitialFrom(undefined);
@@ -2887,16 +3019,6 @@ export default function CoursePage() {
         coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
       />
 
-      {/* Dictation Mark Modal */}
-      <DictationMarkModal
-        isOpen={showDictationModal}
-        onClose={() => setShowDictationModal(false)}
-        students={students}
-        exams={exams}
-        marks={marks}
-        courseId={courseId}
-        onMarkSaved={fetchCourseData}
-      />
 
       {/* Exam Settings Modal */}
       <Dialog open={!!showExamSettings} onOpenChange={(open) => !open && setShowExamSettings(null)}>
@@ -4255,7 +4377,7 @@ export default function CoursePage() {
 
     {/* Set Empty Marks to Zero Modal */}
     <Dialog open={showSetZeroModal} onOpenChange={(open) => {
-      if (!open) {
+      if (!open && !isSettingEmptyMarksToZero) {
         setShowSetZeroModal(false);
         setSelectedExamsForAction([]);
         setConfirmationStep(0);
@@ -4370,6 +4492,7 @@ export default function CoursePage() {
             <Button
               variant="outline"
               onClick={() => setConfirmationStep(confirmationStep - 1)}
+              disabled={isSettingEmptyMarksToZero}
             >
               Back
             </Button>
@@ -4381,6 +4504,7 @@ export default function CoursePage() {
               setSelectedExamsForAction([]);
               setConfirmationStep(0);
             }}
+            disabled={isSettingEmptyMarksToZero}
           >
             Cancel
           </Button>
@@ -4403,8 +4527,16 @@ export default function CoursePage() {
                 }
               }}
               className="bg-blue-600 hover:bg-blue-700"
+              disabled={isSettingEmptyMarksToZero}
             >
-              Set to Zero
+              {isSettingEmptyMarksToZero ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Setting to Zero...
+                </>
+              ) : (
+                'Set to Zero'
+              )}
             </Button>
           )}
         </DialogFooter>
@@ -4479,6 +4611,55 @@ export default function CoursePage() {
       students={students}
       exams={exams}
       marks={marks}
+    />
+
+    {/* Grace Marks Modal */}
+    <GraceMarksModal
+      isOpen={showGraceModal}
+      onClose={() => setShowGraceModal(false)}
+      students={students}
+      exams={exams}
+      marks={marks}
+      course={{
+        quizWeightage: course?.quizWeightage,
+        quizAggregation: course?.quizAggregation,
+        assignmentWeightage: course?.assignmentWeightage,
+        assignmentAggregation: course?.assignmentAggregation,
+        gradingScale: course?.gradingScale,
+      }}
+      calculateFinalGrade={calculateFinalGrade}
+      calculateLetterGrade={calculateLetterGrade}
+      onApply={handleApplyGrace}
+    />
+
+    {/* Grace History Modal */}
+    <GraceHistoryModal
+      isOpen={!!graceHistoryStudentId}
+      onClose={() => setGraceHistoryStudentId(null)}
+      student={students.find(s => s._id === graceHistoryStudentId) || null}
+      previousGrade={graceHistoryStudentId ? calculateFinalGrade(graceHistoryStudentId, getPreGraceMarks(graceHistoryStudentId)) : null}
+      currentGrade={graceHistoryStudentId ? calculateFinalGrade(graceHistoryStudentId) : null}
+      previousGradeDisplay={
+        graceHistoryStudentId
+          ? calculateLetterGrade(calculateFinalGrade(graceHistoryStudentId, getPreGraceMarks(graceHistoryStudentId)).total, course?.gradingScale).display
+          : ''
+      }
+      currentGradeDisplay={
+        graceHistoryStudentId
+          ? calculateLetterGrade(calculateFinalGrade(graceHistoryStudentId).total, course?.gradingScale).display
+          : ''
+      }
+      gracedColumns={
+        graceHistoryStudentId
+          ? marks
+              .filter(m => m.studentId === graceHistoryStudentId && typeof m.preGraceMark === 'number')
+              .map(m => ({
+                examName: exams.find(e => e._id === m.examId)?.displayName || 'Exam',
+                before: m.preGraceMark as number,
+                after: m.rawMark,
+              }))
+          : []
+      }
     />
 
     <ScaleMarksModal

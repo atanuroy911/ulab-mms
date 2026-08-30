@@ -7,9 +7,10 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil, Gauge } from 'lucide-react';
+import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil, Gauge, Sparkles } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import AggregateMarksModal from './AggregateMarksModal';
 
 interface Student {
   _id: string;
@@ -97,6 +98,7 @@ interface StudentsViewProps {
   onBulkToggleAlias?: (studentIds: string[], useAlias: boolean) => Promise<void> | void;
   onAutoCategorizeAlias: () => void;
   onShowStatisticsModal?: () => void;
+  onShowGraceHistory?: (studentId: string) => void;
 }
 
 export default function StudentsView({
@@ -129,6 +131,7 @@ export default function StudentsView({
   onBulkToggleAlias,
   onAutoCategorizeAlias,
   onShowStatisticsModal,
+  onShowGraceHistory,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
@@ -143,6 +146,8 @@ export default function StudentsView({
   const [bulkDeleteConfirmationStep, setBulkDeleteConfirmationStep] = useState(0);
   const [deletingBulkStudents, setDeletingBulkStudents] = useState(false);
   const [bulkActionPending, setBulkActionPending] = useState(false);
+
+  const [aggregateModal, setAggregateModal] = useState<{ student: Student; category: 'Quiz' | 'Assignment' | 'Project' } | null>(null);
 
   const toggleStudentSelection = (studentId: string) => {
     const newSelected = new Set(selectedStudentIds);
@@ -160,25 +165,6 @@ export default function StudentsView({
         s.name.toLowerCase().includes(search.toLowerCase())
       )
     : students;
-
-  // Group columns the same way the Marks tab groups exam columns, so the two views read consistently.
-  const CATEGORY_ORDER: { key: string; label: string }[] = [
-    { key: 'MainExam', label: 'Main Exams' },
-    { key: 'Quiz', label: 'Quizzes' },
-    { key: 'Assignment', label: 'Assignments' },
-    { key: 'Project', label: 'Project' },
-    { key: 'ClassPerformance', label: 'Class Performance' },
-    { key: 'Attendance', label: 'Attendance' },
-    { key: 'Others', label: 'Others' },
-  ];
-  const examGroups = CATEGORY_ORDER
-    .map(({ key, label }) => ({
-      key,
-      label,
-      exams: exams.filter(e => (e.examCategory || 'Others') === key),
-    }))
-    .filter(group => group.exams.length > 0);
-  const orderedExams = examGroups.flatMap(group => group.exams);
 
   const toggleAllSelection = () => {
     if (selectedStudentIds.size === filteredStudents.length && filteredStudents.length > 0) {
@@ -390,279 +376,149 @@ export default function StudentsView({
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted sticky top-0 z-20">
               <tr>
-                <th rowSpan={2} className="px-3 py-3 text-center sticky left-0 z-30 bg-muted border-r w-[40px] align-middle">
+                <th className="px-3 py-2.5 text-center sticky left-0 z-30 bg-muted border-r w-[40px] align-middle">
                   <Checkbox
                     checked={filteredStudents.length > 0 && selectedStudentIds.size === filteredStudents.length}
                     onCheckedChange={toggleAllSelection}
                     aria-label="Select all"
                   />
                 </th>
-                <th rowSpan={2} className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-[40px] z-30 bg-muted border-r w-[50px] align-middle">#</th>
-                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[90px] z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px] align-middle">Student</th>
-                {examGroups.map((group, gIdx) => (
-                  <th
-                    key={group.key}
-                    colSpan={group.exams.length}
-                    className={`px-4 py-1.5 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/60 border-b ${gIdx > 0 ? 'border-l-2 border-border' : ''}`}
-                  >
-                    {group.label}
-                  </th>
-                ))}
+                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider sticky left-[40px] z-30 bg-muted border-r w-[50px] align-middle">#</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider sticky left-[90px] z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[220px] align-middle">Student</th>
                 {hasQuizzes && (
-                  <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-500/10 border-l-2 border-amber-500/50 min-w-[150px] whitespace-nowrap align-middle">
-                    <div className="flex items-center gap-1">
-                      <span>📝 Quiz (Agg)</span>
-                    </div>
-                    <div className="text-[10px] font-normal mt-0.5 text-amber-600 dark:text-amber-400">
-                      {course?.quizAggregation === 'best' ? 'Best' : 'Avg'} → Score / {course?.quizWeightage || 0}%
-                    </div>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap align-middle" title={`Quiz - ${course?.quizAggregation === 'best' ? 'best' : 'average'}, out of ${course?.quizWeightage || 0}%`}>
+                    Quiz
                   </th>
                 )}
                 {hasAssignments && (
-                  <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-500/10 border-l-2 border-blue-500/50 min-w-[170px] whitespace-nowrap align-middle">
-                    <div className="flex items-center gap-1">
-                      <span>📋 {course?.courseType === 'Lab' ? 'CLA' : 'Assignment'} (Agg)</span>
-                    </div>
-                    <div className="text-[10px] font-normal mt-0.5 text-blue-600 dark:text-blue-400">
-                      {course?.assignmentAggregation === 'best' ? 'Best' : course?.assignmentAggregation === 'sum' ? 'Sum' : 'Avg'} → Score / {course?.assignmentWeightage || 0}%
-                    </div>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap align-middle" title={`${course?.courseType === 'Lab' ? 'CLA' : 'Assignment'} - ${course?.assignmentAggregation === 'best' ? 'best' : course?.assignmentAggregation === 'sum' ? 'sum' : 'average'}, out of ${course?.assignmentWeightage || 0}%`}>
+                    {course?.courseType === 'Lab' ? 'CLA' : 'Assignment'}
                   </th>
                 )}
                 {hasProjects && (
-                  <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-500/10 border-l-2 border-violet-500/50 min-w-[190px] whitespace-nowrap align-middle">
-                    <div className="flex items-center gap-1">
-                      <span>{course?.courseType === 'Lab' ? '🚀 OEL / CE Project' : '🎓 Project'} (Agg)</span>
-                    </div>
-                    <div className="text-[10px] font-normal mt-0.5 text-violet-600 dark:text-violet-400">
-                      Sum of sections → Score / {course?.projectWeightage || 0}%
-                    </div>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[100px] whitespace-nowrap align-middle" title={`${course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}, out of ${course?.projectWeightage || 0}%`}>
+                    {course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'}
                   </th>
                 )}
-                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-l-2 border-green-500/50 min-w-[160px] whitespace-nowrap align-middle">
-                  <div className="flex items-center gap-1">
-                    <span>🎯 Final Grade (Est.)</span>
-                  </div>
-                  <div className="text-[10px] font-normal mt-0.5 text-green-600 dark:text-green-400">
-                    Weighted Total
-                  </div>
-                </th>
-                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-l-2 border-purple-500/50 min-w-[140px] whitespace-nowrap align-middle">
-                  <div className="flex items-center gap-1">
-                    <span>🏆 Letter Grade</span>
-                  </div>
-                  <div className="text-[10px] font-normal mt-0.5 text-purple-600 dark:text-purple-400">
-                    Based on %
-                  </div>
-                </th>
-                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle sticky right-0 z-30 border-l bg-muted">Actions</th>
-              </tr>
-              <tr>
-                {examGroups.map((group, gIdx) =>
-                  group.exams.map((exam, eIdx) => (
-                    <th
-                      key={exam._id}
-                      className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap ${gIdx > 0 && eIdx === 0 ? 'border-l-2 border-border' : ''}`}
-                    >
-                      <div>{exam.displayName}</div>
-                      {exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project' ? (
-                        <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw Mark</div>
-                      ) : (
-                        <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Weighted</div>
-                      )}
-                    </th>
-                  ))
-                )}
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[140px] whitespace-nowrap align-middle border-l-2 border-border">Grade</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle sticky right-0 z-30 border-l bg-muted">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={exams.length + 8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No students match &quot;{search}&quot;
                   </td>
                 </tr>
               )}
-              {filteredStudents.map((student, idx) => (
+              {filteredStudents.map((student, idx) => {
+                const gradeData = student.withdrawn ? null : calculateFinalGrade(student._id);
+                const letterGrade = gradeData && gradeData.breakdown.length > 0 ? calculateLetterGrade(gradeData.total, course?.gradingScale) : null;
+                const studentHasGrace = marks.some(m => m.studentId === student._id && typeof (m as { preGraceMark?: number | null }).preGraceMark === 'number');
+
+                return (
                 <tr key={student._id} className={`transition-colors hover:bg-muted/50 bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5 hover:bg-primary/10' : ''}`}>
-                  <td className={`px-3 py-3 text-center sticky left-0 z-10 border-r w-[40px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
-                    <Checkbox 
+                  <td className={`px-3 py-2 text-center sticky left-0 z-10 border-r w-[40px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
+                    <Checkbox
                       checked={selectedStudentIds.has(student._id)}
                       onCheckedChange={() => toggleStudentSelection(student._id)}
                       aria-label={`Select ${student.name}`}
                     />
                   </td>
-                  <td className={`px-3 py-3 text-sm font-medium text-center sticky left-[40px] z-10 border-r w-[50px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>{idx + 1}</td>
-                  <td className={`px-4 py-3 text-sm font-medium sticky left-[90px] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r min-w-[200px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
-                    <div className="flex flex-col">
+                  <td className={`px-3 py-2 text-sm font-medium text-center sticky left-[40px] z-10 border-r w-[50px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>{idx + 1}</td>
+                  <td className={`px-4 py-2 text-sm sticky left-[90px] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r min-w-[220px] bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
+                    <button
+                      onClick={() => onShowStudentDetail(student)}
+                      className="flex items-center gap-1.5 text-left hover:opacity-70 transition-opacity"
+                    >
                       <span className="text-primary font-semibold">{student.studentId}</span>
-                      <button
-                        onClick={() => onShowStudentDetail(student)}
-                        className={`text-xs hover:underline transition-colors cursor-pointer text-left ${student.withdrawn ? 'text-amber-700 dark:text-yellow-400 font-semibold' : 'text-muted-foreground hover:text-blue-400'}`}
-                      >
-                        {student.name} {student.withdrawn && <span className="font-bold ml-1">(W)</span>}
-                      </button>
+                      <span className={student.withdrawn ? 'text-amber-700 dark:text-yellow-400 font-semibold' : 'text-muted-foreground'}>
+                        {student.name}
+                      </span>
+                      {student.withdrawn && <span className="font-bold text-amber-700 dark:text-yellow-400">(W)</span>}
                       {course?.aliasEnabled && student.useAlias && (
-                        <Badge variant="secondary" className="mt-1 w-fit gap-1 text-[10px]">
+                        <Badge variant="secondary" className="gap-1 text-[10px] shrink-0">
                           <Tag className="h-2.5 w-2.5" />
-                          New Code: {course.alternateCode}
+                          {course.alternateCode}
                         </Badge>
                       )}
-                    </div>
+                    </button>
                   </td>
-                  {orderedExams.map((exam, idx) => {
-                    const mark = getMark(student._id, exam._id);
-                    const isAggregatedCategory = exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project';
-                    const isGroupStart = idx > 0 && (orderedExams[idx - 1].examCategory || 'Others') !== (exam.examCategory || 'Others');
-                    return (
-                      <td key={exam._id} className={`px-4 py-3 text-sm ${isGroupStart ? 'border-l-2 border-border' : ''}`}>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1">
-                            {mark ? (
-                              isAggregatedCategory ? (
-                                // For aggregated categories, show only raw mark
-                                <Badge variant="secondary" className="font-medium justify-start">
-                                  {mark.rawMark} / {exam.totalMarks}
-                                </Badge>
-                              ) : (
-                                // For regular exams, show both raw and weighted
-                                <div className="flex flex-col gap-1">
-                                  <Badge variant="secondary" className="font-medium justify-start">
-                                    Raw: {mark.rawMark}
-                                  </Badge>
-                                  <Badge variant="secondary" className="font-medium bg-emerald-500/20 justify-start">
-                                    Weighted:{' '}
-                                    {(mark.weightedMark !== undefined && mark.weightedMark !== null
-                                      ? mark.weightedMark
-                                      : (mark.rawMark / exam.totalMarks) * exam.weightage
-                                    ).toFixed(2)}
-                                  </Badge>
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    );
-                  })}
                   {hasQuizzes && (
-                    <td className="px-4 py-3 text-sm bg-amber-500/5 border-l-2 border-amber-500/30">
+                    <td className="px-3 py-2 text-sm">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Quiz');
                         if (!aggMark) return <span className="text-muted-foreground">—</span>;
                         return (
-                          <span className="px-2 py-1 rounded font-medium text-xs bg-amber-500/15 text-amber-700 dark:text-amber-200">
-                            {aggMark.rawMark.toFixed(2)} / {course?.quizWeightage || 0}
-                          </span>
+                          <button onClick={() => setAggregateModal({ student, category: 'Quiz' })} className="font-medium hover:underline">
+                            {aggMark.rawMark.toFixed(1)}<span className="text-muted-foreground">/{course?.quizWeightage || 0}</span>
+                          </button>
                         );
                       })()}
                     </td>
                   )}
                   {hasAssignments && (
-                    <td className="px-4 py-3 text-sm bg-blue-500/5 border-l-2 border-blue-500/30">
+                    <td className="px-3 py-2 text-sm">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Assignment');
                         if (!aggMark) return <span className="text-muted-foreground">—</span>;
                         return (
-                          <span className="px-2 py-1 rounded font-medium text-xs bg-blue-500/15 text-blue-700 dark:text-blue-200">
-                            {aggMark.rawMark.toFixed(2)} / {course?.assignmentWeightage || 0}
-                          </span>
+                          <button onClick={() => setAggregateModal({ student, category: 'Assignment' })} className="font-medium hover:underline">
+                            {aggMark.rawMark.toFixed(1)}<span className="text-muted-foreground">/{course?.assignmentWeightage || 0}</span>
+                          </button>
                         );
                       })()}
                     </td>
                   )}
                   {hasProjects && (
-                    <td className="px-4 py-3 text-sm bg-violet-500/5 border-l-2 border-violet-500/30">
+                    <td className="px-3 py-2 text-sm">
                       {(() => {
                         const aggMark = getProjectAggregatedMark(student._id);
                         if (!aggMark) return <span className="text-muted-foreground">—</span>;
                         return (
-                          <div className="flex flex-col gap-1">
-                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-500/15 text-violet-700 dark:text-violet-200">
-                              {aggMark.sumRaw} / {aggMark.sumTotal} pts
-                            </span>
-                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300">
-                              → {aggMark.rawMark.toFixed(2)} / {course?.projectWeightage || 0}%
-                            </span>
-                          </div>
+                          <button onClick={() => setAggregateModal({ student, category: 'Project' })} className="font-medium hover:underline">
+                            {aggMark.rawMark.toFixed(1)}<span className="text-muted-foreground">/{course?.projectWeightage || 0}</span>
+                          </button>
                         );
                       })()}
                     </td>
                   )}
-                  <td className="px-4 py-3 text-sm bg-gradient-to-r from-green-500/5 to-emerald-500/5 border-l-2 border-green-500/30">
-                    {(() => {
-                      if (student.withdrawn) {
-                        return <span className="text-muted-foreground font-semibold italic">Withdrawn</span>;
-                      }
-
-                      const gradeData = calculateFinalGrade(student._id);
-                      if (gradeData.breakdown.length === 0) {
-                        return <span className="text-muted-foreground">0</span>;
-                      }
-
-                      return (
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1">
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-green-500/15 text-green-700 dark:text-green-200">
-                                Total: {gradeData.total.toFixed(2)}%
-                              </span>
-                              <span className="text-[10px] italic text-muted-foreground">
-                                Out of 100%
-                              </span>
-                            </div>
-                          </div>
+                  <td className="px-4 py-2 text-sm border-l-2 border-border">
+                    {student.withdrawn ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded font-bold text-xs bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30">W</span>
+                        <span className="text-xs text-muted-foreground">Withdrawn</span>
+                      </span>
+                    ) : !letterGrade ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 rounded font-bold text-xs ${getGradeBgColor(letterGrade.letter)} ${getGradeColor(letterGrade.letter)} border ${letterGrade.letter === 'A' ? 'border-green-500/30' : letterGrade.letter === 'B' ? 'border-blue-500/30' : letterGrade.letter === 'C' ? 'border-yellow-500/30' : letterGrade.letter === 'D' ? 'border-orange-500/30' : 'border-red-500/30'}`}>
+                          {getGradeDisplay(letterGrade.letter, letterGrade.modifier)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{gradeData!.total.toFixed(1)}%</span>
+                        <button
+                          onClick={() => onShowGradeBreakdown(student)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          title="View breakdown"
+                        >
+                          <Gauge className="w-3.5 h-3.5" />
+                        </button>
+                        {studentHasGrace && onShowGraceHistory && (
                           <button
-                            onClick={() => onShowGradeBreakdown(student)}
-                            className="px-2 py-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 text-xs rounded transition-all"
-                            title="View breakdown"
+                            type="button"
+                            onClick={() => onShowGraceHistory(student._id)}
+                            title="Grace applied - click to see before/after breakdown"
+                            className="text-violet-500 hover:text-violet-600 transition-colors"
                           >
-                            ℹ️
+                            <Sparkles className="w-3.5 h-3.5" />
                           </button>
-                        </div>
-                      );
-                    })()}
+                        )}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-sm bg-gradient-to-r from-purple-500/5 to-violet-500/5 border-l-2 border-purple-500/30">
-                    {(() => {
-                      if (student.withdrawn) {
-                        return (
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1.5 rounded-lg font-bold text-sm bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30">
-                              W
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              (Withdrawn)
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      const gradeData = calculateFinalGrade(student._id);
-                      if (gradeData.breakdown.length === 0) {
-                        return <span className="text-muted-foreground">0</span>;
-                      }
-
-                      const letterGrade = calculateLetterGrade(gradeData.total, course?.gradingScale);
-
-                      if (!letterGrade) {
-                        return <span className="text-muted-foreground">0</span>;
-                      }
-
-                      return (
-                        <div className="flex items-center gap-2">
-                          <span className={`px-3 py-1.5 rounded-lg font-bold text-sm ${getGradeBgColor(letterGrade.letter)} ${getGradeColor(letterGrade.letter)} border ${letterGrade.letter === 'A' ? 'border-green-500/30' : letterGrade.letter === 'B' ? 'border-blue-500/30' : letterGrade.letter === 'C' ? 'border-yellow-500/30' : letterGrade.letter === 'D' ? 'border-orange-500/30' : 'border-red-500/30'}`}>
-                            {getGradeDisplay(letterGrade.letter, letterGrade.modifier)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            ({gradeData.total.toFixed(2)}%)
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className={`px-4 py-3 text-sm sticky right-0 z-10 border-l bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
+                  <td className={`px-4 py-2 text-sm sticky right-0 z-10 border-l bg-background ${selectedStudentIds.has(student._id) ? 'bg-primary/5' : ''}`}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="h-8 w-8 p-0">
@@ -696,7 +552,8 @@ export default function StudentsView({
                     </DropdownMenu>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -890,6 +747,45 @@ export default function StudentsView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AggregateMarksModal
+        isOpen={!!aggregateModal}
+        onClose={() => setAggregateModal(null)}
+        student={aggregateModal?.student ?? null}
+        categoryLabel={
+          aggregateModal?.category === 'Quiz'
+            ? 'Quiz'
+            : aggregateModal?.category === 'Assignment'
+            ? (course?.courseType === 'Lab' ? 'CLA' : 'Assignment')
+            : (course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project')
+        }
+        exams={aggregateModal ? exams.filter(e => e.examCategory === aggregateModal.category) : []}
+        marks={marks}
+        aggregationMethod={
+          aggregateModal?.category === 'Quiz'
+            ? (course?.quizAggregation === 'best' ? 'best' : 'average')
+            : aggregateModal?.category === 'Assignment'
+            ? (course?.assignmentAggregation || 'average')
+            : 'sum'
+        }
+        weightage={
+          aggregateModal?.category === 'Quiz'
+            ? course?.quizWeightage || 0
+            : aggregateModal?.category === 'Assignment'
+            ? course?.assignmentWeightage || 0
+            : course?.projectWeightage || 0
+        }
+        aggregatedValue={
+          !aggregateModal
+            ? null
+            : aggregateModal.category === 'Project'
+            ? getProjectAggregatedMark(aggregateModal.student._id)?.rawMark ?? null
+            : (() => {
+                const aggMark = getAggregatedMark(aggregateModal.student._id, aggregateModal.category as 'Quiz' | 'Assignment');
+                return aggMark ? aggMark.rawMark : null;
+              })()
+        }
+      />
     </div>
   );
 }
