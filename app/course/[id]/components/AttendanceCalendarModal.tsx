@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, CalendarDays, Search, Check, X, Loader2 } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, isToday } from 'date-fns';
+import { computeMissedClassDates } from '@/app/utils/classSchedule';
 
 interface AttendanceRecord {
   studentId: string;
@@ -26,6 +27,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface AttendanceCalendarModalProps {
@@ -37,6 +39,7 @@ interface AttendanceCalendarModalProps {
   /** Course's regular weekly class days (e.g. ['Thursday', 'Saturday']) - days matching this
    *  pattern with no session between the first session and today are flagged as missed. */
   classDays?: string[];
+  courseType?: 'Theory' | 'Lab';
 }
 
 function countsForSession(session: Session) {
@@ -65,10 +68,15 @@ export default function AttendanceCalendarModal({
   students,
   onUpdateStatus,
   classDays = [],
+  courseType,
 }: AttendanceCalendarModalProps) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const [slideDirection, setSlideDirection] = useState<'next' | 'prev' | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
+  const wheelCooldownRef = useRef(false);
+  const wheelAccumRef = useRef(0);
+  const touchStartXRef = useRef<number | null>(null);
   const [savingStudentId, setSavingStudentId] = useState<string | null>(null);
 
   const sessionsByDay = useMemo(() => {
@@ -84,12 +92,14 @@ export default function AttendanceCalendarModal({
     return sessions.reduce((earliest, s) => (new Date(s.date) < earliest ? new Date(s.date) : earliest), new Date(sessions[0].date));
   }, [sessions]);
 
-  const isMissedClassDay = (day: Date) => {
-    if (classDays.length === 0 || !firstSessionDate) return false;
-    if (day < firstSessionDate || day > new Date()) return false;
-    if (!classDays.includes(format(day, 'EEEE'))) return false;
-    return !sessionsByDay.has(format(day, 'yyyy-MM-dd'));
-  };
+  const missedClassDateKeys = useMemo(() => {
+    if (classDays.length === 0 || !firstSessionDate) return new Set<string>();
+    const sessionDateKeys = new Set(sessions.map((s) => format(new Date(s.date), 'yyyy-MM-dd')));
+    const missed = computeMissedClassDates(firstSessionDate, sessionDateKeys, classDays, courseType);
+    return new Set(missed.map((d) => format(d, 'yyyy-MM-dd')));
+  }, [classDays, firstSessionDate, sessions, courseType]);
+
+  const isMissedClassDay = (day: Date) => missedClassDateKeys.has(format(day, 'yyyy-MM-dd'));
 
   const selectedSession = sessions.find((s) => s._id === selectedSessionId) || null;
 
@@ -104,6 +114,44 @@ export default function AttendanceCalendarModal({
     }
     return result;
   }, [viewMonth]);
+
+  const goToMonth = (direction: 'next' | 'prev') => {
+    setSlideDirection(direction);
+    setViewMonth((m) => (direction === 'next' ? addMonths(m, 1) : subMonths(m, 1)));
+  };
+
+  // Mouse-wheel scroll and touch swipe both change months, mirroring how people naturally try to
+  // navigate a compact calendar (scroll up/down on desktop, swipe left/right on phone) instead of
+  // hunting for the arrow buttons every time.
+  const handleWheel = (e: React.WheelEvent) => {
+    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (Math.abs(delta) < 2) return;
+    e.preventDefault();
+    if (wheelCooldownRef.current) return;
+
+    wheelAccumRef.current += delta;
+    if (Math.abs(wheelAccumRef.current) < 60) return;
+
+    const direction = wheelAccumRef.current > 0 ? 'next' : 'prev';
+    wheelAccumRef.current = 0;
+    wheelCooldownRef.current = true;
+    goToMonth(direction);
+    setTimeout(() => {
+      wheelCooldownRef.current = false;
+    }, 400);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return;
+    const deltaX = (e.changedTouches[0]?.clientX ?? touchStartXRef.current) - touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (Math.abs(deltaX) < 50) return;
+    goToMonth(deltaX < 0 ? 'next' : 'prev');
+  };
 
   const handleSelectDay = (day: Date) => {
     const session = sessionsByDay.get(format(day, 'yyyy-MM-dd'));
@@ -145,26 +193,39 @@ export default function AttendanceCalendarModal({
           <div className="lg:col-span-3 flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r">
             <div className="flex items-center justify-between px-6 py-3 shrink-0 gap-3">
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setViewMonth((m) => subMonths(m, 1))} aria-label="Previous month">
+                <Button variant="outline" size="icon" onClick={() => goToMonth('prev')} aria-label="Previous month">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="icon" onClick={() => setViewMonth((m) => addMonths(m, 1))} aria-label="Next month">
+                <Button variant="outline" size="icon" onClick={() => goToMonth('next')} aria-label="Next month">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <span className="font-semibold text-lg flex-1 text-center">{format(viewMonth, 'MMMM yyyy')}</span>
+              <div className="flex-1 flex flex-col items-center">
+                <span className="font-semibold text-lg">{format(viewMonth, 'MMMM yyyy')}</span>
+                <span className="text-[11px] text-muted-foreground hidden sm:block">Scroll or swipe to change month</span>
+              </div>
               <Button variant="outline" size="sm" onClick={() => setViewMonth(startOfMonth(new Date()))}>
                 Jump to today
               </Button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+            <div
+              className="flex-1 min-h-0 overflow-y-auto px-6 pb-6"
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               <div className="grid grid-cols-7 gap-2 text-center text-sm font-semibold text-muted-foreground mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
                   <div key={d}>{d}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-2">
+              <div
+                key={format(viewMonth, 'yyyy-MM')}
+                className={`grid grid-cols-7 gap-2 animate-in fade-in duration-200 ${
+                  slideDirection === 'next' ? 'slide-in-from-right-8' : slideDirection === 'prev' ? 'slide-in-from-left-8' : ''
+                }`}
+              >
                 {days.map((day) => {
                   const key = format(day, 'yyyy-MM-dd');
                   const session = sessionsByDay.get(key);
@@ -274,7 +335,9 @@ export default function AttendanceCalendarModal({
                     return (
                       <div key={student._id} className="flex items-center justify-between gap-3 px-5 py-2.5">
                         <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{student.name}</div>
+                          <div className={`text-sm font-medium truncate ${student.withdrawn ? 'text-amber-700 dark:text-yellow-400' : ''}`}>
+                            {student.name} {student.withdrawn && <span className="font-bold">(W)</span>}
+                          </div>
                           <div className="text-xs text-muted-foreground">{student.studentId}</div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">

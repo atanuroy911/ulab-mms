@@ -9,12 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, CalendarDays, MoreVertical, Check, X, Search, Wrench, Download, Upload, Shuffle, RotateCcw, UserX, AlertTriangle, ScanText } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { notify } from '@/app/utils/notifications';
 import { formatClassRoomDisplay } from '@/app/utils/classInfo';
+import { computeMissedClassDates, getClassSessionCap } from '@/app/utils/classSchedule';
 import BulkOcrAttendanceModal from './BulkOcrAttendanceModal';
 import AttendanceCalendarModal from './AttendanceCalendarModal';
 
@@ -189,11 +190,13 @@ interface Student {
   name: string;
   probation?: boolean;
   useAlias?: boolean;
+  withdrawn?: boolean;
 }
 
 interface CourseInfo {
   name?: string;
   code?: string;
+  courseType?: 'Theory' | 'Lab';
   classTime?: string;
   classRoom?: string;
   classDays?: string[];
@@ -263,8 +266,9 @@ function QuickAttendanceSearch({
                   }}
                   className="justify-between"
                 >
-                  <span>
+                  <span className={student.withdrawn ? 'text-amber-700 dark:text-yellow-400' : undefined}>
                     {student.name} <span className="text-muted-foreground">({student.studentId})</span>
+                    {student.withdrawn && <span className="font-bold ml-1">(W)</span>}
                   </span>
                   {status === 'present' && <Badge className="bg-green-600 hover:bg-green-600">Present</Badge>}
                   {status === 'absent' && <Badge variant="destructive">Absent</Badge>}
@@ -654,22 +658,10 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const missedClassDates = useMemo(() => {
     if (!course?.classDays || course.classDays.length === 0 || sortedSessions.length === 0) return [];
     const sessionDateKeys = new Set(sortedSessions.map((s) => format(new Date(s.date), 'yyyy-MM-dd')));
-    const start = new Date(sortedSessions[0].date);
-    const today = new Date();
-    const missed: Date[] = [];
-    let cursor = start;
-    let guard = 0;
-    while (cursor <= today && guard < 3660) {
-      guard++;
-      const dayName = format(cursor, 'EEEE');
-      const key = format(cursor, 'yyyy-MM-dd');
-      if (course.classDays.includes(dayName) && !sessionDateKeys.has(key)) {
-        missed.push(cursor);
-      }
-      cursor = addDays(cursor, 1);
-    }
-    return missed;
-  }, [course?.classDays, sortedSessions]);
+    return computeMissedClassDates(new Date(sortedSessions[0].date), sessionDateKeys, course.classDays, course.courseType);
+  }, [course?.classDays, course?.courseType, sortedSessions]);
+
+  const classSessionCap = getClassSessionCap(course?.courseType);
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -836,7 +828,9 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           </div>
           <div className="rounded-lg border bg-muted/10 px-4 py-3">
             <div className="text-xs text-muted-foreground">Total Sessions</div>
-            <div className="text-lg font-semibold mt-0.5">{sessions.length}</div>
+            <div className="text-lg font-semibold mt-0.5">
+              {sessions.length} <span className="text-xs font-normal text-muted-foreground">/ {classSessionCap} usual</span>
+            </div>
           </div>
           <div className="rounded-lg border bg-muted/10 px-4 py-3">
             <div className="text-xs text-muted-foreground">Avg. Attendees</div>
@@ -933,9 +927,12 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                           className="flex items-center gap-2 text-left font-medium hover:underline"
                         >
                           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          <span>{student.probation ? <strong>{student.name}</strong> : student.name}</span>
+                          <span className={student.withdrawn ? 'text-amber-700 dark:text-yellow-400' : undefined}>
+                            {student.probation ? <strong>{student.name}</strong> : student.name}
+                          </span>
                           <span className="text-muted-foreground">({student.studentId})</span>
                           {student.probation && <Badge variant="secondary">Probation</Badge>}
+                          {student.withdrawn && <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-yellow-400">Withdrawn</Badge>}
                         </button>
                       </TableCell>
                       <TableCell>
@@ -1186,6 +1183,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
         students={students}
         onUpdateStatus={updateStudentStatus}
         classDays={course?.classDays || []}
+        courseType={course?.courseType}
       />
 
       <Dialog open={showExportWarningModal} onOpenChange={setShowExportWarningModal}>
