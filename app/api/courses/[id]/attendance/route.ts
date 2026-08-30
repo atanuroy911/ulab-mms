@@ -137,19 +137,20 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
     }
 
     const body = await req.json();
-    const { sessionId, studentId, studentIds, status, applyToAll } = body as {
+    const { sessionId, studentId, studentIds, status, applyToAll, randomize } = body as {
       sessionId?: string;
       studentId?: string;
       studentIds?: string[];
       status?: 'present' | 'absent';
       applyToAll?: boolean;
+      randomize?: boolean;
     };
 
-    if (!sessionId || !status || !['present', 'absent'].includes(status)) {
+    if (!sessionId || (!randomize && (!status || !['present', 'absent'].includes(status)))) {
       return NextResponse.json({ error: 'sessionId and a valid status (present/absent) are required' }, { status: 400 });
     }
 
-    if (!applyToAll && !studentId && !(Array.isArray(studentIds) && studentIds.length > 0)) {
+    if (!applyToAll && !randomize && !studentId && !(Array.isArray(studentIds) && studentIds.length > 0)) {
       return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
     }
 
@@ -195,6 +196,21 @@ export async function PATCH(req: NextRequest, { params }: { params: any }) {
       targetSession.records = allStudents.map((student) => ({
         studentId: student._id,
         status,
+        recordedAt: now,
+        markedBy: 'manual',
+        studentIdString: student.studentId,
+      })) as any;
+
+      await targetSession.save();
+      return NextResponse.json({ session: targetSession });
+    }
+
+    if (randomize) {
+      const allStudents = await Student.find({ courseId: new mongoose.Types.ObjectId(courseId) }).lean();
+      const now = new Date();
+      targetSession.records = allStudents.map((student) => ({
+        studentId: student._id,
+        status: Math.random() < 0.5 ? 'present' : 'absent',
         recordedAt: now,
         markedBy: 'manual',
         studentIdString: student.studentId,

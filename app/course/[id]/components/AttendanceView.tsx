@@ -444,6 +444,28 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
+  const randomizeSession = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/attendance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, randomize: true }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.session) applySessionUpdate(data.session);
+        notify.success('Attendance randomized for that date');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.error || 'Failed to randomize attendance');
+      }
+    } catch (err) {
+      console.error('Error randomizing attendance', err);
+      notify.error('Failed to randomize attendance');
+    }
+  };
+
   const toggleActiveSessionStatus = (student: Student) => {
     if (!activeSession) return;
     const current = getStatus(activeSession, student);
@@ -732,7 +754,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 Add Attendance (Paste / Screenshot)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={exportAttendanceJson} disabled={sessions.length === 0}>
+              <DropdownMenuItem
+                onClick={exportAttendanceJson}
+                disabled={sessions.length === 0}
+                title={sessions.length === 0 ? 'No attendance sessions recorded yet' : undefined}
+              >
                 <Download />
                 Export Attendance (JSON)
               </DropdownMenuItem>
@@ -741,7 +767,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 Import Attendance (JSON)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => runBulkAction('fillAbsent')} disabled={sessions.length === 0 || bulkActionLoading}>
+              <DropdownMenuItem
+                onClick={() => runBulkAction('fillAbsent')}
+                disabled={sessions.length === 0 || bulkActionLoading}
+                title={sessions.length === 0 ? 'No attendance sessions recorded yet' : undefined}
+              >
                 <UserX />
                 Mark Empty as Absent
               </DropdownMenuItem>
@@ -749,6 +779,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 variant="destructive"
                 onClick={() => setBulkActionPending('randomize')}
                 disabled={sessions.length === 0 || bulkActionLoading}
+                title={sessions.length === 0 ? 'No attendance sessions recorded yet' : undefined}
               >
                 <Shuffle />
                 Randomize Attendance
@@ -757,6 +788,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 variant="destructive"
                 onClick={() => setBulkActionPending('reset')}
                 disabled={sessions.length === 0 || bulkActionLoading}
+                title={sessions.length === 0 ? 'No attendance sessions recorded yet' : undefined}
               >
                 <RotateCcw />
                 Reset All Attendance
@@ -898,6 +930,10 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                           <DropdownMenuItem variant="destructive" onClick={() => bulkSetSession(session._id, 'absent')}>
                             <X />
                             Mark all absent
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => randomizeSession(session._id)}>
+                            <Shuffle />
+                            Randomize
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
