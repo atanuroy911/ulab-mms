@@ -45,6 +45,8 @@ export async function POST(
       const newRawMark = Math.min(scaleTo, Math.max(0, round2(mark.rawMark * ratio)));
       mark.rawMark = newRawMark;
       mark.weightedMark = exam.totalMarks > 0 ? round2((newRawMark / exam.totalMarks) * exam.weightage) : 0;
+      // Scaling redefines the mark itself, so any prior Grace "before" value is no longer meaningful.
+      mark.preGraceMark = null;
 
       if (mark.coMarks && mark.coMarks.length > 0) {
         mark.coMarks = mark.coMarks.map((m: number) => round2(m * ratio));

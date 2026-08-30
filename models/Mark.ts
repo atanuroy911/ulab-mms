@@ -10,6 +10,7 @@ export interface IMark extends Document {
   nonCoMark?: number; // Mark not mapped to any specific CO
   questionMarks?: number[]; // Array of Question marks [Q1, Q2, Q3, ...]
   weightedMark?: number;
+  preGraceMark?: number | null; // rawMark before the last "Grace" bump was applied, cleared on any later manual edit
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +55,10 @@ const MarkSchema: Schema = new Schema(
       default: null,
     },
     weightedMark: {
+      type: Number,
+      default: null,
+    },
+    preGraceMark: {
       type: Number,
       default: null,
     },

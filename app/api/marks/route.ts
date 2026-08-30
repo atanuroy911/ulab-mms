@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       return await handleBulkCreate(body.marks, session.user.id);
     }
 
-    const { studentId, examId, courseId } = body;
+    const { studentId, examId, courseId, preGraceMark } = body;
     let { rawMark, coMarks, questionMarks, nonCoMark } = body;
 
     if (!studentId || !examId || !courseId || rawMark === undefined) {
@@ -241,6 +241,11 @@ export async function POST(request: NextRequest) {
     } else if (student.withdrawn) {
       markData.nonCoMark = null;
     }
+
+    // preGraceMark only ever comes from the Grace flow (the score before the bump). Any other save
+    // path - manual edit, bulk paste, scaling, etc. - clears it, since that "before" value is no
+    // longer meaningful once the mark has been touched again.
+    markData.preGraceMark = typeof preGraceMark === 'number' ? preGraceMark : null;
 
     const mark = await Mark.findOneAndUpdate(
       { studentId, examId },

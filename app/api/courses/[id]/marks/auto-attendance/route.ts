@@ -78,6 +78,8 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
         userId: session.user.id,
         rawMark,
         weightedMark,
+        // Recomputed from attendance, so any prior Grace bump on this exam is no longer meaningful.
+        preGraceMark: null,
       };
 
       const mark = await Mark.findOneAndUpdate(
