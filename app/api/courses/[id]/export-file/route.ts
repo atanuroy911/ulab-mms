@@ -7,6 +7,8 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import AttendanceSession from '@/models/AttendanceSession';
+import ProjectGroup from '@/models/ProjectGroup';
 import fs from 'fs';
 import path from 'path';
 import XlsxPopulate from 'xlsx-populate';
@@ -15,6 +17,7 @@ import {
   type ExcelExportField,
   type ExcelExportMapping,
 } from '@/app/course/[id]/lib/excelExportMapping';
+import { findFinalExam, computeAttendanceByStudent, ATTENDANCE_AT_RISK_THRESHOLD, getProjectCoMarksByStudent } from '@/lib/coPoCalculations';
 
 function normalizeMapping(mapping: any): ExcelExportMapping {
   if (!mapping) return DEFAULT_EXCEL_EXPORT_MAPPING;
@@ -87,7 +90,18 @@ function getCOMarkValueForFinal(student: any, exams: any[], marks: any[], coInde
   return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
 }
 
-function getCOMarkValueForProject(student: any, exams: any[], marks: any[], coIndex: number) {
+function getCOMarkValueForProject(
+  student: any,
+  exams: any[],
+  marks: any[],
+  coIndex: number,
+  projectCoByStudent: Record<string, number[]> = {}
+) {
+  // Combined Project/OEL CO marks live on ProjectGroup.groups[].coMarks (shared across every
+  // Project-category exam), not on any single exam's Mark record - check that first.
+  const combined = projectCoByStudent[String(student._id)];
+  if (combined) return combined[coIndex] ?? 0;
+
   const exam = exams.find(e => e.examCategory === 'Project');
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
@@ -176,7 +190,15 @@ function parseCellAddress(cell: string) {
   return { column: match[1].toUpperCase(), row: Number(match[2]) };
 }
 
-function resolveFieldValue(field: ExcelExportField, course: any, student: any, instructorName: string, exams: any[] = [], marks: any[] = []) {
+function resolveFieldValue(
+  field: ExcelExportField,
+  course: any,
+  student: any,
+  instructorName: string,
+  exams: any[] = [],
+  marks: any[] = [],
+  projectCoByStudent: Record<string, number[]> = {}
+) {
   const fieldStr = field as string;
   if (fieldStr.startsWith('co.midterm.')) {
     const coIndex = parseInt(fieldStr.split('.')[2]) - 1;
@@ -188,7 +210,7 @@ function resolveFieldValue(field: ExcelExportField, course: any, student: any, i
   }
   if (fieldStr.startsWith('co.project.')) {
     const coIndex = parseInt(fieldStr.split('.')[2]) - 1;
-    return getCOMarkValueForProject(student, exams, marks, coIndex);
+    return getCOMarkValueForProject(student, exams, marks, coIndex, projectCoByStudent);
   }
 
   switch (field) {
@@ -280,6 +302,8 @@ export async function POST(
       : allStudents;
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
+    const projectGroupDoc = await ProjectGroup.findOne({ courseId });
+    const projectCoByStudent = getProjectCoMarksByStudent(projectGroupDoc?.groups || []);
 
     // When exporting the alias group, resolveFieldValue('course.code', ...) should
     // reflect the alternate code, not the course's primary code.
@@ -306,7 +330,7 @@ export async function POST(
       const sheet = workbook.sheet(targetSheetName);
       if (!sheet) continue;
       
-      const value = resolveFieldValue(singleCell.field, courseForExport, null, instructorName, exams, marks);
+      const value = resolveFieldValue(singleCell.field, courseForExport, null, instructorName, exams, marks, projectCoByStudent);
       sheet.cell(singleCell.cell).value(value === undefined || value === null ? '' : value);
     }
 
@@ -327,26 +351,26 @@ export async function POST(
 
       targetStudents.forEach((student, index) => {
         const row = fromCell.row + index;
-        const value = resolveFieldValue(rangeMapping.field, courseForExport, student, instructorName, exams, marks);
+        const value = resolveFieldValue(rangeMapping.field, courseForExport, student, instructorName, exams, marks, projectCoByStudent);
         sheet.cell(`${fromCell.column}${row}`).value(value === undefined || value === null ? '' : value);
       });
     }
 
-    // Write "W" for withdrawn students in column M (M10 to M59) without touching other cells
+    // Write "W" for withdrawn students in column M (M10 to M69) without touching other cells
     const gradeSheet = workbook.sheet(mapping.sheetName || 'GradeSheet');
     if (gradeSheet) {
       // Labs inherit the Assignment exam from Theory, but the column header/labels should read "CLA"
       if (course.courseType === 'Lab') {
         gradeSheet.cell('S8').value('CLA');
-        gradeSheet.cell('B67').value('CLA');
-        gradeSheet.cell('G9').formula('CONCATENATE("CLA (",GradeSheet!$C$67,")")');
+        gradeSheet.cell('B75').value('CLA');
+        gradeSheet.cell('G9').formula('CONCATENATE("CLA (",GradeSheet!$C$75,")")');
       }
 
-      const targetStudents = students.slice(0, 50);
+      const targetStudents = students.slice(0, 60);
       targetStudents.forEach((student, index) => {
         if (student.withdrawn) {
           const row = 10 + index;
-          gradeSheet.cell(`M${row}`).value('Withdrawn (W)');
+          gradeSheet.cell(`M${row}`).value('W (Withdrawn)');
         }
       });
     }
@@ -376,9 +400,11 @@ export async function POST(
         }
       }
 
-      if (projectExam && maxMarksObj?.[projectExam._id.toString()]) {
+      // Combined Project/OEL CO max marks are stored under the literal key 'Project' (shared
+      // across every Project-category exam), not under any individual exam's ObjectId.
+      if (projectExam && maxMarksObj?.['Project']) {
         for (let i = 0; i < 6; i++) {
-          const val = maxMarksObj[projectExam._id.toString()][i];
+          const val = maxMarksObj['Project'][i];
           copoSheet.cell(`${colLetters[i]}5`).value(val || '');
         }
       }
@@ -393,6 +419,37 @@ export async function POST(
             copoSheet.cell(row, col).value(isTicked ? 1 : 0);
           }
         }
+      }
+    }
+
+    // Auto-fill system-derived stats on the CourseSummary sheet (rest of the sheet is
+    // hand-filled by the instructor - only these cells have a value the app already knows).
+    const courseSummarySheet = workbook.sheet('CourseSummary');
+    if (courseSummarySheet) {
+      // G32 "Students who took final exam" - non-withdrawn students with a recorded final-exam mark.
+      const finalExam = findFinalExam(exams);
+      if (finalExam) {
+        const finalTakenCount = students.filter(
+          (s) => !s.withdrawn && getMark(s._id.toString(), finalExam._id.toString(), marks)
+        ).length;
+        courseSummarySheet.cell('G32').value(finalTakenCount);
+      }
+
+      // G39 "Absent Students" and AG23/AG39 "Number of Sessions" (Lectures) - derived from
+      // attendance sessions. Attendance is tracked course-wide, independent of the alias
+      // main/new-code split, so this always uses the full roster rather than `students`.
+      const attendanceSessions = await AttendanceSession.find({ courseId });
+      if (attendanceSessions.length > 0) {
+        const attendanceByStudent = computeAttendanceByStudent(allStudents, attendanceSessions);
+        const absentStudentCount = allStudents.filter((s) => {
+          const stat = attendanceByStudent.get(String(s._id));
+          if (!stat || stat.total === 0) return false;
+          return stat.present / stat.total < ATTENDANCE_AT_RISK_THRESHOLD;
+        }).length;
+        courseSummarySheet.cell('G39').value(absentStudentCount);
+
+        courseSummarySheet.cell('AG23').value(attendanceSessions.length);
+        courseSummarySheet.cell('AG39').value(attendanceSessions.length);
       }
     }
 

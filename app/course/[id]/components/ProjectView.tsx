@@ -10,10 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Search, MoreVertical, Printer, FileDown } from 'lucide-react';
+import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, Save, Settings, Plus, ClipboardList, Search, MoreVertical, Printer, FileDown, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateProjectMark } from '@/app/utils/projectRubric';
 import type { IRubricScores } from '@/app/utils/projectRubric';
+import ProjectCoMarksModal from './ProjectCoMarksModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,12 @@ interface ProjectViewProps {
   defaultProjectWeightage?: number;
   /** Combined CO count shared across all Project exams (0/undefined = combined COs not configured). */
   projectNumberOfCOs?: number;
+  /** Combined CO max marks per CO (course.coPoMapping.maxMarks['Project']), used to cap/validate CO marks entry. */
+  projectCoMaxMarks?: number[];
+  /** What the combined CO max marks sum to: raw total marks across Project exams, or the group's weightage %. */
+  projectCoMode?: 'marks' | 'weightage';
+  /** Opens the Exams tab's "Configure OEL/CE Project Settings" dialog to edit the combined CO max marks. */
+  onEditProjectCoSettings?: () => void;
   /** Called after a section (Project exam) is created or its rubric is changed, so the parent can refresh its exam list. */
   onExamsChanged?: () => void | Promise<void>;
 }
@@ -147,7 +154,7 @@ function RubricDetail({ scores, criteria }: { scores: IRubricScores; criteria: R
 
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function ProjectView({ courseId, students, exams, examFilter, title, description, courseType, defaultProjectWeightage, projectNumberOfCOs = 0, onExamsChanged }: ProjectViewProps) {
+export default function ProjectView({ courseId, students, exams, examFilter, title, description, courseType, defaultProjectWeightage, projectNumberOfCOs = 0, projectCoMaxMarks, projectCoMode = 'marks', onEditProjectCoSettings, onExamsChanged }: ProjectViewProps) {
   const [state, setState] = useState<ProjectState>({ isActive: false, maxMembersPerGroup: 4, groups: [] });
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -165,7 +172,6 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
   // Combined Project CO marks editing (shared across all Project exams for this group)
   const [editingCoMarks, setEditingCoMarks] = useState<string | null>(null); // groupId
-  const [coMarksDraft, setCoMarksDraft] = useState<string[]>([]);
   const [savingCoMarks, setSavingCoMarks] = useState<Record<string, boolean>>({});
 
   // Search/filter groups by group number, title, or member name/ID
@@ -416,16 +422,25 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
   };
 
   const handleOpenCoMarks = (group: GroupEntry) => {
-    const existing = group.coMarks && group.coMarks.length > 0 ? group.coMarks : [0, 0, 0, 0, 0, 0];
-    setCoMarksDraft(Array.from({ length: projectNumberOfCOs }, (_, i) => String(existing[i] ?? 0)));
     setEditingCoMarks(group._id);
   };
 
-  const handleSaveCoMarks = async (groupId: string) => {
+  /** This group's total obtained marks/points to distribute across its COs — the raw sum of its
+   *  saved Project-exam marks, or that sum converted to weighted points, depending on projectCoMode. */
+  const getGroupCoTarget = (group: GroupEntry): number => {
+    const sumRaw = projectExams.reduce((sum, exam) => sum + (savedMarks[group._id]?.[exam._id] ?? 0), 0);
+    if (projectCoMode === 'weightage') {
+      const sumTotal = projectExams.reduce((sum, exam) => sum + (exam.totalMarks || 0), 0);
+      return sumTotal > 0 ? (sumRaw / sumTotal) * (defaultProjectWeightage ?? 0) : 0;
+    }
+    return sumRaw;
+  };
+
+  const handleSaveCoMarks = async (groupId: string, coMarksInput: number[]) => {
     setSavingCoMarks(prev => ({ ...prev, [groupId]: true }));
     try {
       const coMarks = [0, 0, 0, 0, 0, 0];
-      coMarksDraft.forEach((v, i) => { coMarks[i] = v === '' ? 0 : parseFloat(v) || 0; });
+      coMarksInput.forEach((v, i) => { coMarks[i] = v || 0; });
       const res = await fetch(`/api/courses/${courseId}/project`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -757,6 +772,11 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                 <DropdownMenuItem onClick={() => setShowSectionsManager(true)}>
                   <ClipboardList className="w-4 h-4 mr-2" />Manage Sections
                 </DropdownMenuItem>
+                {onEditProjectCoSettings && (
+                  <DropdownMenuItem onClick={onEditProjectCoSettings}>
+                    <Target className="w-4 h-4 mr-2" />Edit Combined CO Max Marks
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.open(`/api/courses/${courseId}/project/export-pdf-simple`, '_blank')}>
                   <Printer className="w-4 h-4 mr-2" />Print Simple Grid
@@ -968,42 +988,17 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
                           {projectNumberOfCOs > 0 && (
                             <td className="px-4 py-3 text-sm">
-                              {editingCoMarks === group._id ? (
-                                <div className="flex items-center gap-1 flex-wrap">
-                                  {coMarksDraft.map((v, i) => (
-                                    <input
-                                      key={i}
-                                      type="number"
-                                      min="0"
-                                      step="0.1"
-                                      value={v}
-                                      onChange={e => setCoMarksDraft(prev => prev.map((p, pi) => pi === i ? e.target.value : p))}
-                                      placeholder={`CO${i + 1}`}
-                                      className="w-14 h-7 rounded border bg-background px-1 text-xs text-center"
-                                    />
-                                  ))}
-                                  <Button
-                                    size="sm"
-                                    className="h-7 px-2 text-xs"
-                                    onClick={() => handleSaveCoMarks(group._id)}
-                                    disabled={savingCoMarks[group._id]}
-                                  >
-                                    {savingCoMarks[group._id] ? '...' : 'Save'}
-                                  </Button>
-                                </div>
-                              ) : (
-                                <button onClick={() => handleOpenCoMarks(group)} className="text-left hover:opacity-70 transition-opacity">
-                                  {group.coMarks && group.coMarks.some(m => m > 0) ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded font-medium text-xs bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                                      {group.coMarks.slice(0, projectNumberOfCOs).map((m, i) => `CO${i + 1}: ${m}`).join(' · ')}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/70 transition-colors">
-                                      Not scored
-                                    </span>
-                                  )}
-                                </button>
-                              )}
+                              <button onClick={() => handleOpenCoMarks(group)} className="text-left hover:opacity-70 transition-opacity">
+                                {group.coMarks && group.coMarks.some(m => m > 0) ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded font-medium text-xs bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                    {group.coMarks.slice(0, projectNumberOfCOs).map((m, i) => `CO${i + 1}: ${m}`).join(' · ')}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/70 transition-colors">
+                                    Not scored
+                                  </span>
+                                )}
+                              </button>
                             </td>
                           )}
 
@@ -1386,6 +1381,25 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
           </div>
         </DialogContent>
       </Dialog>
+
+      {(() => {
+        const editingGroup = state.groups.find(g => g._id === editingCoMarks);
+        if (!editingGroup) return null;
+        return (
+          <ProjectCoMarksModal
+            isOpen={!!editingCoMarks}
+            onClose={() => setEditingCoMarks(null)}
+            groupLabel={`Group ${editingGroup.groupNumber}`}
+            numberOfCOs={projectNumberOfCOs}
+            maxMarks={projectCoMaxMarks}
+            targetTotal={getGroupCoTarget(editingGroup)}
+            targetUnit={projectCoMode === 'weightage' ? '%' : 'marks'}
+            initialValues={editingGroup.coMarks && editingGroup.coMarks.length > 0 ? editingGroup.coMarks : [0, 0, 0, 0, 0, 0]}
+            saving={!!savingCoMarks[editingGroup._id]}
+            onSave={(values) => handleSaveCoMarks(editingGroup._id, values)}
+          />
+        );
+      })()}
     </div>
   );
 }

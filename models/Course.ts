@@ -21,11 +21,13 @@ export interface ICourse extends Document {
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
   excelExportMapping?: ExcelExportMapping | null;
   coPoMapping?: {
-    maxMarks: Record<string, number[]>; // keyed by exam._id, except 'Project' which holds the combined Project-category CO max marks (summing to projectWeightage)
+    maxMarks: Record<string, number[]>; // keyed by exam._id, except 'Project' which holds the combined Project-category CO max marks
     mapping: boolean[][];
     projectNumberOfCOs?: number; // combined CO count shared across all Project-category exams
-    projectCoAutoDistribute?: boolean; // when true, projectMaxMarks['Project'] is kept as an even split of projectWeightage
+    projectCoAutoDistribute?: boolean; // when true, maxMarks['Project'] is kept as an even split of the projectCoMode target
+    projectCoMode?: 'marks' | 'weightage'; // what maxMarks['Project'] sums to: raw total marks across Project exams (default), or projectWeightage %
   };
+  coPoMappingEnabled?: boolean; // Whether this course tracks CO-PO mapping at all; when false, missing-CO-PO warnings are suppressed
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived
   aliasEnabled?: boolean; // Whether some students are grouped under an alternate course code
@@ -135,6 +137,10 @@ const CourseSchema: Schema = new Schema(
         maxMarks: {},
         mapping: Array(6).fill(Array(12).fill(false))
       }
+    },
+    coPoMappingEnabled: {
+      type: Boolean,
+      default: true,
     },
     isArchived: {
       type: Boolean,

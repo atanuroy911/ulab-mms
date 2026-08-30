@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, ChevronDown, Search, MoreVertical, Settings, Equal, Gauge } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, Search, MoreVertical, Settings, Equal, Gauge, ArrowLeftRight } from 'lucide-react';
 import COMarksWarningBanner from './COMarksWarningBanner';
 
 interface Student {
@@ -46,6 +46,7 @@ interface MarksViewProps {
   onShowResetMarksModal: (examId?: string) => void;
   onShowExamSettings?: (examId: string) => void;
   onShowSetColumnMarkModal?: (examId: string) => void;
+  onShowScaleMarksModal?: (examId: string) => void;
   onShowStatisticsModal?: () => void;
   onAutoAttendanceMarks: (examId: string) => void;
   isAutoCalculatingAttendance?: boolean;
@@ -71,6 +72,7 @@ export default function MarksView({
   onShowResetMarksModal,
   onShowExamSettings,
   onShowSetColumnMarkModal,
+  onShowScaleMarksModal,
   onShowStatisticsModal,
   onAutoAttendanceMarks,
   isAutoCalculatingAttendance = false,
@@ -389,6 +391,19 @@ export default function MarksView({
                                   >
                                     <Equal className="w-3.5 h-3.5" />
                                     Set all marks to...
+                                  </button>
+                                )}
+                                {onShowScaleMarksModal && (
+                                  <button
+                                    onClick={() => {
+                                      setOpenColumnMenu(null);
+                                      onShowScaleMarksModal(exam._id);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs hover:bg-accent transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    disabled={enteredCount === 0}
+                                  >
+                                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                                    Scale to...
                                   </button>
                                 )}
                                 {onShowExamSettings && (

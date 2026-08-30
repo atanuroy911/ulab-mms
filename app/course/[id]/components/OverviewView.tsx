@@ -6,7 +6,32 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink, FileText, Sparkles, Users, PenLine, PieChart } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  BookOpen,
+  FlaskConical,
+  Upload,
+  Download,
+  Plus,
+  ClipboardList,
+  AlertTriangle,
+  ExternalLink,
+  FileText,
+  Sparkles,
+  Users,
+  PenLine,
+  PieChart,
+  ChevronDown,
+  Database,
+  FileSpreadsheet,
+} from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
 
@@ -228,147 +253,116 @@ export default function OverviewView({
       <Card className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-backwards">
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common tasks and operations</CardDescription>
+          <CardDescription>Everything you need, one click away</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Left column */}
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Student Management</h3>
-                <Button
-                  onClick={onImportStudents}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Primary actions — used constantly, always visible */}
+            <Button onClick={onAddExam} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Add Exam
+            </Button>
+            <Button onClick={onImportStudents} variant="outline" className="gap-2">
+              <Upload className="w-4 h-4" />
+              Import Students
+            </Button>
+
+            <div className="mx-1 hidden h-6 w-px bg-border sm:block" />
+
+            {/* Course Data group */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Database className="w-4 h-4" />
+                  Course Data
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuItem onClick={onImportCourse}>
                   <Upload className="w-4 h-4 mr-2" />
-                  Import Students (CSV/PDF)
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Course Data</h3>
-                <div className="flex flex-col gap-2">
-                  <Button
-                    onClick={onImportCourse}
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Course Data
-                  </Button>
-                  <Button
-                    onClick={onExportCSV}
-                    disabled={exportingCSV}
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    {exportingCSV ? 'Exporting...' : 'Export CSV'}
-                  </Button>
-                  <Button
-                    onClick={() => setShowExportDisclaimer(true)}
-                    disabled={exportingCourseFile}
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    {exportingCourseFile ? 'Exporting...' : 'Export course file'}
-                    <span className="ml-2 text-xs text-muted-foreground">Beta</span>
-                  </Button>
-                  <Button
-                    onClick={() => setShowChecklist(true)}
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <ClipboardList className="w-4 h-4 mr-2" />
-                    Course File Checklist
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      const a = document.createElement('a');
-                      a.href = '/templates/Sample CO PO.xlsx';
-                      a.download = 'Empty_CO_PO_File.xlsx';
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                    }}
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download empty CO PO File
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Right column */}
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Exam Management</h3>
-                <Button
-                  onClick={onAddExam}
-                  variant="outline"
-                  className="w-full justify-start"
+                  Import Course Data
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onExportCSV} disabled={exportingCSV}>
+                  <Download className="w-4 h-4 mr-2" />
+                  {exportingCSV ? 'Exporting...' : 'Export CSV'}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = '/templates/Sample CO PO.xlsx';
+                    a.download = 'Empty_CO_PO_File.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add New Exam
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Empty CO-PO File
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Course File Export group */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Course File Export
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
                 </Button>
-              </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                <DropdownMenuItem onClick={() => setShowExportDisclaimer(true)} disabled={exportingCourseFile}>
+                  <Download className="w-4 h-4 mr-2" />
+                  {exportingCourseFile ? 'Exporting...' : 'Export Course File'}
+                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">Beta</Badge>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowChecklist(true)}>
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Course File Checklist
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                  <AlertTriangle className="w-3 h-3 text-amber-500" />
+                  Experimental
+                </DropdownMenuLabel>
+                {onExportCourseFileAlpha && (
+                  <DropdownMenuItem onClick={() => setAlphaDisclaimerTarget('excel')} disabled={exportingCourseFileAlpha}>
+                    <Download className="w-4 h-4 mr-2" />
+                    {exportingCourseFileAlpha ? 'Exporting...' : 'Unlimited Students Export'}
+                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">Alpha</Badge>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setAlphaDisclaimerTarget('pdf')}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Export Course File PDF
+                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">Alpha</Badge>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">External Systems</h3>
-                <div className="flex flex-col gap-2">
-                  <Button
-                    onClick={handleSideBySideUrms}
-                    variant="default"
-                    className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Side-by-Side URMS Entry
-                  </Button>
-                  <Button
-                    onClick={() => setShowUrmsAutoFillModal(true)}
-                    variant="outline"
-                    className="w-full justify-start gap-1.5"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Auto-Fill Grades in URMS
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-auto">Beta</Badge>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                  Experimental Exports
-                  <span className="text-xs font-normal text-muted-foreground">Alpha</span>
-                </h3>
-                <div className="flex flex-col gap-2">
-                  {onExportCourseFileAlpha && (
-                    <Button
-                      onClick={() => setAlphaDisclaimerTarget('excel')}
-                      disabled={exportingCourseFileAlpha}
-                      variant="outline"
-                      className="w-full justify-start"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      {exportingCourseFileAlpha ? 'Exporting...' : 'Export course file (unlimited students)'}
-                    </Button>
-                  )}
-                  <Button
-                    onClick={() => setAlphaDisclaimerTarget('pdf')}
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Export course file PDF
-                  </Button>
-                </div>
-              </div>
-            </div>
+            {/* URMS group */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  URMS
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuItem onClick={handleSideBySideUrms}>
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Side-by-Side URMS Entry
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowUrmsAutoFillModal(true)}>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Auto-Fill Grades in URMS
+                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">Beta</Badge>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardContent>
       </Card>
@@ -434,7 +428,7 @@ export default function OverviewView({
           <div className="space-y-4 py-2">
             <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
               <li><strong>This feature is experimental (Alpha).</strong> It&apos;s newer and less battle-tested than the Beta export - please double-check the generated file.</li>
-              <li>Unlike the Beta export, it supports <strong>any number of students</strong> (not capped at 50).</li>
+              <li>Unlike the Beta export, it supports <strong>any number of students</strong> (not capped at 60).</li>
               <li>
                 {alphaDisclaimerTarget === 'pdf'
                   ? 'It is generated entirely from calculations - no Excel template involved - and opens as a print-ready page in a new tab.'
@@ -498,7 +492,7 @@ export default function OverviewView({
 
             <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
               <li><strong>This feature is in Beta.</strong> Please double-check the generated file.</li>
-              <li>It supports a maximum of <strong>50 students, 6 COs and 12 POs</strong>.</li>
+              <li>It supports a maximum of <strong>60 students, 6 COs and 12 POs</strong>.</li>
               <li>It expects a predefined strict amount of exams for theory: <em>Attendance, Performance, Quiz, Assignment, Midterm Exam, Project, Final Exam</em>.</li>
               <li>It may malfunction for <strong>Lab</strong> courses because labs often follow different structures than theory courses.</li>
             </ul>

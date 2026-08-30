@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Save, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { X, Save, Loader2, AlertTriangle, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
 
 interface Student {
@@ -43,6 +43,7 @@ interface BulkMarkEntryModalProps {
   onGoToCoPo?: () => void;
   ignoredCoWarnings?: Set<string>;
   onIgnoreCOWarning?: (examId: string) => void;
+  onShowScaleMarksModal?: (examId: string) => void;
 }
 
 interface MarkEntry {
@@ -66,6 +67,7 @@ export default function BulkMarkEntryModal({
   onGoToCoPo,
   ignoredCoWarnings = new Set(),
   onIgnoreCOWarning,
+  onShowScaleMarksModal,
 }: BulkMarkEntryModalProps) {
   const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [markEntries, setMarkEntries] = useState<MarkEntry[]>([]);
@@ -508,14 +510,27 @@ export default function BulkMarkEntryModal({
               {selectedExam ? `${selectedExam.displayName} - ${students.length} students` : 'Select an exam to begin'}
             </p>
           </div>
-          <Button
-            onClick={handleClose}
-            variant="ghost"
-            size="sm"
-            className="text-gray-400 hover:text-gray-200"
-          >
-            <X className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedExamId && onShowScaleMarksModal && marks.some(m => m.examId === selectedExamId) && (
+              <Button
+                onClick={() => onShowScaleMarksModal(selectedExamId)}
+                variant="outline"
+                size="sm"
+                className="border-gray-600 text-gray-300 hover:text-gray-100"
+              >
+                <ArrowLeftRight className="w-4 h-4 mr-2" />
+                Scale to...
+              </Button>
+            )}
+            <Button
+              onClick={handleClose}
+              variant="ghost"
+              size="sm"
+              className="text-gray-400 hover:text-gray-200"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* Exam Selection */}

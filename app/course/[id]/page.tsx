@@ -18,6 +18,7 @@ import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import BulkPasteMarkModal from '@/app/components/BulkPasteMarkModal';
 import MarksStatisticsModal from '@/app/components/MarksStatisticsModal';
+import ScaleMarksModal from '@/app/components/ScaleMarksModal';
 import DictationMarkModal from '@/app/components/dictation/DictationMarkModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
@@ -43,7 +44,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { 
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import {
   Settings, 
   LogOut, 
   ArrowLeft, 
@@ -71,7 +73,8 @@ import {
   CalendarCheck,
   Link2,
   Rocket,
-  GraduationCap
+  GraduationCap,
+  Info
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -131,9 +134,11 @@ interface Course {
     mapping: boolean[][];
     projectNumberOfCOs?: number;
     projectCoAutoDistribute?: boolean;
+    projectCoMode?: 'marks' | 'weightage';
   };
   aliasEnabled?: boolean;
   alternateCode?: string;
+  coPoMappingEnabled?: boolean;
 }
 
 export default function CoursePage() {
@@ -170,7 +175,7 @@ export default function CoursePage() {
   const [exportingCourseFileAlphaGroup, setExportingCourseFileAlphaGroup] = useState<'main' | 'alias' | null>(null);
   const [importingCourse, setImportingCourse] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
-  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias'>('aggregation');
+  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias' | 'copo'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
   const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
@@ -185,6 +190,8 @@ export default function CoursePage() {
   const [columnMarkValue, setColumnMarkValue] = useState('');
   const [settingColumnMark, setSettingColumnMark] = useState(false);
   const [showMarksStatsModal, setShowMarksStatsModal] = useState(false);
+  const [scaleMarksExamId, setScaleMarksExamId] = useState<string | null>(null);
+  const [scaleMarksInitialFrom, setScaleMarksInitialFrom] = useState<number | undefined>(undefined);
   const [selectedExamsForAction, setSelectedExamsForAction] = useState<string[]>([]);
   const [confirmationStep, setConfirmationStep] = useState(0);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -280,12 +287,17 @@ export default function CoursePage() {
       const savedNumberOfCOs = course.coPoMapping?.projectNumberOfCOs || 0;
       const savedAutoDistribute = course.coPoMapping?.projectCoAutoDistribute !== false;
       const savedMaxMarks = course.coPoMapping?.maxMarks?.['Project'] || [0, 0, 0, 0, 0, 0];
+      const savedMode: 'marks' | 'weightage' = course.coPoMapping?.projectCoMode === 'weightage' ? 'weightage' : 'marks';
+      const target = savedMode === 'marks'
+        ? exams.filter(e => e.examCategory === 'Project').reduce((sum, e) => sum + (Number(e.totalMarks) || 0), 0)
+        : Number(weightage || 0);
       setProjectCoForm({
         numberOfCOs: savedNumberOfCOs ? String(savedNumberOfCOs) : '',
         autoDistribute: savedAutoDistribute,
         maxMarks: savedAutoDistribute && savedNumberOfCOs
-          ? distributeEvenly(Number(course.projectWeightage || 0), savedNumberOfCOs)
+          ? distributeEvenly(target, savedNumberOfCOs)
           : savedMaxMarks,
+        mode: savedMode,
       });
     }
   };
@@ -324,7 +336,34 @@ export default function CoursePage() {
         throw new Error(data.error || 'Failed to save settings');
       }
 
-      setCourse(data.course);
+      // Project's Combined Course Outcomes section saves alongside the weightage here too, so
+      // clicking the one "Save" button always persists everything shown in this dialog instead
+      // of silently dropping the CO config unless the separate CO button was clicked.
+      if (category === 'Project') {
+        const coMaxMarks = projectCoForm.autoDistribute
+          ? distributeEvenly(
+              projectCoForm.mode === 'weightage' ? weightageNum : getProjectCoTarget('marks'),
+              parseInt(projectCoForm.numberOfCOs) || 0
+            )
+          : projectCoForm.maxMarks;
+
+        const copoResponse = await fetch(`/api/courses/${courseId}/copo`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            maxMarks: { ...(course?.coPoMapping?.maxMarks || {}), Project: coMaxMarks },
+            projectNumberOfCOs: parseInt(projectCoForm.numberOfCOs) || 0,
+            projectCoAutoDistribute: projectCoForm.autoDistribute,
+            projectCoMode: projectCoForm.mode,
+          }),
+        });
+        if (!copoResponse.ok) {
+          const copoData = await copoResponse.json().catch(() => ({}));
+          throw new Error(copoData.error || 'Failed to save combined CO settings');
+        }
+      }
+
+      await fetchCourseData();
       notify.success(`${category === 'Assignment' && course?.courseType === 'Lab' ? 'CLA' : category} settings saved`);
       setCategoryConfigDialog(null);
 
@@ -348,12 +387,19 @@ export default function CoursePage() {
     rubricTemplateId: '',
   });
   // Combined CO configuration shared across every Project-category exam (not per-exam like other categories).
-  const [projectCoForm, setProjectCoForm] = useState<{ numberOfCOs: string; autoDistribute: boolean; maxMarks: number[] }>({
+  const [projectCoForm, setProjectCoForm] = useState<{ numberOfCOs: string; autoDistribute: boolean; maxMarks: number[]; mode: 'marks' | 'weightage' }>({
     numberOfCOs: '',
     autoDistribute: true,
     maxMarks: [0, 0, 0, 0, 0, 0],
+    mode: 'marks',
   });
-  const [savingProjectCo, setSavingProjectCo] = useState(false);
+
+  // What the combined CO max marks should sum to, depending on the selected mode: the raw total
+  // marks across every Project-category exam, or the group's overall weightage percentage.
+  const getProjectCoTarget = (mode: 'marks' | 'weightage') =>
+    mode === 'marks'
+      ? exams.filter(e => e.examCategory === 'Project').reduce((sum, e) => sum + (Number(e.totalMarks) || 0), 0)
+      : parseFloat(categoryConfigForm.weightage) || 0;
 
   const distributeEvenly = (weightage: number, n: number): number[] => {
     const marks = [0, 0, 0, 0, 0, 0];
@@ -376,6 +422,7 @@ export default function CoursePage() {
     showFinalGrade: false,
     aliasEnabled: false,
     alternateCode: '',
+    coPoMappingEnabled: true,
   });
   const [error, setError] = useState('');
   const [courseCodeEditableByTeacher, setCourseCodeEditableByTeacher] = useState(true);
@@ -751,14 +798,18 @@ export default function CoursePage() {
       return;
     }
 
+    // Project/OEL exams configure their combined CO count separately (via the group's gear
+    // icon), so the per-exam numberOfCOs field is irrelevant for them and stays empty here.
+    const defaultNumberOfCOs = '';
+
     if (presetCategory === 'Quiz' || presetCategory === 'Assignment' || presetCategory === 'Project') {
       const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
-      const categoryLabel = presetCategory === 'Assignment' && course?.courseType === 'Lab' ? 'Assessment' : presetCategory;
+      const categoryLabel = presetCategory === 'Assignment' && course?.courseType === 'Lab' ? 'CLA' : presetCategory;
       setExamFormData({
         displayName: `${categoryLabel} ${nextIndex}`,
         totalMarks: '',
         weightage: '',
-        numberOfCOs: '',
+        numberOfCOs: defaultNumberOfCOs,
         numberOfQuestions: '',
         examCategory: presetCategory,
         rubricTemplateId: '',
@@ -768,7 +819,7 @@ export default function CoursePage() {
         displayName: '',
         totalMarks: '',
         weightage: '',
-        numberOfCOs: '',
+        numberOfCOs: defaultNumberOfCOs,
         numberOfQuestions: '',
         examCategory: presetCategory || '',
         rubricTemplateId: '',
@@ -993,8 +1044,9 @@ export default function CoursePage() {
 
   const handleUpdateExamSettings = async () => {
     if (!showExamSettings) return;
-    
+
     try {
+      const previousExam = exams.find(e => e._id === showExamSettings);
       const updateData: any = {};
       if (examSettings.displayName) updateData.displayName = examSettings.displayName;
       if (examSettings.weightage) updateData.weightage = parseFloat(examSettings.weightage);
@@ -1015,6 +1067,20 @@ export default function CoursePage() {
       if (response.ok) {
         await fetchCourseData();
         notify.exam.settingsUpdated();
+
+        // Total marks changed and marks already exist for this exam — offer to rescale them
+        // instead of leaving old raw marks inconsistent with the new maximum. Ignorable.
+        const newTotalMarks = updateData.totalMarks;
+        if (
+          previousExam &&
+          newTotalMarks !== undefined &&
+          newTotalMarks !== previousExam.totalMarks &&
+          marks.some(m => m.examId === showExamSettings)
+        ) {
+          setScaleMarksExamId(showExamSettings);
+          setScaleMarksInitialFrom(previousExam.totalMarks);
+        }
+
         setShowExamSettings(null);
         setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', totalMarks: '', examCategory: '', rubricTemplateId: '' });
         setError('');
@@ -1033,7 +1099,7 @@ export default function CoursePage() {
     setProjectCoForm(prev => ({
       ...prev,
       numberOfCOs: value,
-      maxMarks: prev.autoDistribute ? distributeEvenly(parseFloat(categoryConfigForm.weightage) || 0, n) : prev.maxMarks,
+      maxMarks: prev.autoDistribute ? distributeEvenly(getProjectCoTarget(prev.mode), n) : prev.maxMarks,
     }));
   };
 
@@ -1041,7 +1107,15 @@ export default function CoursePage() {
     setProjectCoForm(prev => ({
       ...prev,
       autoDistribute: checked,
-      maxMarks: checked ? distributeEvenly(parseFloat(categoryConfigForm.weightage) || 0, parseInt(prev.numberOfCOs) || 0) : prev.maxMarks,
+      maxMarks: checked ? distributeEvenly(getProjectCoTarget(prev.mode), parseInt(prev.numberOfCOs) || 0) : prev.maxMarks,
+    }));
+  };
+
+  const handleProjectCoModeChange = (mode: 'marks' | 'weightage') => {
+    setProjectCoForm(prev => ({
+      ...prev,
+      mode,
+      maxMarks: prev.autoDistribute ? distributeEvenly(getProjectCoTarget(mode), parseInt(prev.numberOfCOs) || 0) : prev.maxMarks,
     }));
   };
 
@@ -1051,33 +1125,6 @@ export default function CoursePage() {
       maxMarks[coIndex] = value === '' ? 0 : parseFloat(value) || 0;
       return { ...prev, maxMarks };
     });
-  };
-
-  const handleSaveProjectCoSettings = async () => {
-    if (!course) return;
-    setSavingProjectCo(true);
-    try {
-      const response = await fetch(`/api/courses/${courseId}/copo`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          maxMarks: { ...(course.coPoMapping?.maxMarks || {}), Project: projectCoForm.maxMarks },
-          projectNumberOfCOs: parseInt(projectCoForm.numberOfCOs) || 0,
-          projectCoAutoDistribute: projectCoForm.autoDistribute,
-        }),
-      });
-      if (response.ok) {
-        await fetchCourseData();
-        notify.exam.settingsUpdated();
-      } else {
-        const data = await response.json();
-        notify.exam.settingsError(data.error);
-      }
-    } catch (err) {
-      notify.exam.settingsError('Error saving combined CO settings');
-    } finally {
-      setSavingProjectCo(false);
-    }
   };
 
   const handleDeleteExam = async (examId: string) => {
@@ -1136,6 +1183,7 @@ export default function CoursePage() {
         showFinalGrade: courseSettingsData.showFinalGrade,
         aliasEnabled: courseSettingsData.aliasEnabled,
         alternateCode: courseSettingsData.alternateCode,
+        coPoMappingEnabled: courseSettingsData.coPoMappingEnabled,
       };
 
       if (courseSettingsData.quizWeightage) {
@@ -1391,6 +1439,7 @@ export default function CoursePage() {
    */
   const getExamsWithMissingCOMarks = () => {
     if (!course) return [];
+    if (course.coPoMappingEnabled === false) return [];
     const coPoMaxMarks = course.coPoMapping?.maxMarks || {};
     const perExam = exams.filter(exam => {
       if (exam.examCategory === 'Project') return false; // handled by the combined check below
@@ -1435,6 +1484,7 @@ export default function CoursePage() {
    */
   const getCoPoStatus = (): 'no-mapping' | 'no-max-marks' | 'ok' => {
     if (!course) return 'ok';
+    if (course.coPoMappingEnabled === false) return 'ok';
     const mapping = course.coPoMapping?.mapping;
     const maxMarks = course.coPoMapping?.maxMarks || {};
     // Check if mapping matrix exists and has at least one true value
@@ -1997,6 +2047,7 @@ export default function CoursePage() {
                   showFinalGrade: Boolean(course?.showFinalGrade),
                   aliasEnabled: Boolean(course?.aliasEnabled),
                   alternateCode: course?.alternateCode || '',
+                  coPoMappingEnabled: course?.coPoMappingEnabled !== false,
                 });
                 setShowCourseSettings(true);
               }}
@@ -2135,6 +2186,7 @@ export default function CoursePage() {
                 onSetExamSettings={setExamSettings}
                 onDeleteExam={handleDeleteExam}
                 onConfigureCategory={(category) => openCategoryConfigDialog(category, false)}
+                onExamsChanged={fetchCourseData}
               />
             )}
 
@@ -2239,6 +2291,10 @@ export default function CoursePage() {
                   setShowSetColumnMarkModal(true);
                 }}
                 onShowStatisticsModal={() => setShowMarksStatsModal(true)}
+                onShowScaleMarksModal={(examId) => {
+                  setScaleMarksExamId(examId);
+                  setScaleMarksInitialFrom(undefined);
+                }}
                 onAutoAttendanceMarks={handleAutoAttendanceMarks}
                 isAutoCalculatingAttendance={isAutoCalculatingAttendance}
                 onGetProjectMarks={handleGetProjectMarks}
@@ -2261,6 +2317,9 @@ export default function CoursePage() {
                 courseType={course?.courseType}
                 defaultProjectWeightage={course?.projectWeightage ?? 25}
                 projectNumberOfCOs={course?.coPoMapping?.projectNumberOfCOs || 0}
+                projectCoMaxMarks={course?.coPoMapping?.maxMarks?.['Project']}
+                projectCoMode={course?.coPoMapping?.projectCoMode === 'weightage' ? 'weightage' : 'marks'}
+                onEditProjectCoSettings={() => openCategoryConfigDialog('Project')}
                 onExamsChanged={fetchCourseData}
               />
             )}
@@ -2481,17 +2540,37 @@ export default function CoursePage() {
 
             {course?.courseType === 'Theory' && examFormData.examCategory !== 'Project' && (
               <div>
-                <Label>Number of COs (Optional)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="6"
-                  value={examFormData.numberOfCOs}
-                  onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
-                  placeholder="e.g., 3"
-                  className="mt-2"
-                />
-                <p className="text-xs text-muted-foreground mt-1">For exams with CO-wise marks breakdown</p>
+                <Label>Track Course Outcomes (CO)?</Label>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={!examFormData.numberOfCOs || examFormData.numberOfCOs === '0' ? 'default' : 'outline'}
+                    onClick={() => setExamFormData({ ...examFormData, numberOfCOs: '0' })}
+                  >
+                    No
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={examFormData.numberOfCOs && examFormData.numberOfCOs !== '0' ? 'default' : 'outline'}
+                    onClick={() => setExamFormData({ ...examFormData, numberOfCOs: examFormData.numberOfCOs && examFormData.numberOfCOs !== '0' ? examFormData.numberOfCOs : '6' })}
+                  >
+                    Yes
+                  </Button>
+                </div>
+                {examFormData.numberOfCOs && examFormData.numberOfCOs !== '0' && (
+                  <Input
+                    type="number"
+                    min="1"
+                    max="6"
+                    value={examFormData.numberOfCOs}
+                    onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
+                    placeholder="e.g., 6"
+                    className="mt-2"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground mt-1">Quizzes and assignments usually don&apos;t track COs — turn this on only if this exam has a CO-wise marks breakdown</p>
               </div>
             )}
             {examFormData.examCategory === 'Project' && (
@@ -2614,72 +2693,108 @@ export default function CoursePage() {
                 <div>
                   <Label>Combined Course Outcomes</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Shared across every {course?.courseType === 'Lab' ? 'OEL/CE' : 'project'} exam. Max marks are scaled to the weightage above, not raw marks — enter combined CO scores per group in the Project tab.
+                    Shared across every {course?.courseType === 'Lab' ? 'OEL/CE' : 'project'} exam — enter combined CO scores per group in the Project tab.
                   </p>
                 </div>
 
-                <div>
-                  <Label className="text-xs">Number of COs</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="6"
-                    value={projectCoForm.numberOfCOs}
-                    onChange={(e) => handleProjectCoNumberChange(e.target.value)}
-                    placeholder="e.g., 4"
-                    className="mt-1"
-                  />
-                </div>
+                {(() => {
+                  const projectExamsTotalMarks = exams.filter(e => e.examCategory === 'Project').reduce((sum, e) => sum + (Number(e.totalMarks) || 0), 0);
+                  const target = getProjectCoTarget(projectCoForm.mode);
+                  const targetUnit = projectCoForm.mode === 'marks' ? 'marks' : '%';
+                  return (
+                    <>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs">Distribute based on</Label>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="text-muted-foreground hover:text-foreground">
+                                  <Info className="w-3.5 h-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-xs">
+                                <p className="mb-1"><strong>Marks:</strong> CO max marks add up to the raw total marks of every {course?.courseType === 'Lab' ? 'OEL/CE' : 'project'} exam ({projectExamsTotalMarks} marks here). Matches what teachers actually enter per group.</p>
+                                <p><strong>Weightage:</strong> CO max marks add up to the {(parseFloat(categoryConfigForm.weightage) || 0).toFixed(2)}% weightage typed above instead — the older behavior, for courses that prefer to work in percentages.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        <div className="flex gap-2 mt-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={projectCoForm.mode === 'marks' ? 'default' : 'outline'}
+                            onClick={() => handleProjectCoModeChange('marks')}
+                          >
+                            Marks
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={projectCoForm.mode === 'weightage' ? 'default' : 'outline'}
+                            onClick={() => handleProjectCoModeChange('weightage')}
+                          >
+                            Weightage
+                          </Button>
+                        </div>
+                      </div>
 
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={projectCoForm.autoDistribute}
-                    onChange={(e) => handleProjectCoAutoDistributeToggle(e.target.checked)}
-                  />
-                  Auto-distribute weightage evenly across COs
-                </label>
-
-                {(parseInt(projectCoForm.numberOfCOs) || 0) > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {Array.from({ length: parseInt(projectCoForm.numberOfCOs) || 0 }).map((_, i) => (
-                      <div key={i}>
-                        <Label className="text-[10px] text-muted-foreground">CO {i + 1}</Label>
+                      <div>
+                        <Label className="text-xs">Number of COs</Label>
                         <Input
                           type="number"
                           min="0"
-                          step="0.1"
-                          disabled={projectCoForm.autoDistribute}
-                          value={projectCoForm.maxMarks[i] || ''}
-                          onChange={(e) => handleProjectCoMaxMarkChange(i, e.target.value)}
-                          placeholder="0"
-                          className="mt-1 h-8 text-center"
+                          max="6"
+                          value={projectCoForm.numberOfCOs}
+                          onChange={(e) => handleProjectCoNumberChange(e.target.value)}
+                          placeholder="e.g., 4"
+                          className="mt-1"
                         />
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                {(parseInt(projectCoForm.numberOfCOs) || 0) > 0 && (
-                  <p className={`text-xs ${
-                    Math.round(projectCoForm.maxMarks.slice(0, parseInt(projectCoForm.numberOfCOs) || 0).reduce((s, m) => s + m, 0) * 100) / 100
-                      === Math.round((parseFloat(categoryConfigForm.weightage) || 0) * 100) / 100
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-amber-600 dark:text-amber-400'
-                  }`}>
-                    Total: {projectCoForm.maxMarks.slice(0, parseInt(projectCoForm.numberOfCOs) || 0).reduce((s, m) => s + m, 0).toFixed(2)} / {(parseFloat(categoryConfigForm.weightage) || 0).toFixed(2)}
-                  </p>
-                )}
+                      <label className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={projectCoForm.autoDistribute}
+                          onChange={(e) => handleProjectCoAutoDistributeToggle(e.target.checked)}
+                        />
+                        Auto-distribute the {targetUnit === 'marks' ? 'total marks' : 'weightage'} evenly across COs
+                      </label>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleSaveProjectCoSettings}
-                  disabled={savingProjectCo}
-                >
-                  {savingProjectCo ? 'Saving...' : 'Save Combined CO Settings'}
-                </Button>
+                      {(parseInt(projectCoForm.numberOfCOs) || 0) > 0 && (
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: parseInt(projectCoForm.numberOfCOs) || 0 }).map((_, i) => (
+                            <div key={i}>
+                              <Label className="text-[10px] text-muted-foreground">CO {i + 1}</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                disabled={projectCoForm.autoDistribute}
+                                value={projectCoForm.maxMarks[i] || ''}
+                                onChange={(e) => handleProjectCoMaxMarkChange(i, e.target.value)}
+                                placeholder="0"
+                                className="mt-1 h-8 text-center"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {(parseInt(projectCoForm.numberOfCOs) || 0) > 0 && (
+                        <p className={`text-xs ${
+                          Math.round(projectCoForm.maxMarks.slice(0, parseInt(projectCoForm.numberOfCOs) || 0).reduce((s, m) => s + m, 0) * 100) / 100
+                            === Math.round(target * 100) / 100
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-amber-600 dark:text-amber-400'
+                        }`}>
+                          Total: {projectCoForm.maxMarks.slice(0, parseInt(projectCoForm.numberOfCOs) || 0).reduce((s, m) => s + m, 0).toFixed(2)} / {target.toFixed(2)} {targetUnit}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 
@@ -2733,6 +2848,10 @@ export default function CoursePage() {
         onGoToCoPo={() => { setShowBulkMarkModal(false); setActiveView('copo'); }}
         ignoredCoWarnings={ignoredCoWarnings}
         onIgnoreCOWarning={handleIgnoreCOWarning}
+        onShowScaleMarksModal={(examId) => {
+          setScaleMarksExamId(examId);
+          setScaleMarksInitialFrom(undefined);
+        }}
       />
 
       {/* Bulk Paste Mark Modal */}
@@ -2855,17 +2974,37 @@ export default function CoursePage() {
 
             {canEditCOs && (
               <div>
-                <Label>Number of COs</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="6"
-                  value={examSettings.numberOfCOs}
-                  onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
-                  placeholder="e.g., 3"
-                  className="mt-2"
-                />
-                <p className="text-xs text-muted-foreground mt-1">For CO-wise marks breakdown</p>
+                <Label>Track Course Outcomes (CO)?</Label>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={!examSettings.numberOfCOs || examSettings.numberOfCOs === '0' ? 'default' : 'outline'}
+                    onClick={() => setExamSettings({ ...examSettings, numberOfCOs: '0' })}
+                  >
+                    No
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={examSettings.numberOfCOs && examSettings.numberOfCOs !== '0' ? 'default' : 'outline'}
+                    onClick={() => setExamSettings({ ...examSettings, numberOfCOs: examSettings.numberOfCOs && examSettings.numberOfCOs !== '0' ? examSettings.numberOfCOs : '6' })}
+                  >
+                    Yes
+                  </Button>
+                </div>
+                {examSettings.numberOfCOs && examSettings.numberOfCOs !== '0' && (
+                  <Input
+                    type="number"
+                    min="1"
+                    max="6"
+                    value={examSettings.numberOfCOs}
+                    onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
+                    placeholder="e.g., 6"
+                    className="mt-2"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground mt-1">Quizzes and assignments usually don&apos;t track COs — turn this on only if this exam has a CO-wise marks breakdown</p>
               </div>
             )}
 
@@ -2970,6 +3109,14 @@ export default function CoursePage() {
                 >
                   🏷️ New Code
                 </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'copo' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('copo')}
+                >
+                  🎯 CO-PO Mapping
+                </Button>
               </aside>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-32">
@@ -3005,6 +3152,14 @@ export default function CoursePage() {
                     onClick={() => setCourseSettingsTab('alias')}
                   >
                     🏷️ New Code
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'copo' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('copo')}
+                  >
+                    🎯 CO-PO Mapping
                   </Button>
                 </div>
 
@@ -3374,6 +3529,39 @@ export default function CoursePage() {
                         />
                       </div>
                     )}
+                  </div>
+                )}
+
+                {courseSettingsTab === 'copo' && (
+                  <div className="max-w-2xl space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">CO-PO Mapping</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Turn this off for courses that don&apos;t track Course Outcome &rarr; Program Outcome
+                        attainment. When off, the CO-PO tab&apos;s warnings and the &quot;CO-PO matrix not set&quot;
+                        notice on exports and the Marks tab are suppressed.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Does this course track CO-PO mapping?</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={courseSettingsData.coPoMappingEnabled ? 'default' : 'outline'}
+                          onClick={() => setCourseSettingsData({ ...courseSettingsData, coPoMappingEnabled: true })}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={!courseSettingsData.coPoMappingEnabled ? 'default' : 'outline'}
+                          onClick={() => setCourseSettingsData({ ...courseSettingsData, coPoMappingEnabled: false })}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -4270,6 +4458,15 @@ export default function CoursePage() {
       students={students}
       exams={exams}
       marks={marks}
+    />
+
+    <ScaleMarksModal
+      isOpen={!!scaleMarksExamId}
+      onClose={() => { setScaleMarksExamId(null); setScaleMarksInitialFrom(undefined); }}
+      exam={exams.find(e => e._id === scaleMarksExamId) || null}
+      marks={marks}
+      initialScaleFrom={scaleMarksInitialFrom}
+      onScaled={fetchCourseData}
     />
 
     {/* Reset Marks Modal */}

@@ -8,6 +8,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
@@ -85,6 +86,8 @@ export default function AddMarkModal({
   const selectedExam = exams.find(e => e._id === selectedExamId);
   const numberOfCOs = selectedExam?.numberOfCOs || 0;
   const numberOfQuestions = selectedExam?.numberOfQuestions || 0;
+  const selectedStudent = students.find(s => s._id === selectedStudentId);
+  const isWithdrawn = Boolean(selectedStudent?.withdrawn);
 
   // Filter students based on search
   const filteredStudents = students.filter(s => 
@@ -114,10 +117,20 @@ export default function AddMarkModal({
   // Load existing marks when student is selected
   useEffect(() => {
     if (selectedStudentId && selectedExamId) {
+      if (isWithdrawn) {
+        // Withdrawn students never carry a mark - always show/save 0, ignore any existing entry.
+        setRawMark('0');
+        setCoMarks(numberOfCOs > 0 ? new Array(numberOfCOs).fill('0') : []);
+        setNonCoMark('');
+        setQuestionMarks(numberOfQuestions > 0 ? new Array(numberOfQuestions).fill('0') : []);
+        setCurrentStep('marks');
+        return;
+      }
+
       const existingMark = marks.find(
         m => m.studentId === selectedStudentId && m.examId === selectedExamId
       );
-      
+
       if (existingMark) {
         setRawMark(existingMark.rawMark.toString());
         if (existingMark.coMarks && existingMark.coMarks.length > 0) {
@@ -143,7 +156,7 @@ export default function AddMarkModal({
       }
       setCurrentStep('marks');
     }
-  }, [selectedStudentId, selectedExamId, marks, numberOfCOs, numberOfQuestions]);
+  }, [selectedStudentId, selectedExamId, marks, numberOfCOs, numberOfQuestions, isWithdrawn]);
 
   // Focus management when step changes
   useEffect(() => {
@@ -211,8 +224,41 @@ export default function AddMarkModal({
       return;
     }
 
+    // Withdrawn students never carry a mark - save 0 directly, skipping CO/Question validation.
+    if (isWithdrawn) {
+      try {
+        const response = await fetch('/api/marks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId,
+            studentId: selectedStudentId,
+            examId: selectedExamId,
+            rawMark: 0,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          notify.mark.added(selectedStudent?.name, selectedExam?.displayName);
+          setSuccess('✓ Mark saved as 0 (student is withdrawn)');
+          onMarkSaved();
+          if (initialStudentId) {
+            setTimeout(() => onClose(), 800);
+          }
+        } else {
+          setError(data.error || 'Failed to save mark');
+        }
+      } catch (err) {
+        console.error('Error saving mark:', err);
+        setError('An error occurred while saving the mark');
+      }
+      return;
+    }
+
     const rawMarkNum = parseFloat(rawMark);
-    
+
     // Validate raw mark
     if (isNaN(rawMarkNum) || rawMarkNum < 0) {
       setError('Raw mark must be a valid positive number');
@@ -630,7 +676,10 @@ export default function AddMarkModal({
                       onClick={() => handleStudentSelect(student._id)}
                       className="w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors border-b border-gray-700 last:border-b-0"
                     >
-                      <div className="font-medium text-blue-300">{student.studentId}</div>
+                      <div className="font-medium text-blue-300">
+                        {student.studentId}
+                        {student.withdrawn && <span className="ml-2 text-xs font-bold text-red-400">WITHDRAWN</span>}
+                      </div>
                       <div className="text-sm text-gray-400">{student.name}</div>
                     </button>
                   ))}
@@ -644,6 +693,7 @@ export default function AddMarkModal({
                     <div>
                       <div className="font-medium text-blue-300">
                         {students.find(s => s._id === selectedStudentId)?.studentId}
+                        {isWithdrawn && <span className="ml-2 text-xs font-bold text-red-400">WITHDRAWN</span>}
                       </div>
                       <div className="text-sm text-gray-400">
                         {students.find(s => s._id === selectedStudentId)?.name}
@@ -668,7 +718,28 @@ export default function AddMarkModal({
             </div>
 
             {/* Mark Entry - Only show when student is selected */}
-            {selectedStudentId && (
+            {selectedStudentId && isWithdrawn && (
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <div className="text-sm text-red-200">
+                    <p className="font-semibold">This student is withdrawn</p>
+                    <p className="text-red-300/80 text-xs mt-0.5">
+                      Marks can&apos;t be entered for a withdrawn student. Saving will record 0 for this exam.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  ref={saveButtonRef}
+                  onClick={validateAndSave}
+                  className="w-full py-3 bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg transition-colors"
+                >
+                  Save as 0
+                </button>
+              </div>
+            )}
+
+            {selectedStudentId && !isWithdrawn && (
               <div className="space-y-4">
                 {/* Raw Mark */}
                 <div>

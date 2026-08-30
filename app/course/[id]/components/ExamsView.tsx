@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Plus, Settings, Trash2, Layers3, ClipboardList } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Settings, Trash2, Layers3, ClipboardList, Pencil } from 'lucide-react';
+import BulkRenameExamsModal from './BulkRenameExamsModal';
 
 interface Exam {
   _id: string;
@@ -46,6 +47,7 @@ interface ExamsViewProps {
   onSetExamSettings: (settings: ExamSettings) => void;
   onDeleteExam: (examId: string) => void;
   onConfigureCategory: (category: 'Quiz' | 'Assignment' | 'Project') => void;
+  onExamsChanged?: () => void | Promise<void>;
 }
 
 export default function ExamsView({
@@ -56,13 +58,15 @@ export default function ExamsView({
   onSetExamSettings,
   onDeleteExam,
   onConfigureCategory,
+  onExamsChanged,
 }: ExamsViewProps) {
   const quizExams = exams.filter((exam) => exam.examCategory === 'Quiz');
   const assignmentExams = exams.filter((exam) => exam.examCategory === 'Assignment');
   const projectExams = exams.filter((exam) => exam.examCategory === 'Project');
   const groupedExamIds = new Set([...quizExams, ...assignmentExams, ...projectExams].map((exam) => exam._id));
   const standaloneExams = exams.filter((exam) => !groupedExamIds.has(exam._id));
-  const [openGroup, setOpenGroup] = useState<'quiz' | 'assignment' | 'project' | null>('quiz');
+  const [openGroup, setOpenGroup] = useState<'quiz' | 'assignment' | 'project' | null>(null);
+  const [showBulkRename, setShowBulkRename] = useState(false);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -77,10 +81,18 @@ export default function ExamsView({
                 Configure and manage {exams.length} exam(s)
               </CardDescription>
             </div>
-            <Button onClick={() => onShowExamModal()} className="sm:self-start">
-              <Plus className="w-4 h-4 mr-2" />
-              Add New Exam
-            </Button>
+            <div className="flex flex-wrap gap-2 sm:self-start">
+              {exams.length > 0 && (
+                <Button variant="outline" onClick={() => setShowBulkRename(true)}>
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Bulk Rename
+                </Button>
+              )}
+              <Button onClick={() => onShowExamModal()}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add New Exam
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -489,6 +501,13 @@ export default function ExamsView({
           </div>
         )}
       </Card>
+
+      <BulkRenameExamsModal
+        isOpen={showBulkRename}
+        onClose={() => setShowBulkRename(false)}
+        exams={exams}
+        onRenamed={async () => { await onExamsChanged?.(); }}
+      />
     </div>
   );
 }

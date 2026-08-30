@@ -20,8 +20,9 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
     const createdMarks = [];
     
     for (const markData of marksArray) {
-      const { studentId, examId, rawMark, nonCoMark } = markData;
-      
+      const { studentId, examId } = markData;
+      let { rawMark, nonCoMark, coMarks, questionMarks } = markData;
+
       if (!studentId || !examId || rawMark === undefined) {
         continue; // Skip invalid entries
       }
@@ -34,6 +35,14 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
 
       if (!student || !exam) {
         continue; // Skip if student or exam not found
+      }
+
+      // Withdrawn students never carry a nonzero mark, regardless of what the client sent.
+      if (student.withdrawn) {
+        rawMark = 0;
+        nonCoMark = null;
+        coMarks = null;
+        questionMarks = null;
       }
 
       // Check if mark already exists
@@ -53,8 +62,8 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
         rawMark,
         weightedMark,
         nonCoMark: nonCoMark || null,
-        coMarks: markData.coMarks || null,
-        questionMarks: markData.questionMarks || null,
+        coMarks: coMarks || null,
+        questionMarks: questionMarks || null,
       });
 
       createdMarks.push(mark);
@@ -92,7 +101,8 @@ export async function POST(request: NextRequest) {
       return await handleBulkCreate(body.marks, session.user.id);
     }
 
-    const { studentId, examId, courseId, rawMark, coMarks, questionMarks, nonCoMark } = body;
+    const { studentId, examId, courseId } = body;
+    let { rawMark, coMarks, questionMarks, nonCoMark } = body;
 
     if (!studentId || !examId || !courseId || rawMark === undefined) {
       return NextResponse.json(
@@ -114,6 +124,16 @@ export async function POST(request: NextRequest) {
         { error: 'Student or exam not found' },
         { status: 404 }
       );
+    }
+
+    // Withdrawn students never carry a nonzero mark, regardless of what the client sent -
+    // force it to zero here instead of validating/rejecting, so callers don't need to
+    // special-case withdrawn students before submitting.
+    if (student.withdrawn) {
+      rawMark = 0;
+      coMarks = undefined;
+      questionMarks = undefined;
+      nonCoMark = undefined;
     }
 
     // Validate raw mark
@@ -206,14 +226,20 @@ export async function POST(request: NextRequest) {
 
     if (coMarks && Array.isArray(coMarks) && coMarks.length > 0) {
       markData.coMarks = coMarks;
+    } else if (student.withdrawn) {
+      markData.coMarks = null;
     }
 
     if (questionMarks && Array.isArray(questionMarks) && questionMarks.length > 0) {
       markData.questionMarks = questionMarks;
+    } else if (student.withdrawn) {
+      markData.questionMarks = null;
     }
 
     if (nonCoMark !== undefined) {
       markData.nonCoMark = nonCoMark;
+    } else if (student.withdrawn) {
+      markData.nonCoMark = null;
     }
 
     const mark = await Mark.findOneAndUpdate(

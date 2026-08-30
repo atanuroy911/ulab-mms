@@ -92,6 +92,7 @@ export async function PUT(
       classRepresentativeId,
       aliasEnabled,
       alternateCode,
+      coPoMappingEnabled,
     } = body;
 
     await dbConnect();
@@ -190,6 +191,10 @@ export async function PUT(
       updateData.alternateCode = aliasEnabled ? String(alternateCode).trim() : '';
     } else if (alternateCode !== undefined) {
       updateData.alternateCode = String(alternateCode).trim();
+    }
+
+    if (coPoMappingEnabled !== undefined) {
+      updateData.coPoMappingEnabled = Boolean(coPoMappingEnabled);
     }
 
     const course = await Course.findOneAndUpdate(

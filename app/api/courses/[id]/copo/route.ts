@@ -16,9 +16,15 @@ export async function PUT(
     }
 
     const { id: courseId } = await params;
-    const { maxMarks, mapping, projectNumberOfCOs, projectCoAutoDistribute } = await request.json();
+    const { maxMarks, mapping, projectNumberOfCOs, projectCoAutoDistribute, projectCoMode } = await request.json();
 
-    if (maxMarks === undefined && mapping === undefined && projectNumberOfCOs === undefined && projectCoAutoDistribute === undefined) {
+    if (
+      maxMarks === undefined &&
+      mapping === undefined &&
+      projectNumberOfCOs === undefined &&
+      projectCoAutoDistribute === undefined &&
+      projectCoMode === undefined
+    ) {
       return NextResponse.json(
         { error: 'Missing required mapping data' },
         { status: 400 }
@@ -40,6 +46,7 @@ export async function PUT(
       ...(mapping !== undefined ? { mapping } : {}),
       ...(projectNumberOfCOs !== undefined ? { projectNumberOfCOs } : {}),
       ...(projectCoAutoDistribute !== undefined ? { projectCoAutoDistribute } : {}),
+      ...(projectCoMode !== undefined ? { projectCoMode } : {}),
     };
 
     const course = await Course.findOneAndUpdate(
