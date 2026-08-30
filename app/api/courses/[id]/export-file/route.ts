@@ -17,7 +17,7 @@ import {
   type ExcelExportField,
   type ExcelExportMapping,
 } from '@/app/course/[id]/lib/excelExportMapping';
-import { findFinalExam, computeAttendanceByStudent, ATTENDANCE_AT_RISK_THRESHOLD, getProjectCoMarksByStudent } from '@/lib/coPoCalculations';
+import { findFinalExam, getProjectCoMarksByStudent } from '@/lib/coPoCalculations';
 
 function normalizeMapping(mapping: any): ExcelExportMapping {
   if (!mapping) return DEFAULT_EXCEL_EXPORT_MAPPING;
@@ -31,6 +31,22 @@ function normalizeMapping(mapping: any): ExcelExportMapping {
 
 function getMark(studentId: string, examId: string, marks: any[]) {
   return marks.find(m => String(m.studentId) === String(studentId) && String(m.examId) === String(examId));
+}
+
+// Randomly splits `total` into `parts` positive integers that sum to exactly `total` (requires
+// total >= parts). Used to fill in a per-topic session breakdown from just the overall count.
+function randomPartition(total: number, parts: number): number[] {
+  if (parts <= 1) return [total];
+  const cuts = new Set<number>();
+  while (cuts.size < parts - 1) {
+    cuts.add(1 + Math.floor(Math.random() * (total - 1)));
+  }
+  const boundaries = [0, ...Array.from(cuts).sort((a, b) => a - b), total];
+  const result: number[] = [];
+  for (let i = 1; i < boundaries.length; i++) {
+    result.push(boundaries[i] - boundaries[i - 1]);
+  }
+  return result;
 }
 
 function getMarkValue(student: any, exams: any[], marks: any[], category: string) {
@@ -50,7 +66,7 @@ function getMarkValueForMid(student: any, exams: any[], marks: any[]) {
 }
 
 function getMarkValueForFinal(student: any, exams: any[], marks: any[]) {
-  const exam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
+  const exam = exams.find(e => e.examType === 'final' || e.examType === 'labFinal') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
   return mark ? mark.rawMark : 0;
@@ -67,7 +83,7 @@ function getMidtermWeight(exams: any[]) {
 }
 
 function getFinalWeight(exams: any[]) {
-  const exam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
+  const exam = exams.find(e => e.examType === 'final' || e.examType === 'labFinal') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
   return exam ? (exam.weightage || 0) : 0;
 }
 
@@ -84,7 +100,7 @@ function getCOMarkValueForMid(student: any, exams: any[], marks: any[], coIndex:
 }
 
 function getCOMarkValueForFinal(student: any, exams: any[], marks: any[], coIndex: number) {
-  const exam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
+  const exam = exams.find(e => e.examType === 'final' || e.examType === 'labFinal') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
   return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
@@ -381,7 +397,7 @@ export async function POST(
       const { maxMarks: maxMarksObj, mapping: copoMatrix } = course.coPoMapping;
       
       const midtermExam = exams.find(e => e.examType === 'midterm') || exams.find(e => e.displayName?.toLowerCase().includes('mid'));
-      const finalExam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
+      const finalExam = exams.find(e => e.examType === 'final' || e.examType === 'labFinal') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
       const projectExam = exams.find(e => e.examCategory === 'Project');
 
       const colLetters = ['D', 'E', 'F', 'G', 'H', 'I'];
@@ -426,30 +442,43 @@ export async function POST(
     // hand-filled by the instructor - only these cells have a value the app already knows).
     const courseSummarySheet = workbook.sheet('CourseSummary');
     if (courseSummarySheet) {
-      // G32 "Students who took final exam" - non-withdrawn students with a recorded final-exam mark.
+      // G32 "Students who took final exam" - non-withdrawn students with a nonzero final-exam mark.
       const finalExam = findFinalExam(exams);
       if (finalExam) {
-        const finalTakenCount = students.filter(
-          (s) => !s.withdrawn && getMark(s._id.toString(), finalExam._id.toString(), marks)
-        ).length;
+        const finalTakenCount = students.filter((s) => {
+          if (s.withdrawn) return false;
+          const mark = getMark(s._id.toString(), finalExam._id.toString(), marks);
+          return !!mark && Number(mark.rawMark) > 0;
+        }).length;
         courseSummarySheet.cell('G32').value(finalTakenCount);
       }
 
-      // G39 "Absent Students" and AG23/AG39 "Number of Sessions" (Lectures) - derived from
-      // attendance sessions. Attendance is tracked course-wide, independent of the alias
-      // main/new-code split, so this always uses the full roster rather than `students`.
+      // "Session Planned" (P30/P33/AG23) is a fixed count by course type, not something derived
+      // from attendance data: 24 lecture sessions for Theory, 12 for Lab, per a semester's usual
+      // schedule.
+      const sessionsPlanned = course.courseType === 'Lab' ? 12 : 24;
+      courseSummarySheet.cell('P30').value(sessionsPlanned);
+      courseSummarySheet.cell('P33').value(sessionsPlanned);
+      courseSummarySheet.cell('AG23').value(sessionsPlanned);
+
+      // AG4:AG8 "Number of Sessions" per topic (5 topics) - randomly split sessionsPlanned across
+      // the 5 rows so they sum to exactly the planned total.
+      const topicSessionSplit = randomPartition(sessionsPlanned, 5);
+      ['AG4', 'AG5', 'AG6', 'AG7', 'AG8'].forEach((cell, i) => {
+        courseSummarySheet.cell(cell).value(topicSessionSplit[i]);
+      });
+
+      // G39 "Absent Students" - average number of students absent per session. Attendance is
+      // tracked course-wide, independent of the alias main/new-code split, so this always uses
+      // the full roster rather than `students`.
       const attendanceSessions = await AttendanceSession.find({ courseId });
       if (attendanceSessions.length > 0) {
-        const attendanceByStudent = computeAttendanceByStudent(allStudents, attendanceSessions);
-        const absentStudentCount = allStudents.filter((s) => {
-          const stat = attendanceByStudent.get(String(s._id));
-          if (!stat || stat.total === 0) return false;
-          return stat.present / stat.total < ATTENDANCE_AT_RISK_THRESHOLD;
-        }).length;
-        courseSummarySheet.cell('G39').value(absentStudentCount);
-
-        courseSummarySheet.cell('AG23').value(attendanceSessions.length);
-        courseSummarySheet.cell('AG39').value(attendanceSessions.length);
+        const totalAbsences = attendanceSessions.reduce(
+          (sum, sess: any) => sum + (sess.records?.filter((r: any) => r.status === 'absent').length || 0),
+          0
+        );
+        const avgAbsentPerSession = Math.round(totalAbsences / attendanceSessions.length);
+        courseSummarySheet.cell('G39').value(avgAbsentPerSession);
       }
     }
 

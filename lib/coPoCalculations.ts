@@ -48,7 +48,13 @@ export function findMidtermExam(exams: any[]) {
 }
 
 export function findFinalExam(exams: any[]) {
-  return exams.find((e) => e.examType === 'final') || exams.find((e) => e.displayName?.toLowerCase().includes('final'));
+  // Lab courses use examType 'labFinal' rather than 'final' - treat both as the strict match so
+  // the substring fallback (which could snag an unrelated "Final Presentation"/"Final Report"
+  // custom exam) is never needed for a properly-typed course.
+  return (
+    exams.find((e) => e.examType === 'final' || e.examType === 'labFinal') ||
+    exams.find((e) => e.displayName?.toLowerCase().includes('final'))
+  );
 }
 
 export function findProjectExam(exams: any[]) {
