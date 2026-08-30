@@ -9,6 +9,7 @@ export interface ICourse extends Document {
   section: string;
   classTime?: string;
   classRoom?: string;
+  classDays?: string[]; // Regular weekly class days, e.g. ['Thursday', 'Saturday'] - used to detect missed classes
   numberOfStudents?: number;
   classRepresentativeId?: mongoose.Types.ObjectId | null;
   courseType: 'Theory' | 'Lab';
@@ -75,6 +76,10 @@ const CourseSchema: Schema = new Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    classDays: {
+      type: [String],
+      default: [],
     },
     numberOfStudents: {
       type: Number,

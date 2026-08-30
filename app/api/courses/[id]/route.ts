@@ -88,6 +88,7 @@ export async function PUT(
       projectWeightage,
       classTime,
       classRoom,
+      classDays,
       numberOfStudents,
       classRepresentativeId,
       aliasEnabled,
@@ -161,6 +162,10 @@ export async function PUT(
 
     if (classRoom !== undefined) {
       updateData.classRoom = classRoom;
+    }
+
+    if (classDays !== undefined) {
+      updateData.classDays = Array.isArray(classDays) ? classDays : [];
     }
 
     if (numberOfStudents !== undefined) {

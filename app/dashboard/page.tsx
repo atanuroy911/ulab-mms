@@ -30,6 +30,7 @@ interface Course {
   code: string;
   classTime?: string;
   classRoom?: string;
+  classDays?: string[];
   semester: string;
   year: number;
   section: string;
@@ -105,6 +106,7 @@ export default function Dashboard() {
     alternateCode: '',
     classTime: '',
     classRoom: '',
+    classDays: [] as string[],
   });
   const [addWizardStep, setAddWizardStep] = useState(0);
   const [selectedAdminCourse, setSelectedAdminCourse] = useState<AdminCourse | null>(null);
@@ -266,6 +268,7 @@ export default function Dashboard() {
       alternateCode: '',
       classTime: '',
       classRoom: '',
+      classDays: [],
     });
   };
 
@@ -1085,8 +1088,34 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label>Class Days (optional)</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            classDays: formData.classDays.includes(day)
+                              ? formData.classDays.filter((d) => d !== day)
+                              : [...formData.classDays, day],
+                          })
+                        }
+                        className={`px-2.5 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                          formData.classDays.includes(day)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background hover:bg-accent border-input'
+                        }`}
+                      >
+                        {day.slice(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <p className="text-xs text-muted-foreground -mt-2">
-                  Used to pre-fill the Attendance tab&apos;s class settings. You can change these later.
+                  Used to pre-fill the Attendance tab&apos;s class settings, and to detect missed classes on the attendance calendar. You can change these later.
                 </p>
               </>
             )}
@@ -1149,9 +1178,9 @@ export default function Dashboard() {
                   <div>
                     <div className="text-xs text-muted-foreground">Details</div>
                     <div className="font-medium">{formData.semester} {formData.year} • Section {formData.section} • {formData.courseType}</div>
-                    {(formData.classTime || formData.classRoom) && (
+                    {(formData.classTime || formData.classRoom || formData.classDays.length > 0) && (
                       <div className="text-xs text-muted-foreground mt-1">
-                        {[formData.classTime, formData.classRoom].filter(Boolean).join(' • ')}
+                        {[formData.classTime, formData.classRoom, formData.classDays.map((d) => d.slice(0, 3)).join('/')].filter(Boolean).join(' • ')}
                       </div>
                     )}
                   </div>

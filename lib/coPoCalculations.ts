@@ -38,12 +38,17 @@ function getWeightedContribution(rawMark: number, totalMarks: number, weightage:
   return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
 }
 
+// Prefer an exact examType match first, and only fall back to a name-substring guess when no
+// exam has that exact type. A courses's custom exams often include "Final Presentation",
+// "Final Report", etc. alongside the real, properly-typed Final exam - an OR'd find() over both
+// conditions can pick whichever exam happens to sort first (Exam.find() has no explicit order),
+// silently matching the wrong exam's marks instead.
 export function findMidtermExam(exams: any[]) {
-  return exams.find((e) => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  return exams.find((e) => e.examType === 'midterm') || exams.find((e) => e.displayName?.toLowerCase().includes('mid'));
 }
 
 export function findFinalExam(exams: any[]) {
-  return exams.find((e) => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  return exams.find((e) => e.examType === 'final') || exams.find((e) => e.displayName?.toLowerCase().includes('final'));
 }
 
 export function findProjectExam(exams: any[]) {

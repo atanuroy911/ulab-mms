@@ -112,12 +112,19 @@ interface Mark {
   weightedMark?: number;
 }
 
+interface AttendanceSessionSummary {
+  _id: string;
+  date: string;
+  records: { studentId: string; status: 'present' | 'absent' }[];
+}
+
 interface Course {
   _id: string;
   name: string;
   code: string;
   classTime?: string;
   classRoom?: string;
+  classDays?: string[];
   semester: string;
   year: number;
   courseType: 'Theory' | 'Lab';
@@ -152,6 +159,7 @@ export default function CoursePage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionSummary[]>([]);
 
   // Modal states
   const [showImportStudentsModal, setShowImportStudentsModal] = useState(false);
@@ -431,6 +439,16 @@ export default function CoursePage() {
     if (courseId) {
       fetchCourseData();
     }
+  }, [courseId]);
+
+  // Lightweight, separate from fetchCourseData since attendance sessions aren't needed by most
+  // mutation handlers that call it - just the Overview summary and Attendance tab.
+  useEffect(() => {
+    if (!courseId) return;
+    fetch(`/api/courses/${courseId}/attendance`)
+      .then((res) => res.json())
+      .then((data) => setAttendanceSessions(data.sessions || []))
+      .catch((err) => console.error('Error fetching attendance sessions:', err));
   }, [courseId]);
 
   useEffect(() => {
@@ -2157,6 +2175,7 @@ export default function CoursePage() {
                 students={students}
                 exams={exams}
                 marks={marks}
+                attendanceSessions={attendanceSessions}
                 onImportStudents={() => setShowImportStudentsModal(true)}
                 onAddExam={() => setShowExamModal(true)}
                 onImportCourse={() => setShowImportCourseModal(true)}

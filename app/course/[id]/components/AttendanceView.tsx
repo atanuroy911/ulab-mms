@@ -8,14 +8,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, MoreVertical, Check, X, Search, Wrench, Download, Upload, Shuffle, RotateCcw, UserX, AlertTriangle, ScanText } from 'lucide-react';
-import { format } from 'date-fns';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings, CalendarIcon, CalendarDays, MoreVertical, Check, X, Search, Wrench, Download, Upload, Shuffle, RotateCcw, UserX, AlertTriangle, ScanText } from 'lucide-react';
+import { format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { notify } from '@/app/utils/notifications';
 import { formatClassRoomDisplay } from '@/app/utils/classInfo';
 import BulkOcrAttendanceModal from './BulkOcrAttendanceModal';
+import AttendanceCalendarModal from './AttendanceCalendarModal';
 
 interface AttendanceRecord {
   studentId: string;
@@ -28,8 +29,11 @@ interface AttendanceRecord {
 type CourseSettings = {
   classTime: string;
   classRoom: string;
+  classDays: string[];
   classRepresentativeId: string;
 };
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function SettingsForm({
   students,
@@ -46,6 +50,7 @@ function SettingsForm({
 }) {
   const [classTime, setClassTime] = useState(initialValues.classTime);
   const [classRoom, setClassRoom] = useState(initialValues.classRoom);
+  const [classDays, setClassDays] = useState<string[]>(initialValues.classDays);
   const [repSearch, setRepSearch] = useState('');
   const [classRepresentativeId, setClassRepresentativeId] = useState(initialValues.classRepresentativeId);
   const [saving, setSaving] = useState(false);
@@ -54,10 +59,16 @@ function SettingsForm({
   useEffect(() => {
     setClassTime(initialValues.classTime);
     setClassRoom(initialValues.classRoom);
+    setClassDays(initialValues.classDays);
     setClassRepresentativeId(initialValues.classRepresentativeId);
     const selectedRep = students.find((st) => st._id === initialValues.classRepresentativeId);
     setRepSearch(selectedRep ? selectedRep.name : '');
-  }, [initialValues.classRoom, initialValues.classRepresentativeId, initialValues.classTime, students]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValues.classRoom, initialValues.classRepresentativeId, initialValues.classTime, initialValues.classDays, students]);
+
+  const toggleClassDay = (day: string) => {
+    setClassDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  };
 
   const filtered = students.filter((st) => {
     if (!repSearch) return true;
@@ -71,6 +82,7 @@ function SettingsForm({
       const payload: any = {
         classTime: classTime || '',
         classRoom: classRoom || '',
+        classDays,
         numberOfStudents: students.length,
       };
 
@@ -108,6 +120,27 @@ function SettingsForm({
       <div>
         <label className="text-sm font-medium">Class Room</label>
         <input value={classRoom} onChange={(e) => setClassRoom(e.target.value)} placeholder="e.g. Lab 101" className="w-full rounded-md border px-2 py-2 mt-1" />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Class Days</label>
+        <p className="text-xs text-muted-foreground mb-1.5">Regular weekly class days — used to detect missed classes in the attendance summary and calendar.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {WEEKDAYS.map((day) => (
+            <button
+              key={day}
+              type="button"
+              onClick={() => toggleClassDay(day)}
+              className={`px-2.5 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                classDays.includes(day)
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background hover:bg-accent border-input'
+              }`}
+            >
+              {day.slice(0, 3)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>
@@ -163,6 +196,7 @@ interface CourseInfo {
   code?: string;
   classTime?: string;
   classRoom?: string;
+  classDays?: string[];
   numberOfStudents?: number;
   classRepresentativeId?: string | null;
   aliasEnabled?: boolean;
@@ -254,6 +288,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showBulkOcrModal, setShowBulkOcrModal] = useState(false);
   const [mimicValuePlusLogo, setMimicValuePlusLogo] = useState(true);
@@ -605,6 +640,37 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const settingsMissing = !course?.classTime && !course?.classRoom && !course?.classRepresentativeId;
   const settingsSummary = [course?.classTime, course?.classRoom, `${students.length} students`, course?.classRepresentativeId ? 'Representative set' : ''].filter(Boolean);
 
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [sessions]
+  );
+  const firstClassDate = sortedSessions[0]?.date;
+  const averagePresent = sessions.length > 0
+    ? Math.round((sessions.reduce((sum, s) => sum + countsForSession(s).present, 0) / sessions.length) * 10) / 10
+    : 0;
+
+  // Dates matching the course's configured weekly class days, between the first session and
+  // today, that have no session at all - i.e. classes that appear to have been skipped.
+  const missedClassDates = useMemo(() => {
+    if (!course?.classDays || course.classDays.length === 0 || sortedSessions.length === 0) return [];
+    const sessionDateKeys = new Set(sortedSessions.map((s) => format(new Date(s.date), 'yyyy-MM-dd')));
+    const start = new Date(sortedSessions[0].date);
+    const today = new Date();
+    const missed: Date[] = [];
+    let cursor = start;
+    let guard = 0;
+    while (cursor <= today && guard < 3660) {
+      guard++;
+      const dayName = format(cursor, 'EEEE');
+      const key = format(cursor, 'yyyy-MM-dd');
+      if (course.classDays.includes(dayName) && !sessionDateKeys.has(key)) {
+        missed.push(cursor);
+      }
+      cursor = addDays(cursor, 1);
+    }
+    return missed;
+  }, [course?.classDays, sortedSessions]);
+
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -634,22 +700,14 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             {isActive ? 'Close Session' : 'Open Session'}
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleExportClick}
-            disabled={exportLoading}
-          >
-            {exportLoading ? 'Opening...' : 'Print Attendance'}
-          </Button>
-
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)}>
             <QrCode className="mr-2 h-4 w-4" />
             QR Code
           </Button>
 
-          <Button type="button" variant="outline" onClick={() => setShowManageModal(true)}>
-            Manage class session
+          <Button type="button" variant="outline" onClick={() => setShowCalendarModal(true)}>
+            <CalendarDays className="mr-2 h-4 w-4" />
+            Calendar View
           </Button>
 
           <input
@@ -668,6 +726,15 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportClick} disabled={exportLoading}>
+                <Download />
+                {exportLoading ? 'Opening...' : 'Print Attendance'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowManageModal(true)}>
+                <Settings />
+                Manage Class Session
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowBulkOcrModal(true)}>
                 <ScanText />
                 Add Attendance (Paste / Screenshot)
@@ -759,6 +826,39 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             </Button>
           </div>
         )
+      )}
+
+      {!loading && sessions.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-lg border bg-muted/10 px-4 py-3">
+            <div className="text-xs text-muted-foreground">First Class</div>
+            <div className="text-lg font-semibold mt-0.5">{firstClassDate ? format(new Date(firstClassDate), 'MMM d, yyyy') : '—'}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/10 px-4 py-3">
+            <div className="text-xs text-muted-foreground">Total Sessions</div>
+            <div className="text-lg font-semibold mt-0.5">{sessions.length}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/10 px-4 py-3">
+            <div className="text-xs text-muted-foreground">Avg. Attendees</div>
+            <div className="text-lg font-semibold mt-0.5">{averagePresent} <span className="text-xs font-normal text-muted-foreground">/ {students.length}</span></div>
+          </div>
+          <div className={`rounded-lg border px-4 py-3 ${missedClassDates.length > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-muted/10'}`}>
+            <div className="text-xs text-muted-foreground">Missed Classes</div>
+            {course?.classDays && course.classDays.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowCalendarModal(true)}
+                className={`text-lg font-semibold mt-0.5 hover:underline ${missedClassDates.length > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}
+              >
+                {missedClassDates.length === 0 ? 'None' : missedClassDates.length}
+              </button>
+            ) : (
+              <button type="button" onClick={() => setShowSettingsModal(true)} className="text-xs text-primary hover:underline mt-1.5 block">
+                Set class days to detect
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {!loading && (
@@ -1049,12 +1149,13 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             <DialogTitle>Class Settings</DialogTitle>
           </DialogHeader>
           <SettingsForm
-            key={`${course?.classTime || ''}|${course?.classRoom || ''}|${course?.classRepresentativeId || ''}|${students.length}`}
+            key={`${course?.classTime || ''}|${course?.classRoom || ''}|${(course?.classDays || []).join(',')}|${course?.classRepresentativeId || ''}|${students.length}`}
             students={students}
             courseId={courseId}
             initialValues={{
               classTime: course?.classTime || '',
               classRoom: course?.classRoom || '',
+              classDays: course?.classDays || [],
               classRepresentativeId: course?.classRepresentativeId ? String(course.classRepresentativeId) : '',
             }}
             onSaved={(savedCourse) => {
@@ -1076,6 +1177,15 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
         students={students}
         activeSession={activeSession}
         onSaved={fetchAll}
+      />
+
+      <AttendanceCalendarModal
+        isOpen={showCalendarModal}
+        onClose={() => setShowCalendarModal(false)}
+        sessions={sessions}
+        students={students}
+        onUpdateStatus={updateStudentStatus}
+        classDays={course?.classDays || []}
       />
 
       <Dialog open={showExportWarningModal} onOpenChange={setShowExportWarningModal}>

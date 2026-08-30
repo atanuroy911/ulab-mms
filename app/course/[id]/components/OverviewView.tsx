@@ -31,9 +31,11 @@ import {
   ChevronDown,
   Database,
   FileSpreadsheet,
+  CalendarDays,
 } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
+import { format } from 'date-fns';
 
 interface Course {
   _id: string;
@@ -48,12 +50,21 @@ interface Course {
   quizWeightage?: number | string;
   assignmentWeightage?: number | string;
   projectWeightage?: number | string;
+  classDays?: string[];
 }
+
+interface AttendanceSessionSummary {
+  _id: string;
+  date: string;
+  records: { studentId: string; status: 'present' | 'absent' }[];
+}
+
 interface OverviewViewProps {
   course: Course;
   students: any[];
   exams: any[];
   marks: any[];
+  attendanceSessions?: AttendanceSessionSummary[];
   calculateFinalGrade: (studentId: string) => { total: number };
   onImportStudents: () => void;
   onAddExam: () => void;
@@ -77,6 +88,7 @@ export default function OverviewView({
   students,
   exams,
   marks,
+  attendanceSessions = [],
   calculateFinalGrade,
   onImportStudents,
   onAddExam,
@@ -178,6 +190,13 @@ export default function OverviewView({
     ? Math.round((marks.length / (students.length * exams.length)) * 100)
     : 0;
 
+  const firstClassDate = attendanceSessions.length > 0
+    ? attendanceSessions.reduce((earliest, s) => (new Date(s.date) < earliest ? new Date(s.date) : earliest), new Date(attendanceSessions[0].date))
+    : null;
+  const avgAttendees = attendanceSessions.length > 0
+    ? Math.round((attendanceSessions.reduce((sum, s) => sum + s.records.filter((r) => r.status === 'present').length, 0) / attendanceSessions.length) * 10) / 10
+    : null;
+
   const STAT_CARDS = [
     {
       label: 'Students',
@@ -248,6 +267,25 @@ export default function OverviewView({
           </CardContent>
         </Card>
       </div>
+
+      {attendanceSessions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-6 rounded-lg border bg-muted/10 px-5 py-3 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-backwards">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">First Class:</span>
+            <span className="text-sm font-semibold">{firstClassDate ? format(firstClassDate, 'MMM d, yyyy') : '—'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Avg. Attendees:</span>
+            <span className="text-sm font-semibold">{avgAttendees ?? '—'} <span className="text-xs font-normal text-muted-foreground">/ {students.length}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Total Sessions:</span>
+            <span className="text-sm font-semibold">{attendanceSessions.length}</span>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <Card className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-backwards">

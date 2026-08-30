@@ -43,14 +43,14 @@ function getMarkValue(student: any, exams: any[], marks: any[], category: string
 }
 
 function getMarkValueForMid(student: any, exams: any[], marks: any[]) {
-  const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  const exam = exams.find(e => e.examType === 'midterm') || exams.find(e => e.displayName?.toLowerCase().includes('mid'));
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
   return mark ? mark.rawMark : 0;
 }
 
 function getMarkValueForFinal(student: any, exams: any[], marks: any[]) {
-  const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  const exam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
   return mark ? mark.rawMark : 0;
@@ -62,12 +62,12 @@ function getExamWeight(exams: any[], category: string) {
 }
 
 function getMidtermWeight(exams: any[]) {
-  const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  const exam = exams.find(e => e.examType === 'midterm') || exams.find(e => e.displayName?.toLowerCase().includes('mid'));
   return exam ? (exam.weightage || 0) : 0;
 }
 
 function getFinalWeight(exams: any[]) {
-  const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  const exam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
   return exam ? (exam.weightage || 0) : 0;
 }
 
@@ -77,14 +77,14 @@ function getExamPercentage(rawMark: number, totalMarks: number) {
 }
 
 function getCOMarkValueForMid(student: any, exams: any[], marks: any[], coIndex: number) {
-  const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  const exam = exams.find(e => e.examType === 'midterm') || exams.find(e => e.displayName?.toLowerCase().includes('mid'));
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
   return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
 }
 
 function getCOMarkValueForFinal(student: any, exams: any[], marks: any[], coIndex: number) {
-  const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  const exam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
   return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
@@ -380,8 +380,8 @@ export async function POST(
     if (copoSheet && course.coPoMapping) {
       const { maxMarks: maxMarksObj, mapping: copoMatrix } = course.coPoMapping;
       
-      const midtermExam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
-      const finalExam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+      const midtermExam = exams.find(e => e.examType === 'midterm') || exams.find(e => e.displayName?.toLowerCase().includes('mid'));
+      const finalExam = exams.find(e => e.examType === 'final') || exams.find(e => e.displayName?.toLowerCase().includes('final'));
       const projectExam = exams.find(e => e.examCategory === 'Project');
 
       const colLetters = ['D', 'E', 'F', 'G', 'H', 'I'];

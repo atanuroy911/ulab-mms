@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, code, semester, year, section, courseType, aliasEnabled, alternateCode, classTime, classRoom } = await request.json();
+    const { name, code, semester, year, section, courseType, aliasEnabled, alternateCode, classTime, classRoom, classDays } = await request.json();
 
     // Validation
     if (!name || !code || !semester || !year || !section || !courseType) {
@@ -154,6 +154,7 @@ export async function POST(request: NextRequest) {
       projectWeightage: courseType === 'Lab' ? 40 : 25,
       classTime: classTime || '',
       classRoom: classRoom || '',
+      classDays: Array.isArray(classDays) ? classDays : [],
       userId: new mongoose.Types.ObjectId(userObjectId),
     });
 
