@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { ExternalLink, Play, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { calculateLetterGrade, DEFAULT_GRADING_SCALE } from '@/app/utils/grading';
+import { calculateLetterGrade } from '@/app/utils/grading';
+import { calculateFinalGradeTotal } from '@/lib/finalGrade';
 
 interface UrmsSubmitModalProps {
   open: boolean;
@@ -30,25 +31,9 @@ export default function UrmsSubmitModal({
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<{ studentId: string; status: 'success' | 'error'; message?: string }[]>([]);
 
-  // We need to calculate the final grade for each student before submitting
   const getStudentGrade = (studentId: string) => {
-    // For simplicity, we calculate the total weighted mark of the student
-    let totalScore = 0;
-    
-    // First, map marks to exams
-    const studentMarks = marks.filter(m => m.studentId === studentId);
-    
-    // Logic from the app to calculate total marks...
-    studentMarks.forEach(mark => {
-      const exam = exams.find(e => e._id === mark.examId);
-      if (exam && mark.weightedMark !== undefined) {
-        totalScore += mark.weightedMark;
-      }
-    });
-    
-    // For now we use the DEFAULT_GRADING_SCALE to get letter grade
-    const gradingScale = course.gradingScale ? JSON.parse(course.gradingScale) : DEFAULT_GRADING_SCALE;
-    return calculateLetterGrade(totalScore, gradingScale);
+    const totalScore = calculateFinalGradeTotal(studentId, exams, marks, course || {});
+    return calculateLetterGrade(totalScore, course?.gradingScale);
   };
 
   const handleOpenUrms = () => {

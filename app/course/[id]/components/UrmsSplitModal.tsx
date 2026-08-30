@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { calculateLetterGrade, DEFAULT_GRADING_SCALE } from '@/app/utils/grading';
+import { calculateLetterGrade } from '@/app/utils/grading';
+import { calculateFinalGradeTotal } from '@/lib/finalGrade';
 import { Copy, Check, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -27,16 +28,7 @@ export default function UrmsSplitModal({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const getStudentGrade = (studentId: string) => {
-    let totalScore = 0;
-    const studentMarks = marks.filter(m => m.studentId === studentId);
-    
-    studentMarks.forEach(mark => {
-      const exam = exams.find(e => e._id === mark.examId);
-      if (exam && mark.weightedMark !== undefined) {
-        totalScore += mark.weightedMark;
-      }
-    });
-    
+    const totalScore = calculateFinalGradeTotal(studentId, exams, marks, course || {});
     return calculateLetterGrade(totalScore, course?.gradingScale);
   };
 

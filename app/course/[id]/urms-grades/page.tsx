@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { calculateLetterGrade, DEFAULT_GRADING_SCALE } from '@/app/utils/grading';
+import { calculateLetterGrade } from '@/app/utils/grading';
+import { calculateFinalGradeTotal } from '@/lib/finalGrade';
 import { Button } from '@/components/ui/button';
 import { Copy, Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -43,16 +44,7 @@ export default function UrmsGradesPage() {
   };
 
   const getStudentGrade = (studentId: string) => {
-    let totalScore = 0;
-    const studentMarks = marks.filter(m => m.studentId === studentId);
-    
-    studentMarks.forEach(mark => {
-      const exam = exams.find(e => e._id === mark.examId);
-      if (exam && mark.weightedMark !== undefined) {
-        totalScore += mark.weightedMark;
-      }
-    });
-
+    const totalScore = calculateFinalGradeTotal(studentId, exams, marks, course || {});
     return calculateLetterGrade(totalScore, course?.gradingScale);
   };
 
