@@ -14,7 +14,7 @@ import { Loader2, QrCode, RefreshCw, Trash2, Copy, Check, Users, ExternalLink, S
 import { toast } from 'sonner';
 import { calculateProjectMark } from '@/app/utils/projectRubric';
 import type { IRubricScores } from '@/app/utils/projectRubric';
-import ProjectCoMarksModal from './ProjectCoMarksModal';
+import ProjectCoMarksModal, { distributeEvenly } from './ProjectCoMarksModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -165,6 +165,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
 
   // Per-group title editing
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [savingTitle, setSavingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
   // Group delete
@@ -409,6 +410,7 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
   };
 
   const handleSaveTitle = async (groupId: string) => {
+    setSavingTitle(true);
     try {
       const res = await fetch(`/api/courses/${courseId}/project`, {
         method: 'PATCH',
@@ -419,10 +421,30 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
       if (res.ok) { setState(data); setEditingTitle(null); toast.success('Title updated'); }
       else toast.error(data.error || 'Failed to update title');
     } catch { toast.error('Network error'); }
+    finally { setSavingTitle(false); }
   };
 
   const handleOpenCoMarks = (group: GroupEntry) => {
     setEditingCoMarks(group._id);
+  };
+
+  // All groups live inside a single ProjectGroup document, so firing these saves concurrently
+  // (e.g. via Promise.all or a bare forEach) races on that document's version and throws
+  // Mongoose VersionErrors - they must run one at a time.
+  const handleAutoDistributeAllCoMarks = async () => {
+    for (const group of state.groups) {
+      const distributed = distributeEvenly(getGroupCoTarget(group), projectNumberOfCOs, projectCoMaxMarks);
+      await handleSaveCoMarks(group._id, distributed);
+    }
+  };
+
+  const handleResetAllCoMarks = async () => {
+    const scoredGroups = state.groups.filter(g => g.coMarks && g.coMarks.some(m => m > 0));
+    if (scoredGroups.length === 0) return;
+    if (!confirm(`Reset Combined CO marks for all ${scoredGroups.length} scored group(s)?`)) return;
+    for (const group of scoredGroups) {
+      await handleSaveCoMarks(group._id, []);
+    }
   };
 
   /** This group's total obtained marks/points to distribute across its COs — the raw sum of its
@@ -902,7 +924,32 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                       ))}
                       {projectNumberOfCOs > 0 && (
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[160px] whitespace-nowrap">
-                          Combined COs
+                          <div className="flex items-center justify-between gap-1">
+                            <span>Combined COs</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors normal-case shrink-0"
+                                  aria-label="Options for Combined COs column"
+                                >
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56 normal-case font-normal">
+                                <DropdownMenuItem onClick={handleAutoDistributeAllCoMarks}>
+                                  <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                                  Auto distribute all groups
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={handleResetAllCoMarks}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 mr-2" />
+                                  Reset marks for all groups
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </th>
                       )}
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap">Status</th>
@@ -927,7 +974,9 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                                       onChange={e => setTitleDraft(e.target.value)}
                                       onKeyDown={e => e.key === 'Enter' && handleSaveTitle(group._id)}
                                       className="rounded-md border bg-background px-2 py-1 text-xs w-32" placeholder="Project title..." />
-                                    <Button size="sm" className="h-7 px-2 text-xs" onClick={() => handleSaveTitle(group._id)}>Save</Button>
+                                    <Button size="sm" className="h-7 px-2 text-xs" disabled={savingTitle} onClick={() => handleSaveTitle(group._id)}>
+                                      {savingTitle ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+                                    </Button>
                                   </div>
                                 ) : (
                                   <button onClick={() => { setEditingTitle(group._id); setTitleDraft(group.projectTitle || ''); }}
@@ -938,9 +987,17 @@ export default function ProjectView({ courseId, students, exams, examFilter, tit
                                   </button>
                                 )}
                                 <div className="text-xs text-muted-foreground truncate mt-0.5">
-                                  {group.studentIds.length === 0
-                                    ? 'No members'
-                                    : group.studentIds.map(s => s.name).join(', ')}
+                                  {group.studentIds.length === 0 ? (
+                                    'No members'
+                                  ) : (
+                                    group.studentIds.map((s, i) => (
+                                      <span key={s._id} className={s.withdrawn ? 'text-amber-700 dark:text-yellow-400 font-semibold' : undefined}>
+                                        {i > 0 && ', '}
+                                        {s.name}
+                                        {s.withdrawn && <span className="font-bold"> (W)</span>}
+                                      </span>
+                                    ))
+                                  )}
                                 </div>
                                 <Button
                                   size="sm"

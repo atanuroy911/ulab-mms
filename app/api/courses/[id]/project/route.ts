@@ -25,7 +25,7 @@ export async function GET(
     }
 
     let projectGroup = await ProjectGroup.findOne({ courseId: id })
-      .populate('groups.studentIds', 'name studentId');
+      .populate('groups.studentIds', 'name studentId withdrawn');
 
     if (!projectGroup) {
       return NextResponse.json({
@@ -82,7 +82,7 @@ export async function POST(
     }
 
     await projectGroup.save();
-    await projectGroup.populate('groups.studentIds', 'name studentId');
+    await projectGroup.populate('groups.studentIds', 'name studentId withdrawn');
 
     return NextResponse.json(projectGroup);
   } catch (error: any) {
@@ -113,6 +113,23 @@ export async function PATCH(
     const body = await req.json();
     const { groupId, projectTitle, rubricScores, examRubricScores, coMarks, maxMembersPerGroup } = body;
 
+    // All of a course's groups live inside one ProjectGroup document, so bulk actions (or just two
+    // requests landing close together) can race on its version and throw a Mongoose VersionError.
+    // Re-fetching a fresh copy and reapplying the same mutation is safe here since the mutation is
+    // derived entirely from the request body, not from any state read before this attempt.
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        return await applyPatch();
+      } catch (error: any) {
+        const isVersionError = error?.name === 'VersionError';
+        if (!isVersionError || attempt === MAX_ATTEMPTS) throw error;
+      }
+    }
+    // Unreachable - the loop always returns or throws - but keeps TypeScript happy.
+    return NextResponse.json({ error: 'Failed to save after retries' }, { status: 500 });
+
+    async function applyPatch() {
     const projectGroup = await ProjectGroup.findOne({ courseId: id });
     if (!projectGroup) {
       return NextResponse.json({ error: 'Project session not found' }, { status: 404 });
@@ -195,9 +212,10 @@ export async function PATCH(
     }
 
     await projectGroup.save();
-    await projectGroup.populate('groups.studentIds', 'name studentId');
+    await projectGroup.populate('groups.studentIds', 'name studentId withdrawn');
 
     return NextResponse.json(projectGroup);
+    }
   } catch (error: any) {
     console.error('PATCH /api/courses/[id]/project error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });

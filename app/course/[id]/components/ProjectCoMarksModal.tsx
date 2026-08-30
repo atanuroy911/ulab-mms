@@ -25,7 +25,7 @@ interface ProjectCoMarksModalProps {
 /** Evenly distributes `total` across `n` COs, respecting each CO's configured max (0/undefined =
  *  no cap). COs that would overflow their max are pinned to it and the leftover is re-spread
  *  across the remaining COs (classic "water-filling"), so a max never gets exceeded. */
-function distributeEvenly(total: number, n: number, maxMarks: number[] = []): number[] {
+export function distributeEvenly(total: number, n: number, maxMarks: number[] = []): number[] {
   const marks = new Array(n).fill(0);
   if (n <= 0 || total <= 0) return marks;
 
