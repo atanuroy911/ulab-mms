@@ -215,10 +215,13 @@ export async function POST(request: NextRequest) {
     // Create or update mark
     const weightedMark = calculateWeightedMark(rawMark, exam.totalMarks, exam.weightage);
 
+    // courseId is derived from the (ownership-verified) exam rather than trusted from the
+    // request body - a client-supplied courseId could otherwise file a mark against a
+    // different course than the exam it belongs to, corrupting per-course reports.
     const markData: any = {
       studentId,
       examId,
-      courseId,
+      courseId: exam.courseId,
       userId: session.user.id,
       rawMark,
       weightedMark,
