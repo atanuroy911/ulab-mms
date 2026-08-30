@@ -72,6 +72,14 @@ export default function MarksStatisticsModal({ isOpen, onClose, students, exams,
                       </div>
                       {cat.lowest && <EntryLine entry={cat.lowest} tone="low" />}
                     </div>
+                    {cat.lowestNonZero && cat.lowest && cat.lowestNonZero.student._id !== cat.lowest.student._id && (
+                      <div>
+                        <div className="flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400 mb-1">
+                          <TrendingDown className="w-3.5 h-3.5" /> Lowest (non-zero)
+                        </div>
+                        <EntryLine entry={cat.lowestNonZero} tone="low" />
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-center gap-1 text-xs font-medium text-primary mb-1">
                         <Target className="w-3.5 h-3.5" /> Closest to average

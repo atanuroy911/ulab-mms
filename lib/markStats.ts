@@ -34,6 +34,7 @@ export interface CategoryStats {
   average: number | null;
   highest: CategoryStatEntry | null;
   lowest: CategoryStatEntry | null;
+  lowestNonZero: CategoryStatEntry | null;
   closestToAverage: CategoryStatEntry | null;
 }
 
@@ -67,23 +68,27 @@ function computeCategoryStats(
   }
 
   if (entries.length === 0) {
-    return { key, label, examCount: categoryExams.length, entries: [], average: null, highest: null, lowest: null, closestToAverage: null };
+    return { key, label, examCount: categoryExams.length, entries: [], average: null, highest: null, lowest: null, lowestNonZero: null, closestToAverage: null };
   }
 
   const average = entries.reduce((sum, e) => sum + e.percentage, 0) / entries.length;
   const highest = entries.reduce((a, b) => (b.percentage > a.percentage ? b : a));
   const lowest = entries.reduce((a, b) => (b.percentage < a.percentage ? b : a));
+  const nonZeroEntries = entries.filter(e => e.obtained > 0);
+  const lowestNonZero = nonZeroEntries.length > 0
+    ? nonZeroEntries.reduce((a, b) => (b.percentage < a.percentage ? b : a))
+    : null;
   const closestToAverage = entries.reduce((a, b) =>
     Math.abs(b.percentage - average) < Math.abs(a.percentage - average) ? b : a
   );
 
-  return { key, label, examCount: categoryExams.length, entries, average, highest, lowest, closestToAverage };
+  return { key, label, examCount: categoryExams.length, entries, average, highest, lowest, lowestNonZero, closestToAverage };
 }
 
 export function computeAllCategoryStats(exams: StatExam[], students: StatStudent[], marks: StatMark[]): CategoryStats[] {
   const categories: { key: CategoryStats['key']; label: string; exams: StatExam[] }[] = [
     { key: 'midterm', label: 'Midterm', exams: exams.filter(e => e.examType === 'midterm') },
-    { key: 'final', label: 'Final', exams: exams.filter(e => e.examType === 'final') },
+    { key: 'final', label: 'Final', exams: exams.filter(e => e.examType === 'final' || e.examType === 'labFinal') },
     { key: 'project', label: 'Project / OEL', exams: exams.filter(e => e.examCategory === 'Project') },
   ];
 
