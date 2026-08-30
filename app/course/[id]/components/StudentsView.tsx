@@ -26,6 +26,7 @@ interface Exam {
   totalMarks: number;
   weightage: number;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
+  examType?: string;
 }
 
 interface Mark {
@@ -147,7 +148,14 @@ export default function StudentsView({
   const [deletingBulkStudents, setDeletingBulkStudents] = useState(false);
   const [bulkActionPending, setBulkActionPending] = useState(false);
 
-  const [aggregateModal, setAggregateModal] = useState<{ student: Student; category: 'Quiz' | 'Assignment' | 'Project' } | null>(null);
+  const [aggregateModal, setAggregateModal] = useState<{
+    student: Student;
+    categoryLabel: string;
+    categoryExams: Exam[];
+    aggregationMethod: 'average' | 'best' | 'sum' | 'direct';
+    weightage: number;
+    aggregatedValue: number | null;
+  } | null>(null);
 
   const toggleStudentSelection = (studentId: string) => {
     const newSelected = new Set(selectedStudentIds);
@@ -165,6 +173,34 @@ export default function StudentsView({
         s.name.toLowerCase().includes(search.toLowerCase())
       )
     : students;
+
+  // Exams that contribute directly (no Quiz/Assignment/Project-style aggregation) - grouped so the
+  // compact table can still surface Midterm/Final/Attendance/Class Performance at a glance without
+  // going back to one column per exam.
+  const midtermExams = exams.filter(e => e.examType === 'midterm');
+  const finalExams = exams.filter(e => e.examType === 'final' || e.examType === 'labFinal');
+  const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
+  const classPerformanceExams = exams.filter(e => e.examCategory === 'ClassPerformance');
+  const otherExams = exams.filter(e => {
+    if (['Quiz', 'Assignment', 'Project', 'Attendance', 'ClassPerformance'].includes(e.examCategory || '')) return false;
+    if (e.examType === 'midterm' || e.examType === 'final' || e.examType === 'labFinal') return false;
+    return true;
+  });
+
+  const getCategoryContribution = (studentId: string, categoryExams: Exam[]) => {
+    let sum = 0;
+    let weightSum = 0;
+    let enteredCount = 0;
+    for (const exam of categoryExams) {
+      weightSum += exam.weightage;
+      const mark = getMark(studentId, exam._id);
+      if (mark) {
+        enteredCount++;
+        sum += mark.weightedMark ?? (exam.totalMarks > 0 ? (mark.rawMark / exam.totalMarks) * exam.weightage : 0);
+      }
+    }
+    return { sum, weightSum, enteredCount };
+  };
 
   const toggleAllSelection = () => {
     if (selectedStudentIds.size === filteredStudents.length && filteredStudents.length > 0) {
@@ -385,6 +421,12 @@ export default function StudentsView({
                 </th>
                 <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider sticky left-[40px] z-30 bg-muted border-r w-[50px] align-middle">#</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider sticky left-[90px] z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[220px] align-middle">Student</th>
+                {midtermExams.length > 0 && (
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle">Midterm</th>
+                )}
+                {finalExams.length > 0 && (
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle">Final</th>
+                )}
                 {hasQuizzes && (
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap align-middle" title={`Quiz - ${course?.quizAggregation === 'best' ? 'best' : 'average'}, out of ${course?.quizWeightage || 0}%`}>
                     Quiz
@@ -400,6 +442,15 @@ export default function StudentsView({
                     {course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'}
                   </th>
                 )}
+                {classPerformanceExams.length > 0 && (
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap align-middle">Performance</th>
+                )}
+                {attendanceExams.length > 0 && (
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[90px] whitespace-nowrap align-middle">Attendance</th>
+                )}
+                {otherExams.length > 0 && (
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle">Others</th>
+                )}
                 <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[140px] whitespace-nowrap align-middle border-l-2 border-border">Grade</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] whitespace-nowrap align-middle sticky right-0 z-30 border-l bg-muted">Actions</th>
               </tr>
@@ -407,7 +458,17 @@ export default function StudentsView({
             <tbody className="divide-y divide-border/50">
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td
+                    colSpan={
+                      7 +
+                      (midtermExams.length > 0 ? 1 : 0) +
+                      (finalExams.length > 0 ? 1 : 0) +
+                      (classPerformanceExams.length > 0 ? 1 : 0) +
+                      (attendanceExams.length > 0 ? 1 : 0) +
+                      (otherExams.length > 0 ? 1 : 0)
+                    }
+                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                  >
                     No students match &quot;{search}&quot;
                   </td>
                 </tr>
@@ -445,13 +506,49 @@ export default function StudentsView({
                       )}
                     </button>
                   </td>
+                  {midtermExams.length > 0 && (
+                    <td className="px-3 py-2 text-sm">
+                      {(() => {
+                        const { sum, weightSum, enteredCount } = getCategoryContribution(student._id, midtermExams);
+                        if (enteredCount === 0) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: 'Midterm', categoryExams: midtermExams, aggregationMethod: 'direct', weightage: weightSum, aggregatedValue: sum })}
+                            className="font-medium hover:underline"
+                          >
+                            {sum.toFixed(1)}<span className="text-muted-foreground">/{weightSum}</span>
+                          </button>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {finalExams.length > 0 && (
+                    <td className="px-3 py-2 text-sm">
+                      {(() => {
+                        const { sum, weightSum, enteredCount } = getCategoryContribution(student._id, finalExams);
+                        if (enteredCount === 0) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: 'Final', categoryExams: finalExams, aggregationMethod: 'direct', weightage: weightSum, aggregatedValue: sum })}
+                            className="font-medium hover:underline"
+                          >
+                            {sum.toFixed(1)}<span className="text-muted-foreground">/{weightSum}</span>
+                          </button>
+                        );
+                      })()}
+                    </td>
+                  )}
                   {hasQuizzes && (
                     <td className="px-3 py-2 text-sm">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Quiz');
                         if (!aggMark) return <span className="text-muted-foreground">—</span>;
+                        const quizExams = exams.filter(e => e.examCategory === 'Quiz');
                         return (
-                          <button onClick={() => setAggregateModal({ student, category: 'Quiz' })} className="font-medium hover:underline">
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: 'Quiz', categoryExams: quizExams, aggregationMethod: course?.quizAggregation === 'best' ? 'best' : 'average', weightage: course?.quizWeightage || 0, aggregatedValue: aggMark.rawMark })}
+                            className="font-medium hover:underline"
+                          >
                             {aggMark.rawMark.toFixed(1)}<span className="text-muted-foreground">/{course?.quizWeightage || 0}</span>
                           </button>
                         );
@@ -463,8 +560,12 @@ export default function StudentsView({
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Assignment');
                         if (!aggMark) return <span className="text-muted-foreground">—</span>;
+                        const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
                         return (
-                          <button onClick={() => setAggregateModal({ student, category: 'Assignment' })} className="font-medium hover:underline">
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: course?.courseType === 'Lab' ? 'CLA' : 'Assignment', categoryExams: assignmentExams, aggregationMethod: course?.assignmentAggregation || 'average', weightage: course?.assignmentWeightage || 0, aggregatedValue: aggMark.rawMark })}
+                            className="font-medium hover:underline"
+                          >
                             {aggMark.rawMark.toFixed(1)}<span className="text-muted-foreground">/{course?.assignmentWeightage || 0}</span>
                           </button>
                         );
@@ -476,9 +577,61 @@ export default function StudentsView({
                       {(() => {
                         const aggMark = getProjectAggregatedMark(student._id);
                         if (!aggMark) return <span className="text-muted-foreground">—</span>;
+                        const projectExams = exams.filter(e => e.examCategory === 'Project');
                         return (
-                          <button onClick={() => setAggregateModal({ student, category: 'Project' })} className="font-medium hover:underline">
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project', categoryExams: projectExams, aggregationMethod: 'sum', weightage: course?.projectWeightage || 0, aggregatedValue: aggMark.rawMark })}
+                            className="font-medium hover:underline"
+                          >
                             {aggMark.rawMark.toFixed(1)}<span className="text-muted-foreground">/{course?.projectWeightage || 0}</span>
+                          </button>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {classPerformanceExams.length > 0 && (
+                    <td className="px-3 py-2 text-sm">
+                      {(() => {
+                        const { sum, weightSum, enteredCount } = getCategoryContribution(student._id, classPerformanceExams);
+                        if (enteredCount === 0) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: 'Performance', categoryExams: classPerformanceExams, aggregationMethod: 'direct', weightage: weightSum, aggregatedValue: sum })}
+                            className="font-medium hover:underline"
+                          >
+                            {sum.toFixed(1)}<span className="text-muted-foreground">/{weightSum}</span>
+                          </button>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {attendanceExams.length > 0 && (
+                    <td className="px-3 py-2 text-sm">
+                      {(() => {
+                        const { sum, weightSum, enteredCount } = getCategoryContribution(student._id, attendanceExams);
+                        if (enteredCount === 0) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: 'Attendance', categoryExams: attendanceExams, aggregationMethod: 'direct', weightage: weightSum, aggregatedValue: sum })}
+                            className="font-medium hover:underline"
+                          >
+                            {sum.toFixed(1)}<span className="text-muted-foreground">/{weightSum}</span>
+                          </button>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {otherExams.length > 0 && (
+                    <td className="px-3 py-2 text-sm">
+                      {(() => {
+                        const { sum, weightSum, enteredCount } = getCategoryContribution(student._id, otherExams);
+                        if (enteredCount === 0) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            onClick={() => setAggregateModal({ student, categoryLabel: 'Others', categoryExams: otherExams, aggregationMethod: 'direct', weightage: weightSum, aggregatedValue: sum })}
+                            className="font-medium hover:underline"
+                          >
+                            {sum.toFixed(1)}<span className="text-muted-foreground">/{weightSum}</span>
                           </button>
                         );
                       })()}
@@ -752,39 +905,12 @@ export default function StudentsView({
         isOpen={!!aggregateModal}
         onClose={() => setAggregateModal(null)}
         student={aggregateModal?.student ?? null}
-        categoryLabel={
-          aggregateModal?.category === 'Quiz'
-            ? 'Quiz'
-            : aggregateModal?.category === 'Assignment'
-            ? (course?.courseType === 'Lab' ? 'CLA' : 'Assignment')
-            : (course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project')
-        }
-        exams={aggregateModal ? exams.filter(e => e.examCategory === aggregateModal.category) : []}
+        categoryLabel={aggregateModal?.categoryLabel ?? ''}
+        exams={aggregateModal?.categoryExams ?? []}
         marks={marks}
-        aggregationMethod={
-          aggregateModal?.category === 'Quiz'
-            ? (course?.quizAggregation === 'best' ? 'best' : 'average')
-            : aggregateModal?.category === 'Assignment'
-            ? (course?.assignmentAggregation || 'average')
-            : 'sum'
-        }
-        weightage={
-          aggregateModal?.category === 'Quiz'
-            ? course?.quizWeightage || 0
-            : aggregateModal?.category === 'Assignment'
-            ? course?.assignmentWeightage || 0
-            : course?.projectWeightage || 0
-        }
-        aggregatedValue={
-          !aggregateModal
-            ? null
-            : aggregateModal.category === 'Project'
-            ? getProjectAggregatedMark(aggregateModal.student._id)?.rawMark ?? null
-            : (() => {
-                const aggMark = getAggregatedMark(aggregateModal.student._id, aggregateModal.category as 'Quiz' | 'Assignment');
-                return aggMark ? aggMark.rawMark : null;
-              })()
-        }
+        aggregationMethod={aggregateModal?.aggregationMethod ?? 'direct'}
+        weightage={aggregateModal?.weightage ?? 0}
+        aggregatedValue={aggregateModal?.aggregatedValue ?? null}
       />
     </div>
   );
