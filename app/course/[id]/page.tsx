@@ -4631,6 +4631,7 @@ export default function CoursePage() {
         quizAggregation: course?.quizAggregation,
         assignmentWeightage: course?.assignmentWeightage,
         assignmentAggregation: course?.assignmentAggregation,
+        projectWeightage: course?.projectWeightage,
         gradingScale: course?.gradingScale,
       }}
       calculateFinalGrade={calculateFinalGrade}

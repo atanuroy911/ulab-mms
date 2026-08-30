@@ -14,7 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward, Users, ClipboardList, LayoutGrid, List as ListIcon, Clock, MapPin } from 'lucide-react';
+import { formatClassRoomDisplay } from '@/app/utils/classInfo';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import { CourseCombobox } from '@/app/components/CourseCombobox';
@@ -39,6 +40,8 @@ interface Course {
   createdAt: string;
   aliasEnabled?: boolean;
   alternateCode?: string;
+  studentCount?: number;
+  examCount?: number;
 }
 
 interface AdminCourse {
@@ -81,6 +84,26 @@ export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [viewMode, setViewModeState] = useState<'card' | 'list'>('card');
+  const setViewMode = (mode: 'card' | 'list') => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem('dashboardCourseViewMode', mode);
+    } catch {
+      // localStorage can throw in private-browsing/blocked-storage contexts - view just won't persist.
+    }
+  };
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('dashboardCourseViewMode');
+      if (stored === 'card' || stored === 'list') {
+        setViewModeState(stored);
+      }
+    } catch {
+      // ignore - default view stands
+    }
+  }, []);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -743,7 +766,29 @@ export default function Dashboard() {
               Manage your courses and student marks
             </p>
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap items-center">
+            <div className="inline-flex rounded-md border p-0.5">
+              <Button
+                variant={viewMode === 'card' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 px-2.5"
+                onClick={() => setViewMode('card')}
+                title="Card view"
+                aria-label="Card view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 px-2.5"
+                onClick={() => setViewMode('list')}
+                title="List view"
+                aria-label="List view"
+              >
+                <ListIcon className="h-4 w-4" />
+              </Button>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -781,6 +826,102 @@ export default function Dashboard() {
               </Button>
             </CardContent>
           </Card>
+        ) : viewMode === 'list' ? (
+          <div className="rounded-lg border divide-y overflow-hidden">
+            {courses.map((course) => (
+              <div
+                key={course._id}
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 hover:bg-accent/40 transition-colors"
+              >
+                <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${
+                  course.courseType === 'Theory'
+                    ? 'bg-gradient-to-br from-blue-600 to-cyan-600'
+                    : 'bg-gradient-to-br from-purple-600 to-pink-600'
+                }`}>
+                  {course.courseType === 'Theory' ? (
+                    <BookOpen className="h-5 w-5 text-white" />
+                  ) : (
+                    <FlaskConical className="h-5 w-5 text-white" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold truncate">{course.name}</span>
+                    <span className="text-sm text-muted-foreground shrink-0">{course.code}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">{course.semester} {course.year}</Badge>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sec {course.section}</Badge>
+                    {course.classTime && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {course.classTime}
+                      </span>
+                    )}
+                    {course.classRoom && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {formatClassRoomDisplay(course.classRoom)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="font-medium text-foreground">{course.studentCount ?? 0}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    <span className="font-medium text-foreground">{course.examCount ?? 0}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button asChild size="sm">
+                    <Link href={`/course/${course._id}`}>Open</Link>
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" title="Course actions" aria-label="Course actions">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEditModal(course)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openDuplicateModal(course, 'copy')}>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy (Exams Only)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openDuplicateModal(course, 'duplicate')}>
+                        <FileStack className="h-4 w-4 mr-2" />
+                        Duplicate (All Data)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleArchiveCourse(course._id, course.name)}
+                        disabled={archiving === course._id}
+                      >
+                        <Archive className="h-4 w-4 mr-2" />
+                        {archiving === course._id ? 'Archiving...' : 'Archive'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setDeletingCourse(course)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {courses.map((course) => (
@@ -849,6 +990,32 @@ export default function Dashboard() {
                     <Badge variant="outline">{course.year}</Badge>
                     <Badge variant="outline">Section {course.section}</Badge>
                   </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground border-t pt-3">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="font-medium text-foreground">{course.studentCount ?? 0}</span> Students
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      <span className="font-medium text-foreground">{course.examCount ?? 0}</span> Exams
+                    </span>
+                  </div>
+                  {(course.classTime || course.classRoom) && (
+                    <div className="flex flex-col gap-1 text-xs text-muted-foreground mt-2">
+                      {course.classTime && (
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3 w-3 shrink-0" />
+                          {course.classTime}
+                        </span>
+                      )}
+                      {course.classRoom && (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {formatClassRoomDisplay(course.classRoom)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
                 <CardFooter>
                   <Button asChild className="w-full">

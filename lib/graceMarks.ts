@@ -29,6 +29,7 @@ export interface GraceCourseConfig {
   quizAggregation?: 'average' | 'best';
   assignmentWeightage?: number;
   assignmentAggregation?: 'average' | 'best' | 'sum';
+  projectWeightage?: number;
   gradingScale?: string | null;
 }
 
@@ -73,8 +74,8 @@ function isEligibleExam(exam: GraceExam): boolean {
   return exam.weightage > 0 && !(exam.numberOfCOs && exam.numberOfCOs > 0) && !(exam.numberOfQuestions && exam.numberOfQuestions > 0);
 }
 
-function findDirectTarget(student: GraceStudent, exams: GraceExam[], marks: GraceMark[], neededPct: number): GraceTarget | null {
-  for (const category of DIRECT_CATEGORIES) {
+function findDirectTarget(student: GraceStudent, exams: GraceExam[], marks: GraceMark[], neededPct: number, categories: string[] = DIRECT_CATEGORIES): GraceTarget | null {
+  for (const category of categories) {
     const catExams = exams.filter(e => (e.examCategory || 'Others') === category && isEligibleExam(e));
     for (const exam of catExams) {
       const mark = marks.find(m => m.studentId === student._id && m.examId === exam._id);
@@ -94,7 +95,7 @@ function findAggregatedTarget(
   exams: GraceExam[],
   marks: GraceMark[],
   neededPct: number,
-  category: 'Quiz' | 'Assignment',
+  category: 'Quiz' | 'Assignment' | 'Project',
   categoryWeightage: number | undefined,
   aggregationMethod: 'average' | 'best' | 'sum'
 ): GraceTarget | null {
@@ -167,7 +168,13 @@ function findGraceTarget(student: GraceStudent, exams: GraceExam[], marks: Grace
   return (
     findDirectTarget(student, exams, marks, neededPct) ||
     findAggregatedTarget(student, exams, marks, neededPct, 'Assignment', course.assignmentWeightage, course.assignmentAggregation || 'average') ||
-    findAggregatedTarget(student, exams, marks, neededPct, 'Quiz', course.quizWeightage, course.quizAggregation || 'average')
+    findAggregatedTarget(student, exams, marks, neededPct, 'Quiz', course.quizWeightage, course.quizAggregation || 'average') ||
+    // Midterm/Final/Project are normally off-limits because they're usually CO-linked - but if a
+    // student has maxed out everywhere else and a SPECIFIC exam here has no COs configured
+    // (numberOfCOs is 0/unset), it's just as safe to nudge as any other column. Only tried once
+    // every CO-free option elsewhere is exhausted, since it's the least preferred choice.
+    findDirectTarget(student, exams, marks, neededPct, ['MainExam']) ||
+    findAggregatedTarget(student, exams, marks, neededPct, 'Project', course.projectWeightage, 'sum')
   );
 }
 

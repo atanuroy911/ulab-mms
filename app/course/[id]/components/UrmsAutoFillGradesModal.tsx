@@ -82,7 +82,8 @@ export default function UrmsAutoFillGradesModal({
    * user actually selected, instead of a merged list.
    */
   const buildCodeGroups = (): GradeCodeGroup[] => {
-    const withId = students.filter((s) => s.studentId);
+    // Withdrawn students never need a grade entered in URMS.
+    const withId = students.filter((s) => s.studentId && !s.withdrawn);
     if (!hasAliasSplit) {
       return course?.code ? [{ code: course.code, grades: withId.map(toGradeToFill) }] : [];
     }

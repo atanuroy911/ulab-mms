@@ -2,6 +2,7 @@ export interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 export interface Course {

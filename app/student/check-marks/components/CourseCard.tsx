@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, FlaskConical, ChevronRight, Archive, CalendarCheck } from 'lucide-react';
+import { BookOpen, FlaskConical, ChevronRight, Archive, CalendarCheck, UserX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { calculateFinalGrade, calculateTotalWeightage } from '../lib/grade-calculations';
@@ -52,10 +52,16 @@ export function CourseCard({ courseData, onSelect }: CourseCardProps) {
               Past Semester
             </Badge>
           )}
+          {courseData.student.withdrawn && (
+            <Badge variant="outline" className="gap-1 text-red-600 dark:text-red-400 border-red-500/30 bg-red-500/10">
+              <UserX className="h-3 w-3" />
+              Withdrawn
+            </Badge>
+          )}
           <span className="text-sm text-muted-foreground">
             {marksCount}/{examsCount} exams
           </span>
-          {courseData.course.showFinalGrade && marksCount > 0 && (
+          {!courseData.student.withdrawn && courseData.course.showFinalGrade && marksCount > 0 && (
             <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
               {totalWeightage > 0 ? `${((gradeData.total / totalWeightage) * 100).toFixed(1)}%` : 'N/A'}
             </Badge>

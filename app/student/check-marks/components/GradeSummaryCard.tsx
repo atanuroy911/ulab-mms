@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, PartyPopper, GraduationCap } from 'lucide-react';
+import { Target, PartyPopper, GraduationCap, UserX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { calculateLetterGrade, getGradeDisplay, getGradeColor } from '@/app/utils/grading';
 import type { CourseData, FinalGradeResult, GradeProjections } from '../types';
@@ -22,6 +22,28 @@ export function GradeSummaryCard({ courseData, gradeData, projections }: GradeSu
   const letterGrade = gradeData.total > 0
     ? calculateLetterGrade(gradeData.total, courseData.course.gradingScale)
     : null;
+
+  if (courseData.student.withdrawn) {
+    return (
+      <Card className="lg:sticky lg:top-4 bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Target className="h-4 w-4 text-primary" />
+            Your Estimated Grade
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-6">
+            <UserX className="h-10 w-10 mx-auto mb-3 text-red-600 dark:text-red-400" />
+            <div className="text-3xl font-bold text-red-600 dark:text-red-400 mb-1">W</div>
+            <div className="text-sm text-muted-foreground">
+              You are recorded as withdrawn from this course
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="lg:sticky lg:top-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 animate-in fade-in slide-in-from-bottom-2 duration-500">

@@ -124,7 +124,7 @@ const labDefaults: DefaultExamSeed[] = [
   {
     displayName: 'OEL/CEP',
     examType: 'oel',
-    examCategory: 'MainExam',
+    examCategory: 'Project',
     totalMarks: 40,
     weightage: 40,
     isRequired: true,

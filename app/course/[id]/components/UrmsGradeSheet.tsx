@@ -26,9 +26,12 @@ export default function UrmsGradeSheet({
   const [activeCode, setActiveCode] = useState<'old' | 'new'>('old');
 
   const hasNewCode = Boolean(course?.aliasEnabled && course?.alternateCode);
+  // Withdrawn students never need a grade entered in URMS - drop them entirely rather than
+  // showing a computed/garbage grade for a course they're no longer enrolled in.
+  const activeStudents = students.filter((student) => !student.withdrawn);
   const visibleStudents = hasNewCode
-    ? students.filter((student) => (activeCode === 'new' ? student.useAlias : !student.useAlias))
-    : students;
+    ? activeStudents.filter((student) => (activeCode === 'new' ? student.useAlias : !student.useAlias))
+    : activeStudents;
 
   const getStudentGrade = (studentId: string) => {
     const gradeData = calculateFinalGrade(studentId);

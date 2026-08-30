@@ -86,7 +86,7 @@ export default function UrmsGradesPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {students.map((student) => {
+              {students.filter((student) => !student.withdrawn).map((student) => {
                 const gradeObj = getStudentGrade(student._id);
                 const gradeDisplay = gradeObj ? gradeObj.display : 'F';
                 const gradeLetter = gradeObj ? gradeObj.letter : 'F';

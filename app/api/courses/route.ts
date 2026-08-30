@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
 import Exam from '@/models/Exam';
+import Student from '@/models/Student';
 import User from '@/models/User';
 import AdminCourse from '@/models/AdminCourse';
 import { findFixedCourseByCode } from '@/lib/catalogueRegistry';
@@ -72,7 +73,33 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ courses: combinedCourses }, { status: 200 });
+    // Lightweight per-course stats for the dashboard cards (student count, exam count) - grouped
+    // aggregates in one query per collection rather than N queries per course, so this stays
+    // cheap regardless of how many courses a teacher has.
+    const courseIds = combinedCourses.map((c) => c._id);
+    const [studentCounts, examCounts] = await Promise.all([
+      Student.aggregate([
+        { $match: { courseId: { $in: courseIds }, withdrawn: { $ne: true } } },
+        { $group: { _id: '$courseId', count: { $sum: 1 } } },
+      ]),
+      Exam.aggregate([
+        { $match: { courseId: { $in: courseIds } } },
+        { $group: { _id: '$courseId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const toCountMap = (rows: { _id: mongoose.Types.ObjectId; count: number }[]) =>
+      new Map(rows.map((r) => [String(r._id), r.count]));
+    const studentCountMap = toCountMap(studentCounts);
+    const examCountMap = toCountMap(examCounts);
+
+    const coursesWithStats = combinedCourses.map((course) => ({
+      ...course.toObject(),
+      studentCount: studentCountMap.get(String(course._id)) || 0,
+      examCount: examCountMap.get(String(course._id)) || 0,
+    }));
+
+    return NextResponse.json({ courses: coursesWithStats }, { status: 200 });
   } catch (error: any) {
     console.error('Get courses error:', error);
     return NextResponse.json(

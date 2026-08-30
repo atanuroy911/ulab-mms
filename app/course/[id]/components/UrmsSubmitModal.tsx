@@ -42,7 +42,7 @@ export default function UrmsSubmitModal({
 
   const generateScript = () => {
     // Generate an array of { id: '...', grade: 'A' }
-    const gradeData = students.map(student => ({
+    const gradeData = students.filter(student => !student.withdrawn).map(student => ({
       id: student.studentId,
       grade: getStudentGrade(student._id) || 'F'
     }));

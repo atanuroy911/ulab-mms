@@ -45,6 +45,7 @@ interface Course {
   assignmentAggregation?: 'average' | 'best' | 'sum';
   quizWeightage?: number;
   assignmentWeightage?: number;
+  projectWeightage?: number;
   gradingScale?: string;
 }
 
@@ -149,6 +150,29 @@ export default function StudentDetailModal({
     }
   };
 
+  // Project category is summed (raw across all project sections / total across all project
+  // sections), then scaled to the course's project weightage - not averaged/best like Quiz/Assignment.
+  const getProjectAggregatedMark = (): { rawMark: number; isAggregated: boolean } | null => {
+    const projectExams = exams.filter(exam => exam.examCategory === 'Project');
+    if (projectExams.length === 0) return null;
+
+    const projectMarks = projectExams
+      .map(exam => studentMarks.find(m => m.examId === exam._id))
+      .filter((mark): mark is Mark => mark !== undefined);
+
+    if (projectMarks.length === 0) return null;
+
+    const projectWeightage = Number(course?.projectWeightage || 0);
+    const sumRaw = projectMarks.reduce((sum, mark) => sum + mark.rawMark, 0);
+    const sumTotal = projectMarks.reduce((sum, mark) => {
+      const exam = projectExams.find(e => e._id === mark.examId);
+      return exam ? sum + exam.totalMarks : sum;
+    }, 0);
+
+    const weightedSum = sumTotal > 0 ? (getExamPercentage(sumRaw, sumTotal) * projectWeightage) / 100 : 0;
+    return { rawMark: weightedSum, isAggregated: true };
+  };
+
   // Calculate final grade with breakdown
   const calculateFinalGrade = (): { total: number; breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> } => {
     const breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> = [];
@@ -156,10 +180,11 @@ export default function StudentDetailModal({
 
     const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
     const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+    const hasProjects = exams.some(exam => exam.examCategory === 'Project');
 
-    // Process individual exams (non-Quiz, non-Assignment)
+    // Process individual exams (non-Quiz, non-Assignment, non-Project)
     exams.forEach(exam => {
-      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
+      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
         return;
       }
 
@@ -221,6 +246,26 @@ export default function StudentDetailModal({
       }
     }
 
+    // Add Project aggregated column if exists
+    if (hasProjects && course?.projectWeightage) {
+      const aggMark = getProjectAggregatedMark();
+      if (aggMark) {
+        const totalMarks = Number(course.projectWeightage);
+        const contribution = aggMark.rawMark;
+
+        breakdown.push({
+          name: `${course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} (Aggregated)`,
+          mark: contribution,
+          totalMarks: totalMarks,
+          weightage: totalMarks,
+          contribution: contribution,
+          isAggregated: true,
+        });
+
+        totalContribution += contribution;
+      }
+    }
+
     return {
       total: totalContribution,
       breakdown: breakdown,
@@ -234,8 +279,9 @@ export default function StudentDetailModal({
     const totalWeightage = exams.reduce((sum, exam) => {
       if (exam.examCategory === 'Quiz' && course?.quizWeightage) return sum;
       if (exam.examCategory === 'Assignment' && course?.assignmentWeightage) return sum;
+      if (exam.examCategory === 'Project' && course?.projectWeightage) return sum;
       return sum + exam.weightage;
-    }, 0) + (course?.quizWeightage || 0) + (course?.assignmentWeightage || 0);
+    }, 0) + (course?.quizWeightage || 0) + (course?.assignmentWeightage || 0) + (course?.projectWeightage || 0);
     const remainingWeightage = totalWeightage - completedWeightage;
 
     if (remainingWeightage <= 0) {

@@ -66,7 +66,8 @@ export default function GraceMarksModal({
           </DialogTitle>
           <DialogDescription>
             Finds students within 1 mark of the next grade boundary and bumps a Quiz, Assignment, Attendance,
-            or Class Performance column just enough to push them over - never Midterm, Final, or Project (CO-linked).
+            or Class Performance column just enough to push them over. Midterm, Final, and Project are used only
+            as a last resort, and only when that specific exam has no COs configured.
           </DialogDescription>
         </DialogHeader>
 
