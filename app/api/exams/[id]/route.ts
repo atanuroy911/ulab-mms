@@ -8,6 +8,12 @@ import Mark from '@/models/Mark';
 import RubricTemplate from '@/models/RubricTemplate';
 import mongoose from 'mongoose';
 
+const calculateWeightedMark = (rawMark: number, totalMarks: number, weightage: number) => {
+  if (totalMarks <= 0) return 0;
+  const weighted = (rawMark / totalMarks) * weightage;
+  return Math.round(weighted * 100) / 100;
+};
+
 // PUT - Update exam settings
 export async function PUT(
   request: NextRequest,
@@ -31,6 +37,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
     }
     const previousNumberOfCOs = existingExam.numberOfCOs || 0;
+    const previousTotalMarks = existingExam.totalMarks;
+    const previousWeightage = existingExam.weightage;
 
     const updateData: any = {};
 
@@ -141,6 +149,23 @@ export async function PUT(
       }
       exam.weightage = weightage;
       await exam.save();
+    }
+
+    // The weighted contribution stored on each Mark is derived from totalMarks/weightage at the
+    // time it was saved. If either changed here, that stored value goes stale and calculateFinalGrade
+    // (which prefers the stored weightedMark over recomputing) keeps using the old percentage.
+    if (exam.totalMarks !== previousTotalMarks || exam.weightage !== previousWeightage) {
+      const existingMarks = await Mark.find({ examId: id });
+      if (existingMarks.length > 0) {
+        await Mark.bulkWrite(
+          existingMarks.map(m => ({
+            updateOne: {
+              filter: { _id: m._id },
+              update: { $set: { weightedMark: calculateWeightedMark(m.rawMark, exam.totalMarks, exam.weightage) } },
+            },
+          }))
+        );
+      }
     }
 
     return NextResponse.json({ exam }, { status: 200 });

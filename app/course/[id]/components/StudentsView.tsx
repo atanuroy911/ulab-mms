@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil } from 'lucide-react';
+import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil, Gauge } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
@@ -96,6 +96,7 @@ interface StudentsViewProps {
   onBulkToggleWithdraw?: (studentIds: string[], withdrawn: boolean) => Promise<void> | void;
   onBulkToggleAlias?: (studentIds: string[], useAlias: boolean) => Promise<void> | void;
   onAutoCategorizeAlias: () => void;
+  onShowStatisticsModal?: () => void;
 }
 
 export default function StudentsView({
@@ -127,6 +128,7 @@ export default function StudentsView({
   onBulkToggleWithdraw,
   onBulkToggleAlias,
   onAutoCategorizeAlias,
+  onShowStatisticsModal,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
@@ -311,6 +313,16 @@ export default function StudentsView({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {onShowStatisticsModal && (
+            <Button
+              onClick={onShowStatisticsModal}
+              variant="outline"
+              className="gap-2"
+            >
+              <Gauge className="w-4 h-4" />
+              Statistics
+            </Button>
           )}
           <Button
             onClick={onShowAddStudentModal}

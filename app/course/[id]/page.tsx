@@ -2192,6 +2192,7 @@ export default function CoursePage() {
                 calculateFinalGrade={calculateFinalGrade}
                 coPoStatus={getCoPoStatus()}
                 onGoToCoPo={() => setActiveView('copo')}
+                onShowStatisticsModal={() => setShowMarksStatsModal(true)}
               />
             )}
 
@@ -2254,6 +2255,7 @@ export default function CoursePage() {
                 onBulkToggleWithdraw={handleBulkToggleWithdraw}
                 onBulkToggleAlias={handleBulkToggleAlias}
                 onAutoCategorizeAlias={() => checkAliasCandidates(false)}
+                onShowStatisticsModal={() => setShowMarksStatsModal(true)}
               />
             )}
 

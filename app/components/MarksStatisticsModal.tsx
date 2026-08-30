@@ -1,146 +1,87 @@
 'use client';
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Gauge } from 'lucide-react';
-
-interface Student {
-  _id: string;
-  studentId: string;
-  name: string;
-}
-
-interface Exam {
-  _id: string;
-  displayName: string;
-  totalMarks: number;
-  examCategory?: string;
-}
-
-interface Mark {
-  _id: string;
-  studentId: string;
-  examId: string;
-  rawMark: number;
-}
+import { TrendingUp, TrendingDown, Gauge, Target } from 'lucide-react';
+import { computeAllCategoryStats, CategoryStatEntry, StatExam, StatMark, StatStudent } from '@/lib/markStats';
 
 interface MarksStatisticsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  students: Student[];
-  exams: Exam[];
-  marks: Mark[];
+  students: StatStudent[];
+  exams: StatExam[];
+  marks: StatMark[];
 }
 
-interface ExamStats {
-  exam: Exam;
-  entered: number;
-  average: number;
-  highest: { student: Student; mark: number }[];
-  lowest: { student: Student; mark: number }[];
-}
-
-function computeExamStats(exam: Exam, students: Student[], marks: Mark[]): ExamStats {
-  const studentById = new Map(students.map(s => [s._id, s]));
-  const examMarks = marks
-    .filter(m => m.examId === exam._id)
-    .map(m => ({ student: studentById.get(m.studentId), mark: m.rawMark }))
-    .filter((entry): entry is { student: Student; mark: number } => !!entry.student);
-
-  if (examMarks.length === 0) {
-    return { exam, entered: 0, average: 0, highest: [], lowest: [] };
-  }
-
-  const values = examMarks.map(e => e.mark);
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const average = values.reduce((sum, v) => sum + v, 0) / values.length;
-
-  return {
-    exam,
-    entered: examMarks.length,
-    average: Math.round(average * 100) / 100,
-    highest: examMarks.filter(e => e.mark === max),
-    lowest: examMarks.filter(e => e.mark === min),
-  };
-}
-
-function StudentList({ entries }: { entries: { student: Student; mark: number }[] }) {
-  if (entries.length === 0) return <span className="text-muted-foreground">—</span>;
+function EntryLine({ entry, tone }: { entry: CategoryStatEntry; tone: 'high' | 'low' | 'avg' }) {
+  const toneClass = tone === 'high' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'low' ? 'text-amber-600 dark:text-amber-400' : 'text-primary';
   return (
-    <div className="space-y-0.5">
-      {entries.map(({ student, mark }) => (
-        <div key={student._id} className="whitespace-nowrap">
-          <span className="font-medium">{student.name}</span>
-          <span className="text-muted-foreground"> · {student.studentId} · {mark}</span>
-        </div>
-      ))}
+    <div>
+      <div className="font-medium">{entry.student.name}</div>
+      <div className="text-xs text-muted-foreground">{entry.student.studentId}</div>
+      <div className={`text-sm font-semibold mt-0.5 ${toneClass}`}>
+        {entry.obtained} / {entry.total} <span className="text-xs font-normal text-muted-foreground">({entry.percentage.toFixed(1)}%)</span>
+      </div>
     </div>
   );
 }
 
 export default function MarksStatisticsModal({ isOpen, onClose, students, exams, marks }: MarksStatisticsModalProps) {
-  const stats = exams.map(exam => computeExamStats(exam, students, marks));
+  const stats = computeAllCategoryStats(exams, students, marks);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gauge className="w-5 h-5 text-primary" />
             Marks Statistics
           </DialogTitle>
           <DialogDescription>
-            Highest, lowest, and average marks for each exam.
+            Highest, lowest, and closest-to-average for Midterm, Final, and Project / OEL. Withdrawn students are excluded.
           </DialogDescription>
         </DialogHeader>
 
         {stats.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-            No exams found.
+            No midterm, final, or project marks entered yet.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[160px]">Exam</TableHead>
-                  <TableHead className="text-center w-[110px]">Entered</TableHead>
-                  <TableHead className="text-center w-[100px]">Average</TableHead>
-                  <TableHead className="min-w-[220px]">
-                    <span className="inline-flex items-center gap-1 text-emerald-500">
-                      <TrendingUp className="w-3.5 h-3.5" /> Highest
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[220px]">
-                    <span className="inline-flex items-center gap-1 text-amber-500">
-                      <TrendingDown className="w-3.5 h-3.5" /> Lowest
-                    </span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.map(({ exam, entered, average, highest, lowest }) => (
-                  <TableRow key={exam._id}>
-                    <TableCell className="font-medium">
-                      {exam.displayName}
-                      <span className="block text-xs text-muted-foreground mt-0.5">Total: {exam.totalMarks}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={entered === students.length ? 'default' : 'secondary'}>
-                        {entered}/{students.length}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center font-medium">
-                      {entered > 0 ? average : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell><StudentList entries={highest} /></TableCell>
-                    <TableCell><StudentList entries={lowest} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {stats.map(cat => (
+              <div key={cat.key} className="border rounded-lg p-4 space-y-4">
+                <div>
+                  <div className="font-semibold">{cat.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {cat.entries.length} of {students.filter(s => !s.withdrawn).length} students · avg {cat.average !== null ? `${cat.average.toFixed(1)}%` : '—'}
+                  </div>
+                </div>
+
+                {cat.entries.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No complete marks entered yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
+                        <TrendingUp className="w-3.5 h-3.5" /> Highest
+                      </div>
+                      {cat.highest && <EntryLine entry={cat.highest} tone="high" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">
+                        <TrendingDown className="w-3.5 h-3.5" /> Lowest
+                      </div>
+                      {cat.lowest && <EntryLine entry={cat.lowest} tone="low" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 text-xs font-medium text-primary mb-1">
+                        <Target className="w-3.5 h-3.5" /> Closest to average
+                      </div>
+                      {cat.closestToAverage && <EntryLine entry={cat.closestToAverage} tone="avg" />}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </DialogContent>

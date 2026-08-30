@@ -32,9 +32,11 @@ import {
   Database,
   FileSpreadsheet,
   CalendarDays,
+  Gauge,
 } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
+import { computeAllCategoryStats } from '@/lib/markStats';
 import { format } from 'date-fns';
 
 interface Course {
@@ -82,6 +84,7 @@ interface OverviewViewProps {
   /** CO-PO mapping status for export warning */
   coPoStatus?: 'no-mapping' | 'no-max-marks' | 'ok';
   onGoToCoPo?: () => void;
+  onShowStatisticsModal?: () => void;
 }
 export default function OverviewView({
   course,
@@ -105,6 +108,7 @@ export default function OverviewView({
   exportingCourseFileAlphaGroup,
   coPoStatus = 'ok',
   onGoToCoPo,
+  onShowStatisticsModal,
 }: OverviewViewProps) {
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
   // Which export flow the code-chooser modal is currently serving - null when closed. Shared
@@ -197,6 +201,8 @@ export default function OverviewView({
     ? Math.round((attendanceSessions.reduce((sum, s) => sum + s.records.filter((r) => r.status === 'present').length, 0) / attendanceSessions.length) * 10) / 10
     : null;
 
+  const markCategoryStats = computeAllCategoryStats(exams, students, marks);
+
   const STAT_CARDS = [
     {
       label: 'Students',
@@ -284,6 +290,26 @@ export default function OverviewView({
             <span className="text-sm text-muted-foreground">Total Sessions:</span>
             <span className="text-sm font-semibold">{attendanceSessions.length}</span>
           </div>
+        </div>
+      )}
+
+      {markCategoryStats.length > 0 && (
+        <div className="flex flex-wrap items-center gap-6 rounded-lg border bg-muted/10 px-5 py-3 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-backwards">
+          <div className="flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Marks:</span>
+          </div>
+          {markCategoryStats.map(cat => (
+            <div key={cat.key} className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{cat.label} avg:</span>
+              <span className="text-sm font-semibold">{cat.average !== null ? `${cat.average.toFixed(1)}%` : '—'}</span>
+            </div>
+          ))}
+          {onShowStatisticsModal && (
+            <Button variant="link" size="sm" className="h-auto p-0 ml-auto" onClick={onShowStatisticsModal}>
+              View details
+            </Button>
+          )}
         </div>
       )}
 
