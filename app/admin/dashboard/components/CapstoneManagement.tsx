@@ -602,7 +602,7 @@ export default function CapstoneManagement() {
 
       {/* Create Group Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(open) => {
-        if (!open) handleCloseDialog();
+        if (!open && !loading) handleCloseDialog();
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1019,7 +1019,7 @@ export default function CapstoneManagement() {
 
       {/* Edit Group Dialog */}
       <Dialog open={showEditDialog} onOpenChange={(open) => {
-        if (!open) handleCloseEditDialog();
+        if (!open && !updating) handleCloseEditDialog();
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

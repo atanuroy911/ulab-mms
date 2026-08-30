@@ -226,7 +226,7 @@ export default function BulkOcrAttendanceModal({
   if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !saving && !ocrRunning && handleClose()}>
       <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Attendance (Paste / Screenshot)</DialogTitle>

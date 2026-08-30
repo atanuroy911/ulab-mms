@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { notify } from '@/app/utils/notifications';
-import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
 
 interface Student {
   _id: string;
@@ -28,6 +28,7 @@ interface Mark {
   coMarks?: number[];
   nonCoMark?: number;
   questionMarks?: number[];
+  preGraceMark?: number | null;
 }
 
 interface AddMarkModalProps {
@@ -74,6 +75,7 @@ export default function AddMarkModal({
   const [currentStep, setCurrentStep] = useState<'exam' | 'student' | 'marks'>('exam');
   const [focusedCOIndex, setFocusedCOIndex] = useState<number>(-1);
   const [showCoWarning, setShowCoWarning] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Refs for input fields
   const studentSearchRef = useRef<HTMLInputElement>(null);
@@ -226,6 +228,7 @@ export default function AddMarkModal({
 
     // Withdrawn students never carry a mark - save 0 directly, skipping CO/Question validation.
     if (isWithdrawn) {
+      setIsSaving(true);
       try {
         const response = await fetch('/api/marks', {
           method: 'POST',
@@ -253,6 +256,8 @@ export default function AddMarkModal({
       } catch (err) {
         console.error('Error saving mark:', err);
         setError('An error occurred while saving the mark');
+      } finally {
+        setIsSaving(false);
       }
       return;
     }
@@ -340,7 +345,16 @@ export default function AddMarkModal({
     }
 
     // Save mark
+    setIsSaving(true);
     try {
+      const existingMark = marks.find(m => m.studentId === selectedStudentId && m.examId === selectedExamId);
+      // Only carry the grace note forward if the raw mark wasn't actually changed - any real edit
+      // supersedes the graced value, so the "before" note should stop being shown.
+      const preserveGrace =
+        existingMark && typeof existingMark.preGraceMark === 'number' && existingMark.rawMark === rawMarkNum
+          ? existingMark.preGraceMark
+          : undefined;
+
       const response = await fetch('/api/marks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -352,6 +366,7 @@ export default function AddMarkModal({
           coMarks: coMarksArray,
           nonCoMark: nonCoMarkPayload,
           questionMarks: questionMarksArray,
+          ...(preserveGrace !== undefined ? { preGraceMark: preserveGrace } : {}),
         }),
       });
 
@@ -396,6 +411,8 @@ export default function AddMarkModal({
     } catch (err) {
       notify.mark.addError();
       setError('Error saving mark');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -516,7 +533,7 @@ export default function AddMarkModal({
   return (
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-100 p-4"
-      onClick={onClose}
+      onClick={() => !isSaving && onClose()}
     >
       <div
         className="bg-linear-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-3xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto"
@@ -526,7 +543,8 @@ export default function AddMarkModal({
           <h2 className="text-2xl font-bold text-gray-100">Add/Edit Marks</h2>
           <button
             onClick={handleFinish}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm"
+            disabled={isSaving}
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Finish Adding Marks
           </button>
@@ -732,9 +750,17 @@ export default function AddMarkModal({
                 <button
                   ref={saveButtonRef}
                   onClick={validateAndSave}
-                  className="w-full py-3 bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg transition-colors"
+                  disabled={isSaving}
+                  className="w-full py-3 bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Save as 0
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save as 0'
+                  )}
                 </button>
               </div>
             )}
@@ -779,6 +805,17 @@ export default function AddMarkModal({
                     className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
                     placeholder="Enter raw mark"
                   />
+                  {(() => {
+                    const existingMark = marks.find(m => m.studentId === selectedStudentId && m.examId === selectedExamId);
+                    if (existingMark && typeof existingMark.preGraceMark === 'number') {
+                      return (
+                        <p className="mt-1.5 text-xs text-violet-400 flex items-center gap-1">
+                          ✨ Grace applied - original mark was {existingMark.preGraceMark}. Editing this value will clear the grace note.
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* CO Marks */}
@@ -926,9 +963,17 @@ export default function AddMarkModal({
                     ref={saveButtonRef}
                     onClick={validateAndSave}
                     onKeyDown={(e) => handleKeyDown(e, 'save')}
-                    className="flex-1 px-6 py-3 bg-linear-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg font-medium text-lg focus:ring-4 focus:ring-green-500"
+                    disabled={isSaving}
+                    className="flex-1 px-6 py-3 bg-linear-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg font-medium text-lg focus:ring-4 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    💾 Save Mark
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      '💾 Save Mark'
+                    )}
                   </button>
                 </div>
 

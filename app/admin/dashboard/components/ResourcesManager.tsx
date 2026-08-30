@@ -14,6 +14,7 @@ import {
   Check,
   X,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +72,9 @@ export default function ResourcesManager() {
   } | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [deletingItem, setDeletingItem] = useState(false);
+  const [savingFolderEdit, setSavingFolderEdit] = useState(false);
 
   // Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -132,6 +136,7 @@ export default function ResourcesManager() {
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return toast.error("Folder name is required");
+    setCreatingFolder(true);
     try {
       const res = await fetch("/api/resources/folders", {
         method: "POST",
@@ -147,6 +152,8 @@ export default function ResourcesManager() {
       } else toast.error(data.error);
     } catch (err) {
       toast.error("Failed to create folder");
+    } finally {
+      setCreatingFolder(false);
     }
   };
 
@@ -175,6 +182,7 @@ export default function ResourcesManager() {
 
   const handleDeleteItem = async () => {
     if (!deleteTarget) return;
+    setDeletingItem(true);
     try {
       const url = deleteTarget.type === "folder" ? `/api/resources/folders/${deleteTarget.id}` : `/api/resources/files/${deleteTarget.id}`;
       const res = await fetch(url, { method: "DELETE" });
@@ -187,11 +195,14 @@ export default function ResourcesManager() {
       } else toast.error(data.error);
     } catch (err) {
       toast.error("Delete failed");
+    } finally {
+      setDeletingItem(false);
     }
   };
 
   const handleEditFolder = async (folderId: string) => {
     if (!editingFolderName.trim()) return toast.error("Folder name is required");
+    setSavingFolderEdit(true);
     try {
       const res = await fetch(`/api/resources/folders/${folderId}`, {
         method: "PUT",
@@ -207,6 +218,8 @@ export default function ResourcesManager() {
       } else toast.error(data.error);
     } catch (err) {
       toast.error("Update failed");
+    } finally {
+      setSavingFolderEdit(false);
     }
   };
 
@@ -344,10 +357,12 @@ export default function ResourcesManager() {
                   <div key={folder._id} className="border rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                     {editingFolderId === folder._id ? (
                       <div className="space-y-2">
-                        <Input value={editingFolderName} onChange={(e) => setEditingFolderName(e.target.value)} placeholder="Folder name" />
+                        <Input value={editingFolderName} onChange={(e) => setEditingFolderName(e.target.value)} placeholder="Folder name" disabled={savingFolderEdit} />
                         <div className="flex gap-1">
-                          <Button size="sm" onClick={() => handleEditFolder(folder._id)} className="flex-1"><Check className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingFolderId(null)} className="flex-1"><X className="w-4 h-4" /></Button>
+                          <Button size="sm" onClick={() => handleEditFolder(folder._id)} disabled={savingFolderEdit} className="flex-1">
+                            {savingFolderEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingFolderId(null)} disabled={savingFolderEdit} className="flex-1"><X className="w-4 h-4" /></Button>
                         </div>
                       </div>
                     ) : (
@@ -400,7 +415,7 @@ export default function ResourcesManager() {
       </Card>
 
       {/* Create Folder Dialog */}
-      <Dialog open={showCreateFolder} onOpenChange={setShowCreateFolder}>
+      <Dialog open={showCreateFolder} onOpenChange={(open) => !creatingFolder && setShowCreateFolder(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Folder</DialogTitle>
@@ -408,25 +423,29 @@ export default function ResourcesManager() {
           </DialogHeader>
           <div className="space-y-2 mt-2">
             <Label>Name</Label>
-            <Input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" />
+            <Input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" disabled={creatingFolder} />
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowCreateFolder(false)}>Cancel</Button>
-            <Button onClick={handleCreateFolder}>Create</Button>
+            <Button variant="outline" onClick={() => setShowCreateFolder(false)} disabled={creatingFolder}>Cancel</Button>
+            <Button onClick={handleCreateFolder} disabled={creatingFolder}>
+              {creatingFolder ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</>) : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirm Dialog */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => !deletingItem && setShowDeleteConfirm(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Delete</DialogTitle>
             <DialogDescription>Are you sure you want to delete {deleteTarget?.type} "{deleteTarget?.name}"?</DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteItem}>Delete</Button>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deletingItem}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteItem} disabled={deletingItem}>
+              {deletingItem ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Deleting...</>) : 'Delete'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

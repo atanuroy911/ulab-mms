@@ -402,7 +402,7 @@ export function ImportStudentsModal({
   const needsTwoPdfs = Boolean(course.aliasEnabled && course.alternateCode);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isImporting && handleClose()}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -757,7 +757,14 @@ export function ImportStudentsModal({
             onClick={handleImport}
             disabled={isImporting || (!csvInput.trim()) || (diffResult.toAdd.length === 0 && (!deleteMissing || diffResult.missing.length === 0))}
           >
-            {isImporting ? 'Processing...' : 'Confirm Import'}
+            {isImporting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              'Confirm Import'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -80,6 +80,8 @@ export default function CapstoneAssignmentManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAssignments();
@@ -167,6 +169,7 @@ export default function CapstoneAssignmentManagement() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const response = await fetch('/api/admin/capstone-assignment', {
         method: 'POST',
@@ -193,6 +196,8 @@ export default function CapstoneAssignmentManagement() {
       }
     } catch (err: any) {
       toast.error('Failed to save assignment');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -201,6 +206,7 @@ export default function CapstoneAssignmentManagement() {
       return;
     }
 
+    setDeletingId(id);
     try {
       const response = await fetch(`/api/admin/capstone-assignment?id=${id}`, {
         method: 'DELETE',
@@ -214,6 +220,8 @@ export default function CapstoneAssignmentManagement() {
       }
     } catch (err: any) {
       toast.error('Failed to remove assignment');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -386,9 +394,14 @@ export default function CapstoneAssignmentManagement() {
                           <Button
                             size="sm"
                             variant="destructive"
+                            disabled={deletingId === assignment._id}
                             onClick={() => handleDelete(assignment._id)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deletingId === assignment._id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                       </td>
@@ -424,7 +437,7 @@ export default function CapstoneAssignmentManagement() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={(open) => {
-        if (!open) handleCloseDialog();
+        if (!open && !isSubmitting) handleCloseDialog();
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -568,12 +581,20 @@ export default function CapstoneAssignmentManagement() {
               <Button
                 type="button"
                 variant="outline"
+                disabled={isSubmitting}
                 onClick={handleCloseDialog}
               >
                 Cancel
               </Button>
-              <Button type="submit">
-                {selectedAssignment ? 'Update Assignment' : 'Assign Student'}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {selectedAssignment ? 'Updating...' : 'Assigning...'}
+                  </>
+                ) : (
+                  selectedAssignment ? 'Update Assignment' : 'Assign Student'
+                )}
               </Button>
             </DialogFooter>
           </form>

@@ -261,7 +261,7 @@ export default function BulkPasteMarkModal({
               Select an exam, then paste rows of &quot;Student ID, Mark&quot; (e.g. exported from Google Classroom)
             </p>
           </div>
-          <Button onClick={handleClose} variant="ghost" size="sm" className="text-gray-400 hover:text-gray-200">
+          <Button onClick={handleClose} variant="ghost" size="sm" disabled={saving} className="text-gray-400 hover:text-gray-200">
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -429,7 +429,7 @@ export default function BulkPasteMarkModal({
         {/* Footer */}
         {selectedExams.length > 0 && (
           <div className="p-6 border-t border-gray-700 flex gap-3">
-            <Button onClick={handleClose} variant="outline" className="flex-1">
+            <Button onClick={handleClose} variant="outline" disabled={saving} className="flex-1">
               Cancel
             </Button>
             <Button

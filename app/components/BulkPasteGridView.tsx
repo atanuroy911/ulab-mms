@@ -656,7 +656,7 @@ export default function BulkPasteGridView({
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setOpenCreateCol(null)}>
+                          <Button size="sm" variant="outline" onClick={() => setOpenCreateCol(null)} disabled={creatingCol === colIndex}>
                             Cancel
                           </Button>
                           <Button
@@ -749,7 +749,7 @@ export default function BulkPasteGridView({
 
       {/* Footer */}
       <div className="p-6 border-t border-gray-700 flex gap-3">
-        <Button onClick={step === 1 ? onCancel : () => setStep((step - 1) as 1 | 2)} variant="outline" className="flex-1">
+        <Button onClick={step === 1 ? onCancel : () => setStep((step - 1) as 1 | 2)} variant="outline" disabled={saving} className="flex-1">
           {step === 1 ? (
             'Cancel'
           ) : (

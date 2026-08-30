@@ -526,6 +526,7 @@ export default function BulkMarkEntryModal({
               onClick={handleClose}
               variant="ghost"
               size="sm"
+              disabled={saving}
               className="text-gray-400 hover:text-gray-200"
             >
               <X className="w-5 h-5" />
@@ -801,6 +802,7 @@ export default function BulkMarkEntryModal({
               <Button
                 onClick={() => setSelectedExamId('')}
                 variant="outline"
+                disabled={saving}
                 className="flex-1"
               >
                 ← Change Exam

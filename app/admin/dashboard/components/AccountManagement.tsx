@@ -635,7 +635,7 @@ export default function AccountManagement() {
       />
 
       {/* Edit account */}
-      <Dialog open={editingAccount !== null} onOpenChange={(open) => !open && setEditingAccount(null)}>
+      <Dialog open={editingAccount !== null} onOpenChange={(open) => !open && !editSaving && setEditingAccount(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Account</DialogTitle>
@@ -650,14 +650,14 @@ export default function AccountManagement() {
               Cancel
             </Button>
             <Button onClick={saveAccountEdit} disabled={editSaving || !editName.trim()}>
-              {editSaving ? 'Saving...' : 'Save'}
+              {editSaving ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>) : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete account */}
-      <Dialog open={deletingAccount !== null} onOpenChange={(open) => !open && setDeletingAccount(null)}>
+      <Dialog open={deletingAccount !== null} onOpenChange={(open) => !open && !deleting && setDeletingAccount(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-2">
@@ -694,14 +694,14 @@ export default function AccountManagement() {
               onClick={confirmDeleteAccount}
               disabled={deleting || deleteConfirmText.trim().toLowerCase() !== deletingAccount?.email.toLowerCase()}
             >
-              {deleting ? 'Deleting...' : 'Delete Account'}
+              {deleting ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>) : 'Delete Account'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Bulk delete accounts */}
-      <Dialog open={showBulkDeleteModal} onOpenChange={(open) => !open && setShowBulkDeleteModal(false)}>
+      <Dialog open={showBulkDeleteModal} onOpenChange={(open) => !open && !bulkDeleting && setShowBulkDeleteModal(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-2">
@@ -738,14 +738,14 @@ export default function AccountManagement() {
               onClick={confirmBulkDeleteAccounts}
               disabled={bulkDeleting || bulkDeleteConfirmText.trim().toUpperCase() !== 'DELETE'}
             >
-              {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} Account${selectedIds.size === 1 ? '' : 's'}`}
+              {bulkDeleting ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>) : `Delete ${selectedIds.size} Account${selectedIds.size === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Edit course */}
-      <Dialog open={editingCourse !== null} onOpenChange={(open) => !open && setEditingCourse(null)}>
+      <Dialog open={editingCourse !== null} onOpenChange={(open) => !open && !courseSaving && setEditingCourse(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Course</DialogTitle>
@@ -793,14 +793,14 @@ export default function AccountManagement() {
               Cancel
             </Button>
             <Button onClick={saveCourseEdit} disabled={courseSaving || !courseForm.name.trim() || !courseForm.code.trim()}>
-              {courseSaving ? 'Saving...' : 'Save'}
+              {courseSaving ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>) : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete course */}
-      <Dialog open={deletingCourse !== null} onOpenChange={(open) => !open && setDeletingCourse(null)}>
+      <Dialog open={deletingCourse !== null} onOpenChange={(open) => !open && !courseDeleting && setDeletingCourse(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-2">
@@ -819,7 +819,7 @@ export default function AccountManagement() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDeleteCourse} disabled={courseDeleting}>
-              {courseDeleting ? 'Deleting...' : 'Delete Course'}
+              {courseDeleting ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>) : 'Delete Course'}
             </Button>
           </DialogFooter>
         </DialogContent>

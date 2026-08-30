@@ -231,7 +231,7 @@ export default function RubricManagement() {
         </div>
       </CardContent>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(open) => !submitting && setShowDialog(open)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditMode ? 'Edit Rubric' : 'Create New Rubric'}</DialogTitle>
@@ -297,7 +297,7 @@ export default function RubricManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={submitting}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={submitting}>

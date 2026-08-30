@@ -107,6 +107,11 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
   const [users, setUsers] = useState<User[]>([]);
   const [courseStudents, setCourseStudents] = useState<Student[]>([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAssigningEvaluator, setIsAssigningEvaluator] = useState(false);
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [removingEvaluatorId, setRemovingEvaluatorId] = useState<string | null>(null);
 
   // Mark as client-side component
   useEffect(() => {
@@ -276,6 +281,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       }
     }
 
+    setIsSubmitting(true);
     try {
       // For new groups, try to find student IDs by looking up in courseStudents
       let studentIds: string[] = [];
@@ -344,6 +350,8 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to save group');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -352,6 +360,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       return;
     }
 
+    setDeletingGroupId(id);
     try {
       const adminPassword = getAdminPassword();
 
@@ -369,6 +378,8 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
     } catch (error) {
       console.error('Error deleting group:', error);
       toast.error('Failed to delete group');
+    } finally {
+      setDeletingGroupId(null);
     }
   };
 
@@ -386,6 +397,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       return;
     }
 
+    setIsAddingStudent(true);
     try {
       const adminPassword = getAdminPassword();
 
@@ -415,6 +427,8 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to add student');
+    } finally {
+      setIsAddingStudent(false);
     }
   };
 
@@ -445,6 +459,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       return;
     }
 
+    setIsAssigningEvaluator(true);
     try {
       const adminPassword = getAdminPassword();
 
@@ -469,12 +484,15 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to assign evaluator');
+    } finally {
+      setIsAssigningEvaluator(false);
     }
   };
 
   const handleRemoveEvaluator = async (evaluatorId: string) => {
     if (!selectedGroup) return;
 
+    setRemovingEvaluatorId(evaluatorId);
     try {
       const response = await fetch(
         `/api/admin/capstone-group/${selectedGroup._id}/assign-evaluator/${evaluatorId}`,
@@ -492,6 +510,8 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
     } catch (error) {
       console.error('Error removing evaluator:', error);
       toast.error('Failed to remove evaluator');
+    } finally {
+      setRemovingEvaluatorId(null);
     }
   };
 
@@ -621,9 +641,14 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
                     <Button
                       variant="destructive"
                       size="sm"
+                      disabled={deletingGroupId === group._id}
                       onClick={() => handleDeleteGroup(group._id)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {deletingGroupId === group._id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -709,9 +734,14 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
                             <Button
                               size="sm"
                               variant="ghost"
+                              disabled={removingEvaluatorId === assignment.evaluatorId._id}
                               onClick={() => handleRemoveEvaluator(assignment.evaluatorId._id)}
                             >
-                              <X className="w-4 h-4" />
+                              {removingEvaluatorId === assignment.evaluatorId._id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <X className="w-4 h-4" />
+                              )}
                             </Button>
                           </div>
                         </div>
@@ -730,7 +760,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       )}
 
       {/* Create/Edit Group Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => !isSubmitting && setShowAddDialog(open)}>
         <DialogContent className="max-w-2xl max-h-screen overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedGroup ? 'Edit Group' : 'Create New Group'}</DialogTitle>
@@ -890,15 +920,23 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
               <Button
                 type="button"
                 variant="outline"
+                disabled={isSubmitting}
                 onClick={() => { setShowAddDialog(false); resetForm(); }}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
-                disabled={loadingDropdowns || courses.length === 0 || users.length === 0}
+                disabled={isSubmitting || loadingDropdowns || courses.length === 0 || users.length === 0}
               >
-                {selectedGroup ? 'Update Group' : 'Create Group'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {selectedGroup ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  selectedGroup ? 'Update Group' : 'Create Group'
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -906,7 +944,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       </Dialog>
 
       {/* Assign Evaluator Dialog */}
-      <Dialog open={showEvaluatorDialog} onOpenChange={setShowEvaluatorDialog}>
+      <Dialog open={showEvaluatorDialog} onOpenChange={(open) => !isAssigningEvaluator && setShowEvaluatorDialog(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Assign Evaluator</DialogTitle>
@@ -950,18 +988,28 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
               <Button
                 type="button"
                 variant="outline"
+                disabled={isAssigningEvaluator}
                 onClick={() => { setShowEvaluatorDialog(false); setEvaluatorForm({ evaluatorId: '' }); }}
               >
                 Cancel
               </Button>
-              <Button type="submit">Assign Evaluator</Button>
+              <Button type="submit" disabled={isAssigningEvaluator}>
+                {isAssigningEvaluator ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  'Assign Evaluator'
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Add Student Dialog */}
-      <Dialog open={showAddStudentDialog} onOpenChange={setShowAddStudentDialog}>
+      <Dialog open={showAddStudentDialog} onOpenChange={(open) => !isAddingStudent && setShowAddStudentDialog(open)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Add Student to Group</DialogTitle>
@@ -1003,11 +1051,21 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
               <Button
                 type="button"
                 variant="outline"
+                disabled={isAddingStudent}
                 onClick={() => { setShowAddStudentDialog(false); setStudentForm({ studentId: '' }); }}
               >
                 Cancel
               </Button>
-              <Button type="submit">Add Student</Button>
+              <Button type="submit" disabled={isAddingStudent}>
+                {isAddingStudent ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Student'
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

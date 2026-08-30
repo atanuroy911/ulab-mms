@@ -250,7 +250,7 @@ export default function SemesterManagement() {
       </CardContent>
 
       {/* Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(open) => !submitting && setShowDialog(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -325,7 +325,7 @@ export default function SemesterManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={submitting}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={submitting}>

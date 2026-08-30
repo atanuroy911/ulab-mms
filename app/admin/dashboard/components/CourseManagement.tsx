@@ -115,6 +115,8 @@ export default function CourseManagement() {
   const [registryEntries, setRegistryEntries] = useState<RegistryDiffEntry[]>([]);
   const [selectedRegistryCodes, setSelectedRegistryCodes] = useState<Set<string>>(new Set());
   const [registryImporting, setRegistryImporting] = useState(false);
+  const [savingCourse, setSavingCourse] = useState(false);
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCourses();
@@ -269,6 +271,7 @@ export default function CourseManagement() {
       return;
     }
 
+    setSavingCourse(true);
     try {
       const response = await fetch('/api/admin/courses', {
         method: 'POST',
@@ -291,6 +294,8 @@ export default function CourseManagement() {
     } catch (error) {
       console.error('Add course error:', error);
       toast.error('Failed to add course');
+    } finally {
+      setSavingCourse(false);
     }
   };
 
@@ -302,6 +307,7 @@ export default function CourseManagement() {
       return;
     }
 
+    setSavingCourse(true);
     try {
       const response = await fetch('/api/admin/courses', {
         method: 'PUT',
@@ -328,6 +334,8 @@ export default function CourseManagement() {
     } catch (error) {
       console.error('Update course error:', error);
       toast.error('Failed to update course');
+    } finally {
+      setSavingCourse(false);
     }
   };
 
@@ -336,6 +344,7 @@ export default function CourseManagement() {
       return;
     }
 
+    setDeletingCourseId(courseId);
     try {
       const response = await fetch(`/api/admin/courses?id=${courseId}`, {
         method: 'DELETE',
@@ -351,6 +360,8 @@ export default function CourseManagement() {
     } catch (error) {
       console.error('Delete course error:', error);
       toast.error('Failed to delete course');
+    } finally {
+      setDeletingCourseId(null);
     }
   };
 
@@ -786,9 +797,14 @@ export default function CourseManagement() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        disabled={deletingCourseId === course._id}
                         onClick={() => handleDeleteCourse(course._id, course.courseCode)}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        {deletingCourseId === course._id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        )}
                       </Button>
                     </div>
                   </TableCell>
@@ -800,7 +816,7 @@ export default function CourseManagement() {
       )}
 
       {/* Add Course Modal */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+      <Dialog open={showAddModal} onOpenChange={(open) => !savingCourse && setShowAddModal(open)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Course</DialogTitle>
@@ -904,6 +920,7 @@ export default function CourseManagement() {
               <Button
                 type="button"
                 variant="outline"
+                disabled={savingCourse}
                 onClick={() => {
                   setShowAddModal(false);
                   resetForm();
@@ -911,14 +928,23 @@ export default function CourseManagement() {
               >
                 Cancel
               </Button>
-              <Button type="submit">Add Course</Button>
+              <Button type="submit" disabled={savingCourse}>
+                {savingCourse ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Course'
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Edit Course Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+      <Dialog open={showEditModal} onOpenChange={(open) => !savingCourse && setShowEditModal(open)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Course</DialogTitle>
@@ -1022,6 +1048,7 @@ export default function CourseManagement() {
               <Button
                 type="button"
                 variant="outline"
+                disabled={savingCourse}
                 onClick={() => {
                   setShowEditModal(false);
                   setEditingCourse(null);
@@ -1030,14 +1057,23 @@ export default function CourseManagement() {
               >
                 Cancel
               </Button>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit" disabled={savingCourse}>
+                {savingCourse ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Import Modal */}
-      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+      <Dialog open={showImportModal} onOpenChange={(open) => !importing && setShowImportModal(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Import Courses</DialogTitle>
@@ -1095,6 +1131,7 @@ export default function CourseManagement() {
           <DialogFooter>
             <Button
               variant="outline"
+              disabled={importing}
               onClick={() => {
                 setShowImportModal(false);
                 setImportFile(null);
@@ -1270,6 +1307,7 @@ export default function CourseManagement() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={deletingCourseId === viewingCourse._id}
                     onClick={() => {
                       setShowViewModal(false);
                       handleDeleteCourse(viewingCourse._id, viewingCourse.courseCode);
