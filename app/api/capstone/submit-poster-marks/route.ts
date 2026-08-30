@@ -6,6 +6,16 @@ import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneMarks from '@/models/CapstoneMarks';
 import mongoose from 'mongoose';
 
+// A user may submit marks for a capstone group only if they supervise it or have been
+// assigned to it as an evaluator by the admin.
+function isGroupGrader(group: any, userId: string): boolean {
+  const supervisorId = group.supervisorId?._id ?? group.supervisorId;
+  if (supervisorId && String(supervisorId) === String(userId)) return true;
+  return (group.evaluatorAssignments || []).some(
+    (assignment: any) => String(assignment?.evaluatorId?._id ?? assignment?.evaluatorId) === String(userId)
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -21,11 +31,25 @@ export async function POST(request: NextRequest) {
     const group = await CapstoneGroup.findById(groupId).populate('studentIds').populate('courseId').populate('supervisorId');
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
+    // Only the group's supervisor or an assigned evaluator may record marks for it.
+    // Without this, any signed-in teacher could overwrite any group's marks by guessing
+    // a groupId, since the group is looked up by id alone.
+    if (!isGroupGrader(group, session.user.id)) {
+      return NextResponse.json({ error: 'You are not assigned to this group' }, { status: 403 });
+    }
+
+    // Marks may only be recorded for students who are actually in this group - otherwise a
+    // caller could attach a mark to any student in the system via a group they do grade.
+    const memberIds = new Set(
+      (group.studentIds || []).map((s: any) => String(s?._id ?? s))
+    );
+
     const saved: any[] = [];
     for (const m of marks) {
       const studentId = m._id;
       const value = Number(m.marks ?? 0);
       if (!mongoose.Types.ObjectId.isValid(studentId)) continue;
+      if (!memberIds.has(String(studentId))) continue;
 
       let doc = await CapstoneMarks.findOne({ studentId, groupId, supervisorId: group.supervisorId, courseId: group.courseId, submissionType: 'poster' });
       if (!doc) {
