@@ -1,3 +1,28 @@
+# [1.14.0](https://github.com/atanuroy911/ulab-mms/compare/v1.13.1...v1.14.0) (2026-08-30)
+
+
+### Bug Fixes
+
+* **export:** correct CourseSummary auto-fill and Lab final-exam matching ([1f6b8a3](https://github.com/atanuroy911/ulab-mms/commit/1f6b8a35890739c19c51fde3ec6b43f02e80ad25))
+* **marks:** remove add-marks-via-dictation feature ([487da57](https://github.com/atanuroy911/ulab-mms/commit/487da572791455cfc74bd38fb95e4ad3885f84fa))
+* **security:** derive mark courseId from the verified exam instead of the request body ([980c475](https://github.com/atanuroy911/ulab-mms/commit/980c47560d83fc4a2f528a9c21ab68ee28054220))
+* **security:** escape user input interpolated into MongoDB regex queries ([6684c8e](https://github.com/atanuroy911/ulab-mms/commit/6684c8e030dcfe043ae72456fbf1dca800b36a38))
+* **security:** restrict capstone mark submission to the group's assigned graders ([bfc4c9a](https://github.com/atanuroy911/ulab-mms/commit/bfc4c9a9e20ed8df08ad4cd4c21695cc9ab14dc7))
+* **urms:** compute grade totals via the real aggregation logic ([b16da32](https://github.com/atanuroy911/ulab-mms/commit/b16da32b2c2bada034cc20788096371de8aed5fe))
+
+
+### Features
+
+* **attendance:** add per-date Randomize action ([2be0525](https://github.com/atanuroy911/ulab-mms/commit/2be05258d9b36569dbfb50997bdfbb610d6754db))
+* **attendance:** show withdrawn students and cap missed-class projection ([5d54889](https://github.com/atanuroy911/ulab-mms/commit/5d54889720b4471c7c7bfa6223e014bd5cc33589))
+* **marks:** add Grace bonus-marks workflow ([194e040](https://github.com/atanuroy911/ulab-mms/commit/194e0400c3018ba6d7a2930776d8b4acec0263eb))
+* **marks:** add per-category highest/lowest/average statistics ([812ac22](https://github.com/atanuroy911/ulab-mms/commit/812ac22be047eda1a5bff44f429b4524b0fac24d))
+* **project:** add bulk Combined-CO actions and fix concurrent-save errors ([57c5e32](https://github.com/atanuroy911/ulab-mms/commit/57c5e32545afe7f3dee6de9c2ed733a15b0490bc))
+* **project:** expand/collapse Group column and move actions to a menu ([d9500b4](https://github.com/atanuroy911/ulab-mms/commit/d9500b482ccaa3b3614b97ae7e83b864cbb28bea))
+* **students:** add Midterm/Final/Attendance/Performance columns ([ea7a746](https://github.com/atanuroy911/ulab-mms/commit/ea7a746e65f5a85a461912835afec5b7b7787dc8))
+* **students:** redesign Students tab into a compact roster ([cde0dda](https://github.com/atanuroy911/ulab-mms/commit/cde0ddacf7f86466c37647143b348c67dccda2c6))
+* **ui:** add explanatory tooltips to disabled and icon-only buttons ([c7fddef](https://github.com/atanuroy911/ulab-mms/commit/c7fddefb67f5d0e6f1cad84d65e4d27cfb3ae2c8))
+
 ## [1.13.1](https://github.com/atanuroy911/ulab-mms/compare/v1.13.0...v1.13.1) (2026-08-30)
 
 
