@@ -126,7 +126,11 @@ export default function BulkRenameExamsModal({ isOpen, onClose, exams, onRenamed
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSaveAll} disabled={saving || changedExamIds === 0}>
+          <Button
+            onClick={handleSaveAll}
+            disabled={saving || changedExamIds === 0}
+            title={!saving && changedExamIds === 0 ? 'No exam names have been changed yet' : undefined}
+          >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {saving ? 'Saving...' : `Save ${changedExamIds > 0 ? `(${changedExamIds})` : ''}`}
           </Button>

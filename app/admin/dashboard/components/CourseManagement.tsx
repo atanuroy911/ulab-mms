@@ -1142,6 +1142,7 @@ export default function CourseManagement() {
             <Button
               onClick={handleImport}
               disabled={!importFile || importing}
+              title={!importFile && !importing ? 'Choose a CSV file to import' : undefined}
             >
               {importing ? (
                 <>
@@ -1723,6 +1724,7 @@ export default function CourseManagement() {
             <Button
               onClick={handleRegistryImport}
               disabled={registryImporting || selectedRegistryCodes.size === 0}
+              title={!registryImporting && selectedRegistryCodes.size === 0 ? 'Select at least one course to import' : undefined}
             >
               {registryImporting ? (
                 <>

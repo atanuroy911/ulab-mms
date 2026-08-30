@@ -486,6 +486,7 @@ export default function CapstoneAssignmentManagement() {
                 disabled={!formData.courseId || students.length === 0}
                 className="w-full px-3 py-2 border rounded-md mt-1"
                 required
+                title={!formData.courseId ? 'Select a course first' : students.length === 0 ? 'No students found in this course' : undefined}
               >
                 <option value="">
                   {students.length === 0 ? 'Select a course first' : 'Select a student'}

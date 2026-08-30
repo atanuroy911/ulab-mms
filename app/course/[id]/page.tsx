@@ -3972,7 +3972,11 @@ export default function CoursePage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleImportCourse} disabled={!importCourseFile || importingCourse}>
+            <Button
+              onClick={handleImportCourse}
+              disabled={!importCourseFile || importingCourse}
+              title={!importCourseFile && !importingCourse ? 'Choose a course export file to import' : undefined}
+            >
               {importingCourse ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -4423,6 +4427,7 @@ export default function CoursePage() {
                       id={`exam-zero-${exam._id}`}
                       checked={selectedExamsForAction.length === 0 || selectedExamsForAction.includes(exam._id)}
                       disabled={selectedExamsForAction.length === 0}
+                      title={selectedExamsForAction.length === 0 ? 'All exams selected by default — uncheck "All Exams" above to pick individual ones' : undefined}
                       onCheckedChange={(checked) => {
                         if (checked) {
                           setSelectedExamsForAction([...selectedExamsForAction, exam._id]);
@@ -4597,6 +4602,7 @@ export default function CoursePage() {
             onClick={handleSetColumnMark}
             disabled={settingColumnMark || columnMarkValue === ''}
             className="bg-blue-600 hover:bg-blue-700"
+            title={!settingColumnMark && columnMarkValue === '' ? 'Enter a mark value first' : undefined}
           >
             {settingColumnMark ? 'Applying...' : `Apply to All ${students.length} Students`}
           </Button>

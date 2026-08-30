@@ -760,6 +760,7 @@ export default function CapstoneManagement() {
                   size="sm"
                   onClick={() => handleNumberOfMembersChange(formData.numberOfMembers - 1)}
                   disabled={formData.numberOfMembers <= 3}
+                  title={formData.numberOfMembers <= 3 ? 'Groups must have at least 3 members' : undefined}
                 >
                   -
                 </Button>
@@ -772,6 +773,7 @@ export default function CapstoneManagement() {
                   size="sm"
                   onClick={() => handleNumberOfMembersChange(formData.numberOfMembers + 1)}
                   disabled={formData.numberOfMembers >= 6}
+                  title={formData.numberOfMembers >= 6 ? 'Groups can have at most 6 members' : undefined}
                 >
                   +
                 </Button>

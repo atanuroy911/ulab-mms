@@ -335,7 +335,12 @@ export default function ResourcesManager() {
 
             <div className="relative">
               <Input type="file" multiple onChange={handleUploadFile} disabled={uploading || !currentFolderId} className="hidden" id="file-upload" />
-              <Button onClick={() => document.getElementById("file-upload")?.click()} disabled={uploading || !currentFolderId} variant="outline">
+              <Button
+                onClick={() => document.getElementById("file-upload")?.click()}
+                disabled={uploading || !currentFolderId}
+                variant="outline"
+                title={!uploading && !currentFolderId ? 'Open a folder first — files must be uploaded into a folder' : undefined}
+              >
                 <Upload className="w-4 h-4 mr-2" /> {uploading ? "Uploading..." : "Upload Files"}
               </Button>
             </div>

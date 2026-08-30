@@ -134,7 +134,11 @@ export default function ScaleMarksModal({ isOpen, onClose, exam, marks, onScaled
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleScale} disabled={saving || enteredCount === 0}>
+          <Button
+            onClick={handleScale}
+            disabled={saving || enteredCount === 0}
+            title={!saving && enteredCount === 0 ? 'No marks entered in this column yet — nothing to scale' : undefined}
+          >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeftRight className="mr-2 h-4 w-4" />}
             {saving ? 'Scaling...' : 'Scale Marks'}
           </Button>

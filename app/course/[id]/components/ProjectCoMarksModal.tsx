@@ -181,6 +181,13 @@ export default function ProjectCoMarksModal({
                   onChange={(e) => handleChange(i, e.target.value)}
                   placeholder="0"
                   className="mt-1 h-8 text-center"
+                  title={
+                    autoDistribute
+                      ? 'Auto-distribute is on — turn it off to edit individual COs'
+                      : i === lastIndex
+                      ? 'This CO auto-fills with whatever marks are left over'
+                      : undefined
+                  }
                 />
               </div>
             ))}

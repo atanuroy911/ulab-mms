@@ -764,6 +764,7 @@ export default function BulkPasteGridView({
             onClick={() => setStep((step + 1) as 2 | 3)}
             disabled={step === 1 && !canGoToStep2}
             className="flex-1"
+            title={step === 1 && !canGoToStep2 ? 'Paste data and select the student ID column before continuing' : undefined}
           >
             Next
             <ArrowRight className="w-4 h-4 ml-2" />
@@ -773,6 +774,7 @@ export default function BulkPasteGridView({
             onClick={handleSaveAll}
             disabled={saving || totalValidRows === 0}
             className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+            title={!saving && totalValidRows === 0 ? 'No valid rows matched to students yet — nothing to save' : undefined}
           >
             {saving ? (
               <>

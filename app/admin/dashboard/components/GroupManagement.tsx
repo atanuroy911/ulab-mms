@@ -805,6 +805,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
                 className="w-full px-3 py-2 border rounded-md text-black"
                 disabled={loadingDropdowns || selectedGroup !== null || courses.length === 0}
                 required
+                title={selectedGroup !== null ? 'Course cannot be changed after a group is created' : undefined}
               >
                 <option value="">Select a course</option>
                 {courses.filter(course => course && course._id).map((course) => (

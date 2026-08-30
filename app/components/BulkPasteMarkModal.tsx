@@ -436,6 +436,7 @@ export default function BulkPasteMarkModal({
               onClick={handleSave}
               disabled={saving || totalValidRows === 0}
               className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+              title={!saving && totalValidRows === 0 ? 'No valid rows matched to students yet — nothing to save' : undefined}
             >
               {saving ? (
                 <>

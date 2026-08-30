@@ -756,6 +756,13 @@ export function ImportStudentsModal({
           <Button
             onClick={handleImport}
             disabled={isImporting || (!csvInput.trim()) || (diffResult.toAdd.length === 0 && (!deleteMissing || diffResult.missing.length === 0))}
+            title={
+              !isImporting && !csvInput.trim()
+                ? 'Paste student data before importing'
+                : !isImporting && diffResult.toAdd.length === 0 && (!deleteMissing || diffResult.missing.length === 0)
+                ? 'No changes detected — nothing to add or remove'
+                : undefined
+            }
           >
             {isImporting ? (
               <>

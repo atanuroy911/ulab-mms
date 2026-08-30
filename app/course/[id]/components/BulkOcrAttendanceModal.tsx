@@ -412,7 +412,17 @@ export default function BulkOcrAttendanceModal({
           <Button variant="outline" onClick={handleClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!activeSession || saving || acceptedRows.length === 0}>
+          <Button
+            onClick={handleSave}
+            disabled={!activeSession || saving || acceptedRows.length === 0}
+            title={
+              !saving && !activeSession
+                ? 'Open an attendance session for this date before saving'
+                : !saving && acceptedRows.length === 0
+                ? 'No rows accepted yet — review the extracted names first'
+                : undefined
+            }
+          >
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

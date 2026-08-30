@@ -437,6 +437,7 @@ export default function MarksView({
                                     }}
                                     className="w-full px-3 py-2 text-left text-xs hover:bg-accent transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                                     disabled={enteredCount === 0}
+                                    title={enteredCount === 0 ? 'No marks entered in this column yet — nothing to scale' : undefined}
                                   >
                                     <ArrowLeftRight className="w-3.5 h-3.5" />
                                     Scale to...
@@ -459,8 +460,9 @@ export default function MarksView({
                                     setOpenColumnMenu(null);
                                     onShowResetMarksModal(exam._id);
                                   }}
-                                  className="w-full px-3 py-2 text-left text-xs hover:bg-accent text-destructive transition-colors flex items-center gap-2"
+                                  className="w-full px-3 py-2 text-left text-xs hover:bg-accent text-destructive transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                                   disabled={enteredCount === 0}
+                                  title={enteredCount === 0 ? 'No marks entered in this column yet — nothing to remove' : undefined}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                   Remove marks for this column
