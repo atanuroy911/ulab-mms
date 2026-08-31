@@ -1,3 +1,10 @@
+## [1.14.1](https://github.com/atanuroy911/ulab-mms/compare/v1.14.0...v1.14.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* class monitor remove fix ([c3f900d](https://github.com/atanuroy911/ulab-mms/commit/c3f900db1cebc2f695ddaf4f9ab8267204ee1134))
+
 # [1.14.0](https://github.com/atanuroy911/ulab-mms/compare/v1.13.1...v1.14.0) (2026-08-30)
 
 
