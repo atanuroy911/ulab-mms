@@ -61,6 +61,31 @@ export function findProjectExam(exams: any[]) {
   return exams.find((e) => e.examCategory === 'Project');
 }
 
+/**
+ * Per-CO max marks for Midterm/Final/Project, read from course.coPoMapping.maxMarks. Project is
+ * special-cased: when combined Project CO tracking is on (course.coPoMapping.projectNumberOfCOs
+ * set), its max marks are stored under the literal key 'Project' - NOT under any specific Project
+ * exam's _id - since the CO breakdown is shared/combined across every Project-category exam, not
+ * tied to one of them. Indexing by projectExam._id there silently reads undefined and exports all
+ * zeros; this one function is the single place that gets the key right, so every consumer (the
+ * student-row calculator, the Alpha Excel export, the Alpha PDF export) agrees.
+ */
+export function getCoMaxMarks(
+  course: any,
+  midtermExam: any,
+  finalExam: any,
+  projectExam: any
+): { midMax: number[]; finalMax: number[]; projectMax: number[] } {
+  const maxMarks: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
+  const hasCombinedProjectCO = !!course?.coPoMapping?.projectNumberOfCOs;
+  const midMax = midtermExam ? maxMarks[midtermExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  const finalMax = finalExam ? maxMarks[finalExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  const projectMax = hasCombinedProjectCO
+    ? maxMarks['Project'] || [0, 0, 0, 0, 0, 0]
+    : projectExam ? maxMarks[projectExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  return { midMax, finalMax, projectMax };
+}
+
 export function getExamWeight(exams: any[], category: string) {
   const exam = exams.find((e) => e.examCategory === category);
   return exam ? exam.weightage || 0 : 0;
@@ -187,13 +212,8 @@ export function computeStudentRows(
   const projectExam = findProjectExam(exams);
 
   const coPoMapping: boolean[][] = course?.coPoMapping?.mapping || [];
-  const maxMarks: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
   const hasCombinedProjectCO = !!course?.coPoMapping?.projectNumberOfCOs;
-  const midMax = midtermExam ? maxMarks[midtermExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const finalMax = finalExam ? maxMarks[finalExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const projectMax = hasCombinedProjectCO
-    ? maxMarks['Project'] || [0, 0, 0, 0, 0, 0]
-    : projectExam ? maxMarks[projectExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  const { midMax, finalMax, projectMax } = getCoMaxMarks(course, midtermExam, finalExam, projectExam);
   const coMaxTotal = [0, 1, 2, 3, 4, 5].map((i) => (midMax[i] || 0) + (finalMax[i] || 0) + (projectMax[i] || 0));
   const poMappedCoCount = Array.from({ length: 12 }, (_, po) =>
     coPoMapping.reduce((sum, coRow) => sum + (coRow?.[po] ? 1 : 0), 0)
@@ -290,6 +310,7 @@ export interface CoPoSummary {
   poPercentageAvg: number[]; // 12, class average (0-1), non-withdrawn only
   sessionCount: number;
   absentStudentCount: number;
+  avgAbsentPerSession: number;
   finalTakenCount: number;
 }
 
@@ -344,18 +365,36 @@ export function computeCoPoSummary(
 
   const attendanceByStudent = computeAttendanceByStudent(students, attendanceSessions);
   const absentStudentCount = students.filter((s) => {
+    if (s.withdrawn) return false;
     const stat = attendanceByStudent.get(String(s._id));
     if (!stat || stat.total === 0) return false;
     return stat.present / stat.total < ATTENDANCE_AT_RISK_THRESHOLD;
   }).length;
 
+  // Average number of students absent per session - what the CourseSummary template's "Absent
+  // Students" cell actually asks for, not a count of at-risk (<75% attendance) students.
+  const avgAbsentPerSession = (() => {
+    if (attendanceSessions.length === 0) return 0;
+    const totalAbsences = attendanceSessions.reduce(
+      (sum, session: any) => sum + (session.records?.filter((r: any) => r.status === 'absent').length || 0),
+      0
+    );
+    return Math.round(totalAbsences / attendanceSessions.length);
+  })();
+
   const finalExam = findFinalExam(exams);
-  const finalTakenCount = finalExam ? rows.filter((r) => getMark(r.student._id, finalExam._id, marks) !== undefined).length : 0;
+  const finalTakenCount = finalExam
+    ? rows.filter((r) => {
+        if (r.isWithdrawn) return false;
+        const mark = getMark(r.student._id, finalExam._id, marks);
+        return !!mark && Number(mark.rawMark) > 0;
+      }).length
+    : 0;
 
   return {
     n, withdrawnCount, incompleteCount, gradedCount, distributionCounts,
     assessmentWeights, totalWeight, assessmentStats,
     coAttainedCounts, coPercentageAvg, poAttainedCounts, poPercentageAvg,
-    sessionCount: attendanceSessions.length, absentStudentCount, finalTakenCount,
+    sessionCount: attendanceSessions.length, absentStudentCount, avgAbsentPerSession, finalTakenCount,
   };
 }

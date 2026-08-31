@@ -152,7 +152,18 @@ function SettingsForm({
       </div>
 
       <div>
-        <label className="text-sm font-medium">Class Representative</label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">Class Representative</label>
+          {classRepresentativeId ? (
+            <button
+              type="button"
+              onClick={() => setClassRepresentativeId('')}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
         <input value={repSearch} onChange={(e) => setRepSearch(e.target.value)} placeholder="Search student name or id" className="w-full rounded-md border px-2 py-2 mt-1" />
         <div className="max-h-40 overflow-y-auto mt-2 rounded-md border bg-background">
           {filtered.map((st) => (
@@ -160,7 +171,7 @@ function SettingsForm({
               key={st._id}
               type="button"
               className={`w-full border-b px-3 py-2 text-left transition-colors last:border-b-0 ${classRepresentativeId === st._id ? 'bg-primary/10 text-foreground' : 'hover:bg-accent hover:text-accent-foreground'}`}
-              onClick={() => setClassRepresentativeId(st._id)}
+              onClick={() => setClassRepresentativeId(classRepresentativeId === st._id ? '' : st._id)}
             >
               <div className="font-medium text-foreground">{st.name}</div>
               <div className="text-xs text-muted-foreground">{st.studentId}</div>

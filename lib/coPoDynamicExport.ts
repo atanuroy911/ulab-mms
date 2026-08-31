@@ -24,10 +24,18 @@ import {
   findMidtermExam,
   findFinalExam,
   findProjectExam,
+  getCoMaxMarks,
   type StudentRow,
 } from '@/lib/coPoCalculations';
+import { getClassSessionCap, randomPartition } from '@/app/utils/classSchedule';
 
-const TEMPLATE_STUDENT_COUNT = 50;
+// The template's student block actually spans rows 10-69 (60 rows) - 50 of those get real
+// per-student data and the trailing 10 are unused formula-filled buffer rows before the footer
+// starts at row 71. Treating the block as only 50 rows tall (an earlier, smaller template
+// version's row count that was never updated) made every "fixed" footer row constant below
+// point 8 rows too high into the real template, so a shrink or the exact-50 case wrote class
+// stats and the signature line on top of the weight/grade-distribution table's real labels.
+const TEMPLATE_STUDENT_COUNT = 60;
 const GRADE_SHEET_FIRST_ROW = 10; // GradeSheet student rows start here (ends at 59 in the template)
 const COPO_SHEET_FIRST_ROW = 15; // CO_PO_AttainmentAnalysis student rows start here (ends at 64)
 
@@ -55,7 +63,27 @@ function shiftMergesBelow(worksheet: ExcelJS.Worksheet, templateLastRow: number,
   });
 }
 
+// ExcelJS represents Excel's "shared formula" groups as a single master cell plus clone cells
+// that just point back at it (`{ sharedFormula: '<master address>', result }`). spliceRows()
+// deletes/shifts rows without any awareness of that - if a clone's master gets deleted, or a
+// clone moves without its master (or vice versa), the group is left dangling and ExcelJS throws
+// "Shared Formula master must exist above and or left of clone" while writing the file. This
+// module already overwrites every cell it cares about with a plain literal, so nothing here is
+// meant to still be a formula by the time we save - flatten every formula cell (master or clone)
+// in the sheet to its last-known cached value first, so there is no shared-formula metadata left
+// for spliceRows to break, regardless of how many rows shrink/grow.
+function flattenFormulas(worksheet: ExcelJS.Worksheet) {
+  worksheet.eachRow({ includeEmpty: false }, (row) => {
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      if (cell.type === ExcelJS.ValueType.Formula) {
+        cell.value = (cell as any).result ?? null;
+      }
+    });
+  });
+}
+
 async function resizeStudentBlock(worksheet: ExcelJS.Worksheet, firstRow: number, count: number) {
+  flattenFormulas(worksheet);
   const lastTemplateRow = firstRow + TEMPLATE_STUDENT_COUNT - 1;
   const delta = count - TEMPLATE_STUDENT_COUNT;
   if (delta > 0) {
@@ -182,21 +210,21 @@ export async function buildDynamicCoPoWorkbook(params: {
     poAttainedCols.forEach((col, i) => { copoSheet.getCell(`${col}${cr}`).value = row.poAttained[i]; });
   });
 
-  // ── GradeSheet summary block (originally rows 64-77, now shifted by gradeShift) ──
+  // ── GradeSheet summary block (real template rows 72-85, shifted by gradeShift) ──
   const weightRows: Array<[number, number]> = [
-    [64, summary.assessmentWeights.attendance],
-    [65, summary.assessmentWeights.classPerformance],
-    [66, summary.assessmentWeights.quiz],
-    [67, summary.assessmentWeights.assignment],
-    [68, summary.assessmentWeights.midterm],
-    [69, summary.assessmentWeights.project],
-    [70, summary.assessmentWeights.final],
+    [72, summary.assessmentWeights.attendance],
+    [73, summary.assessmentWeights.classPerformance],
+    [74, summary.assessmentWeights.quiz],
+    [75, summary.assessmentWeights.assignment],
+    [76, summary.assessmentWeights.midterm],
+    [77, summary.assessmentWeights.project],
+    [78, summary.assessmentWeights.final],
   ];
   weightRows.forEach(([row, weight]) => {
     gradeSheet.getCell(`C${row + gradeShift}`).value = weight;
   });
-  gradeSheet.getCell(`B${67 + gradeShift}`).value = assignmentLabel;
-  gradeSheet.getCell(`C${71 + gradeShift}`).value = summary.totalWeight;
+  gradeSheet.getCell(`B${75 + gradeShift}`).value = assignmentLabel;
+  gradeSheet.getCell(`C${79 + gradeShift}`).value = summary.totalWeight;
 
   // ── Row 9 header labels (D-J) and the mirrored weight row (P-V) - both are template
   //    formulas anchored to the *original* row 64-70 addresses (e.g. D9 is
@@ -233,9 +261,9 @@ export async function buildDynamicCoPoWorkbook(params: {
   });
 
   summary.distributionCounts.forEach((count, i) => {
-    gradeSheet.getCell(`H${64 + i + gradeShift}`).value = count;
+    gradeSheet.getCell(`H${72 + i + gradeShift}`).value = count;
   });
-  gradeSheet.getCell(`H${76 + gradeShift}`).value = n;
+  gradeSheet.getCell(`H${84 + gradeShift}`).value = n;
 
   const assessmentCols: Array<[string, keyof typeof summary.assessmentStats]> = [
     ['P', 'attendance'], ['Q', 'classPerformance'], ['R', 'quiz'], ['S', 'assignment'],
@@ -248,8 +276,8 @@ export async function buildDynamicCoPoWorkbook(params: {
     gradeSheet.getCell(`${col}${66 + gradeShift}`).value = min;
   });
 
-  // ── CO_PO_AttainmentAnalysis class-average row (originally row 67, shifted with the sheet) ──
-  const TEMPLATE_COPO_AVG_ROW = 67; // fixed position of the class-average row in the original 50-row template
+  // ── CO_PO_AttainmentAnalysis class-average row (real template row 76, shifted with the sheet) ──
+  const TEMPLATE_COPO_AVG_ROW = 76; // fixed position of the class-average row in the real 60-row-block template
   const copoAvgRow = TEMPLATE_COPO_AVG_ROW + copoShift;
   const coValueGetters: Record<string, (r: StudentRow, i: number) => number> = {};
   ['D', 'E', 'F', 'G', 'H', 'I'].forEach((col, i) => { coValueGetters[col] = (r) => r.coMidterm[i]; });
@@ -293,16 +321,15 @@ export async function buildDynamicCoPoWorkbook(params: {
   const midtermExam = findMidtermExam(exams);
   const finalExam = findFinalExam(exams);
   const projectExam = findProjectExam(exams);
-  const maxMarksObj: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
   const coPoMatrix: boolean[][] = course?.coPoMapping?.mapping || [];
+  const { midMax, finalMax, projectMax } = getCoMaxMarks(course, midtermExam, finalExam, projectExam);
   const assessmentMaxRows = [
-    { row: 3, exam: midtermExam },
-    { row: 4, exam: finalExam },
-    { row: 5, exam: projectExam },
+    { row: 3, max: midMax },
+    { row: 4, max: finalMax },
+    { row: 5, max: projectMax },
   ];
   const coCols6 = ['D', 'E', 'F', 'G', 'H', 'I'];
-  assessmentMaxRows.forEach(({ row, exam }) => {
-    const max = exam ? maxMarksObj[exam._id.toString()] : undefined;
+  assessmentMaxRows.forEach(({ row, max }) => {
     coCols6.forEach((col, i) => {
       copoSheet.getCell(`${col}${row}`).value = max?.[i] || 0;
     });
@@ -319,7 +346,7 @@ export async function buildDynamicCoPoWorkbook(params: {
   //    template only ever printed the name/title/department with nothing indicating where to
   //    actually sign, unlike CourseSummary/ContinuousQualityImprovement which both have a
   //    "Signature of the..." caption). ──
-  const signatureRow = 74 + gradeShift;
+  const signatureRow = 82 + gradeShift; // blank row directly above the instructor-name row (83)
   gradeSheet.mergeCells(`B${signatureRow}:C${signatureRow}`);
   const signatureCell = gradeSheet.getCell(`B${signatureRow}`);
   signatureCell.value = '____________________';
@@ -343,9 +370,20 @@ export async function buildDynamicCoPoWorkbook(params: {
     courseSummarySheet.getCell('N24').value = n;
     courseSummarySheet.getCell('N25').value = n > 0 ? 1 : 0;
 
-    // Real attendance-session numbers instead of the template's static sample values.
-    courseSummarySheet.getCell('P30').value = summary.sessionCount; // "Session Planned" -> sessions actually conducted
-    courseSummarySheet.getCell('G39').value = summary.absentStudentCount; // "Absent Students" (<75% attendance)
+    // "Session Planned"/"Sessions Conducted"/"Lectures" are a fixed count by course type (a
+    // semester's usual schedule), not derived from however many sessions happen to be in the DB
+    // yet - matches the Beta export's convention.
+    const sessionsPlanned = getClassSessionCap(course?.courseType);
+    courseSummarySheet.getCell('P30').value = sessionsPlanned; // "Session Planned"
+    courseSummarySheet.getCell('P33').value = sessionsPlanned; // "Total Sessions Conducted (excluding midterm and final exams)"
+    courseSummarySheet.getCell('AG23').value = sessionsPlanned; // "Lectures"
+    // Per-topic "Number of Sessions" (5 rows) - split randomly so they sum to the planned total.
+    const topicSessionSplit = randomPartition(sessionsPlanned, 5);
+    ['AG4', 'AG5', 'AG6', 'AG7', 'AG8'].forEach((cell, i) => {
+      courseSummarySheet.getCell(cell).value = topicSessionSplit[i];
+    });
+
+    courseSummarySheet.getCell('G39').value = summary.avgAbsentPerSession; // "Absent Students" -> average absent per session
     courseSummarySheet.getCell('G38').value = 0; // "Tardy Students" - not tracked by this system
 
     // "Summary of COs" mini-table (rows 58-60) - was driven by formulas anchored to

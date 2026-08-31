@@ -10,6 +10,22 @@ export function getClassSessionCap(courseType?: 'Theory' | 'Lab'): number {
   return courseType === 'Lab' ? LAB_CLASS_CAP : THEORY_CLASS_CAP;
 }
 
+/** Randomly splits `total` into `parts` positive integers that sum to exactly `total` (requires
+ *  total >= parts). Used to fill in a per-topic session breakdown from just the overall count. */
+export function randomPartition(total: number, parts: number): number[] {
+  if (parts <= 1) return [total];
+  const cuts = new Set<number>();
+  while (cuts.size < parts - 1) {
+    cuts.add(1 + Math.floor(Math.random() * (total - 1)));
+  }
+  const boundaries = [0, ...Array.from(cuts).sort((a, b) => a - b), total];
+  const result: number[] = [];
+  for (let i = 1; i < boundaries.length; i++) {
+    result.push(boundaries[i] - boundaries[i - 1]);
+  }
+  return result;
+}
+
 /**
  * Dates matching the course's configured weekly class days, between the first session and today,
  * that have no session at all - i.e. classes that appear to have been skipped. Stops counting

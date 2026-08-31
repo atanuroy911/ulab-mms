@@ -24,6 +24,7 @@ import { parseCSV } from '@/app/utils/csv';
 import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
 import { teacherSidebarItems } from '@/app/components/teacherNav';
+import ImportCourseFileWizard from './components/ImportCourseFileWizard';
 
 interface Course {
   _id: string;
@@ -109,6 +110,7 @@ export default function Dashboard() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showImportAlphaModal, setShowImportAlphaModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -796,6 +798,16 @@ export default function Dashboard() {
             >
               <Upload className="h-4 w-4 mr-2" />
               Restore Course
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowImportAlphaModal(true)}
+              title="Import a hand-filled CO-PO course-file gradesheet as a new course"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Import Course File
+              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">Alpha</Badge>
             </Button>
             <Button
               size="sm"
@@ -1694,6 +1706,12 @@ export default function Dashboard() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ImportCourseFileWizard
+        isOpen={showImportAlphaModal}
+        onClose={() => setShowImportAlphaModal(false)}
+        onImported={fetchCourses}
+      />
 
       {/* Import Course Modal */}
       <Dialog open={showImportModal} onOpenChange={setShowImportModal}>

@@ -20,6 +20,7 @@ import {
   findMidtermExam,
   findFinalExam,
   findProjectExam,
+  getCoMaxMarks,
   type StudentRow,
   type CoPoSummary,
 } from '@/lib/coPoCalculations';
@@ -69,10 +70,7 @@ export function buildCoPoReportData(params: {
   const midtermExam = findMidtermExam(exams);
   const finalExam = findFinalExam(exams);
   const projectExam = findProjectExam(exams);
-  const maxMarksObj: Record<string, number[]> = course?.coPoMapping?.maxMarks || {};
-  const midMax = midtermExam ? maxMarksObj[midtermExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const finalMax = finalExam ? maxMarksObj[finalExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
-  const projectMax = projectExam ? maxMarksObj[projectExam._id.toString()] || [0, 0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0];
+  const { midMax, finalMax, projectMax } = getCoMaxMarks(course, midtermExam, finalExam, projectExam);
   const coMaxTotals = [0, 1, 2, 3, 4, 5].map((i) => (midMax[i] || 0) + (finalMax[i] || 0) + (projectMax[i] || 0));
   const coMarkDistribution = [
     { label: 'Midterm Exam', values: midMax },
