@@ -137,6 +137,23 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
   // Export
   const [exportingJournal, setExportingJournal] = useState(false);
   const [openStudentId, setOpenStudentId] = useState<string | null>(null);
+  // Active tab mirrored in the URL (?tab=report), so links, refresh and search land on it.
+  const [tab, setTab] = useState('journal');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('tab');
+    if (requested) setTab(requested);
+    // ?student=<studentAccountId> (from the global search) opens that student's details.
+    const student = params.get('student');
+    if (student) setOpenStudentId(student);
+  }, []);
+  const changeTab = (next: string) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === 'journal') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', next);
+    window.history.replaceState(window.history.state, '', url);
+  };
 
   const myId = session?.user?.id;
   const myRoles: string[] = (session?.user as any)?.roles || [];
@@ -462,7 +479,21 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           onUpdated={() => fetchAll()}
         />
 
-        <Tabs defaultValue="journal">
+        <Tabs
+          value={
+            // A tab this viewer can't see (e.g. from a shared link) falls back to the journal.
+            ({
+              journal: true,
+              'supervisor-marks': isSupervisor,
+              report: isSupervisor || isEvaluator,
+              presentation: isSupervisor || isEvaluator,
+              manage: canManage,
+            } as Record<string, boolean>)[tab]
+              ? tab
+              : 'journal'
+          }
+          onValueChange={changeTab}
+        >
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="journal">Weekly Journal</TabsTrigger>
             {isSupervisor && <TabsTrigger value="supervisor-marks">Supervisor Marks</TabsTrigger>}

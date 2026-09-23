@@ -23,7 +23,7 @@ import { parsePdfRoster, courseCodeMatches, type PdfParseResult } from '@/lib/pd
 import { parseCSV } from '@/app/utils/csv';
 import ChromeExtensionPromo from '@/components/ChromeExtensionPromo';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
-import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 import ImportCourseFileWizard from './components/ImportCourseFileWizard';
 import DepartmentOnboardingDialog from '@/app/components/DepartmentOnboardingDialog';
 import CoordinatorCapstonePanel from './components/CoordinatorCapstonePanel';
@@ -85,6 +85,7 @@ function makeImportPdfSlots(code: string, aliasEnabled: boolean, alternateCode: 
 }
 
 export default function Dashboard() {
+  const sidebarItems = useTeacherNavItems();
   const { data: session, status } = useSession();
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -114,6 +115,20 @@ export default function Dashboard() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showImportAlphaModal, setShowImportAlphaModal] = useState(false);
+
+  // ?action=add-course | restore-course | import-course-file opens that dialog - how the
+  // global search lands on "Add a course" etc. The param is removed once used so a refresh
+  // doesn't reopen it.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const action = url.searchParams.get('action');
+    if (!action) return;
+    if (action === 'add-course') setShowAddModal(true);
+    else if (action === 'restore-course') setShowImportModal(true);
+    else if (action === 'import-course-file') setShowImportAlphaModal(true);
+    url.searchParams.delete('action');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -664,9 +679,7 @@ export default function Dashboard() {
   };
 
 
-  const sidebarItems = ((session?.user as { roles?: string[] } | undefined)?.roles || []).includes('admin')
-    ? [...teacherSidebarItems, { title: 'Developer Settings', href: '/dashboard/developer', icon: Wrench }]
-    : teacherSidebarItems;
+
 
   if (status === 'loading' || loading) {
     return (
@@ -813,6 +826,7 @@ export default function Dashboard() {
               variant="outline"
               size="sm"
               onClick={() => setShowImportModal(true)}
+              title="Restore a course from a backup file exported from this system"
             >
               <Upload className="h-4 w-4 mr-2" />
               Restore Course
@@ -830,6 +844,7 @@ export default function Dashboard() {
             <Button
               size="sm"
               onClick={() => setShowAddModal(true)}
+              title="Create a new course for this semester"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Course

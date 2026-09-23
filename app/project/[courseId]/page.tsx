@@ -290,12 +290,14 @@ export default function ProjectCheckinPage() {
                         />
                         <Button
                           size="icon"
+                          aria-label="Save project title"
+                          title="Save project title"
                           onClick={() => doAction('setTitle', { groupId: myGroup._id, projectTitle: titleInput })}
                           disabled={actionLoading}
                         >
                           <Check className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="outline" onClick={() => setEditingGroupId(null)}>
+                        <Button size="icon" variant="outline" onClick={() => setEditingGroupId(null)} aria-label="Cancel" title="Cancel">
                           <X className="h-4 w-4" />
                         </Button>
                       </div>

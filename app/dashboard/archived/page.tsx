@@ -1,18 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, ArrowLeft, Archive, ArchiveRestore, BookOpen, FlaskConical } from 'lucide-react';
+import { Loader2, ArrowLeft, Archive, ArchiveRestore, BookOpen, FlaskConical, LogOut } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
-import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 
 interface Course {
   _id: string;
@@ -32,6 +32,7 @@ interface GroupedCourses {
 
 export default function ArchivedCoursesPage() {
   const { data: session, status } = useSession();
+  const teacherNav = useTeacherNavItems();
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +108,7 @@ export default function ArchivedCoursesPage() {
   if (status === 'loading' || loading) {
     return (
       <div className="h-dvh bg-background flex overflow-hidden">
-        <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+        <AdminSidebar items={teacherNav} title="Teacher Portal" />
         <div className="flex-1 flex flex-col">
           <div className="h-16 border-b px-4 sm:px-6 pl-16 md:pl-6 flex items-center">
             <Skeleton className="h-5 w-40" />
@@ -133,7 +134,7 @@ export default function ArchivedCoursesPage() {
 
   return (
     <div className="h-dvh bg-background flex overflow-hidden">
-      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+      <AdminSidebar items={teacherNav} title="Teacher Portal" />
 
       <div className="flex-1 flex flex-col">
         <nav className="border-b bg-background sticky top-0 z-30">
@@ -141,11 +142,21 @@ export default function ArchivedCoursesPage() {
             <h1 className="text-base sm:text-lg font-bold">Archived Courses</h1>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <Button variant="default" size="sm" asChild>
+              <Button variant="default" size="sm" asChild title="Capstone groups you supervise or evaluate">
                 <Link href="/capstone">
                   <FlaskConical className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Capstone</span>
                 </Link>
+              </Button>
+              {/* Every other teacher page has Sign Out in its header; this one was missing it. */}
+              <Button
+                variant="outline"
+                size="sm"
+                title="Sign out of your account"
+                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+              >
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sign Out</span>
               </Button>
             </div>
           </div>

@@ -104,7 +104,10 @@ export default function AccountManagement() {
   };
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  // ?q= pre-fills the search (the global search links an account here as ?tab=accounts&q=email).
+  const [search, setSearch] = useState(() =>
+    typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('q') || ''
+  );
 
   const [viewingAccount, setViewingAccount] = useState<Account | null>(null);
   const [viewingCourses, setViewingCourses] = useState<AccountCourse[]>([]);

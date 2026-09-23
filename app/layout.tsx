@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import AppFooter from "@/components/AppFooter";
 import ConditionalFooter from "@/components/ConditionalFooter";
 import BugReportButton from "@/components/BugReportButton";
+import { GlobalSearch } from "@/app/components/GlobalSearch";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,8 @@ export default function RootLayout({
             </div>
             <Toaster richColors position="top-right" />
             <BugReportButton />
+            {/* Ctrl/Cmd+K search for staff; renders nothing for students and signed-out visitors. */}
+            <GlobalSearch />
           </ThemeProvider>
         </AuthProvider>
       </body>

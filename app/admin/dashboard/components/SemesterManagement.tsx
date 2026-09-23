@@ -246,20 +246,47 @@ export default function SemesterManagement() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Semester Name *</Label>
+              {/* Quick picks write the canonical "Term YYYY" form - the same names the capstone
+                  "Open Session" wizard creates and matches, and the Term + year pair courses
+                  store - so one semester never ends up with two spellings. */}
+              <div className="flex flex-wrap gap-1.5">
+                {(() => {
+                  const year = new Date().getFullYear();
+                  return [year, year + 1].flatMap((y) =>
+                    ['Spring', 'Summer', 'Fall'].map((term) => {
+                      const name = `${term} ${y}`;
+                      return (
+                        <Button
+                          key={name}
+                          type="button"
+                          size="sm"
+                          variant={formData.name === name ? 'default' : 'outline'}
+                          className="h-7 px-2 text-xs"
+                          title={`Use "${name}"`}
+                          onClick={() => setFormData({ ...formData, name })}
+                        >
+                          {name}
+                        </Button>
+                      );
+                    })
+                  );
+                })()}
+              </div>
               <Input
                 id="name"
-                placeholder="e.g., Fall25, Spring26"
+                placeholder="e.g., Fall 2026"
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
               />
+              <p className="text-xs text-muted-foreground">Use the form &quot;Term Year&quot;, e.g. Fall 2026.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input
                 id="description"
-                placeholder="e.g., Fall 2025 Semester"
+                placeholder="Optional note, e.g. Fall 2026 semester"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })

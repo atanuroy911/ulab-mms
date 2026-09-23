@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cleanSemesterName, findSemesterByName } from '@/lib/semesterName';
 import dbConnect from '@/lib/mongodb';
 import Semester from '@/models/Semester';
 import mongoose from 'mongoose';
@@ -36,15 +37,15 @@ export async function PUT(
     }
 
     // Check if name is being changed and already exists
-    if (name && name !== semester.name) {
-      const existing = await Semester.findOne({ name });
+    if (name && cleanSemesterName(String(name)) !== semester.name) {
+      const existing = await findSemesterByName(String(name), String(semester._id));
       if (existing) {
         return NextResponse.json(
-          { error: 'Semester with this name already exists' },
+          { error: `A semester named "${existing.name}" already exists` },
           { status: 400 }
         );
       }
-      semester.name = name.trim();
+      semester.name = cleanSemesterName(String(name));
     }
 
     if (description !== undefined) semester.description = description;

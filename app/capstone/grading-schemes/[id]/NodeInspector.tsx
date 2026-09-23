@@ -422,6 +422,8 @@ export function NodeInspector({
                   size="icon"
                   className="h-8 w-8 shrink-0"
                   disabled={readOnly}
+                  aria-label="Remove this grade band"
+                  title="Remove this grade band"
                   onClick={() => set({ bands: (data.bands || []).filter((_: unknown, j: number) => j !== i) })}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

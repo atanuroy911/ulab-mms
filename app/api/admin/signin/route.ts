@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { setAdminHintCookie } from '@/lib/adminHintCookie';
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
 import bcrypt from 'bcryptjs';
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 30, // 30 minutes
       path: '/',
     });
+    setAdminHintCookie(response);
 
     return response;
   } catch (error: any) {

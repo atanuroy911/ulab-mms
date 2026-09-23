@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { notify } from '@/app/utils/notifications';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
-import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +42,7 @@ interface IStoredFile {
 
 export default function ResourcesPage({ params }: { params: Promise<{ folderPath?: string[] }> }) {
   const { data: session, status } = useSession();
+  const teacherNav = useTeacherNavItems();
   const router = useRouter();
   const [folders, setFolders] = useState<IResourceFolder[]>([]);
   const [files, setFiles] = useState<IStoredFile[]>([]);
@@ -358,7 +359,7 @@ export default function ResourcesPage({ params }: { params: Promise<{ folderPath
 
   return (
     <div className="h-dvh bg-background flex overflow-hidden">
-      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+      <AdminSidebar items={teacherNav} title="Teacher Portal" />
 
       <div className="flex-1 flex flex-col">
         <nav className="border-b bg-background sticky top-0 z-30">

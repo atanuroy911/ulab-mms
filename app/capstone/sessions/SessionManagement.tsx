@@ -240,8 +240,24 @@ export default function CapstoneSessionManagement() {
       ]);
       if (semRes.ok) setSemesters(semData);
       if (deptRes.ok) setDepartments(deptData);
-      if (sessRes.ok) setSessions(sessData);
-      else toast.error(sessData.error || 'Failed to load capstone sessions');
+      if (sessRes.ok) {
+        setSessions(sessData);
+        // ?session=<id> (from the global search or a shared link) opens that session directly.
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('action') === 'new-session') {
+          setShowCreate(true);
+          url.searchParams.delete('action');
+          window.history.replaceState(window.history.state, '', url);
+        }
+        const wanted = url.searchParams.get('session');
+        if (wanted) {
+          const match = (sessData as CapstoneSessionRow[]).find((x) => x._id === wanted);
+          if (match) openSession(match);
+          else toast.error('That capstone session was not found, or you cannot manage it');
+          url.searchParams.delete('session');
+          window.history.replaceState(window.history.state, '', url);
+        }
+      } else toast.error(sessData.error || 'Failed to load capstone sessions');
       if (usersRes.ok) setUsers(usersData);
     } catch (err) {
       console.error(err);

@@ -328,6 +328,8 @@ export default function AdminSettings() {
                     size="icon-sm"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                    title={showCurrentPassword ? 'Hide password' : 'Show password'}
                     disabled={submitting}
                   >
                     {showCurrentPassword ? (
@@ -360,6 +362,8 @@ export default function AdminSettings() {
                     size="icon-sm"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                     onClick={() => setShowNewPassword(!showNewPassword)}
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                    title={showNewPassword ? 'Hide password' : 'Show password'}
                     disabled={submitting}
                   >
                     {showNewPassword ? (

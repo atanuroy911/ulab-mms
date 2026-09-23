@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cleanSemesterName, findSemesterByName } from '@/lib/semesterName';
 import dbConnect from '@/lib/mongodb';
 import Semester from '@/models/Semester';
 import { verifyAdminToken } from '@/lib/adminAuth';
@@ -42,17 +43,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if semester already exists
-    const existing = await Semester.findOne({ name });
+    // Check if semester already exists (ignoring case and spacing)
+    const existing = await findSemesterByName(String(name));
     if (existing) {
       return NextResponse.json(
-        { error: 'Semester with this name already exists' },
+        { error: `A semester named "${existing.name}" already exists` },
         { status: 400 }
       );
     }
 
     const semester = new Semester({
-      name: name.trim(),
+      name: cleanSemesterName(String(name)),
       description: description || '',
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,

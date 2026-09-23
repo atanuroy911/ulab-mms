@@ -14,10 +14,27 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LogOut, Save, User, Mail, Link2, CheckCircle2, FlaskConical } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
-import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const teacherNav = useTeacherNavItems();
+
+  // /settings#password etc. (used by the global search): the cards render after data loads,
+  // so the browser's own jump-to-anchor usually fires too early - retry briefly.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      const el = document.getElementById(id);
+      if (el || ++tries > 20) {
+        window.clearInterval(timer);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, []);
   const router = useRouter();
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -139,7 +156,7 @@ export default function SettingsPage() {
 
   return (
     <div className="h-dvh bg-background flex overflow-hidden">
-      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+      <AdminSidebar items={teacherNav} title="Teacher Portal" />
 
       <div className="flex-1 flex flex-col">
         <nav className="border-b bg-background sticky top-0 z-30">
@@ -175,7 +192,7 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto p-4 pt-8">
 
         {/* Default Weightages */}
-        <Card className="mb-6">
+        <Card id="weightages" className="scroll-mt-20 mb-6">
           <CardHeader>
             <CardTitle>Default Exam Weightages</CardTitle>
             <CardDescription>
@@ -234,7 +251,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="mb-6">
+        <Card id="attendance" className="scroll-mt-20 mb-6">
           <CardHeader>
             <CardTitle>Attendance & Class Settings</CardTitle>
             <CardDescription>
@@ -247,7 +264,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Password Change / Set */}
-        <Card className="mb-6">
+        <Card id="password" className="scroll-mt-20 mb-6">
           <CardHeader>
             <CardTitle>{hasPassword ? 'Change Password' : 'Set Password'}</CardTitle>
             <CardDescription>
@@ -318,7 +335,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Linked Accounts */}
-        <Card className="mb-6">
+        <Card id="linked-accounts" className="scroll-mt-20 mb-6">
           <CardHeader>
             <CardTitle>Linked Accounts</CardTitle>
             <CardDescription>
@@ -357,7 +374,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Account Info */}
-        <Card>
+        <Card id="account" className="scroll-mt-20">
           <CardHeader>
             <CardTitle>Account Information</CardTitle>
             <CardDescription>

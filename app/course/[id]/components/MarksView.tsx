@@ -566,11 +566,12 @@ export default function MarksView({
         </div>
       </Card>
 
-      {/* Floating Action Buttons */}
+      {/* Floating Action Buttons - bottom-24 keeps them above the site-wide bug-report button (bottom-6 right-6, 48px tall). */}
       {showFloatingButtons && (
-        <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+        <div className="fixed bottom-24 right-6 flex flex-col items-end gap-3 z-50">
           <Button
             onClick={() => onShowBulkMarkModal()}
+            title="Enter marks for every student at once"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"
           >
@@ -579,6 +580,7 @@ export default function MarksView({
           </Button>
           <Button
             onClick={onShowSetZeroModal}
+            title="Fill every blank mark with 0 (existing marks are kept)"
             variant="secondary"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"
@@ -588,6 +590,7 @@ export default function MarksView({
           </Button>
           <Button
             onClick={() => onShowResetMarksModal()}
+            title="Clear marks - you'll choose what to reset and confirm first"
             variant="destructive"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"

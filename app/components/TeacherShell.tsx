@@ -8,9 +8,9 @@ import { useStaffViewer } from '@/app/components/useStaffViewer';
 import { adminSidebarItems } from '@/app/components/adminNav';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { LogOut, Wrench } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
-import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 import { DevModeBanner } from '@/app/components/DevModeBanner';
 
 /**
@@ -47,12 +47,8 @@ export function TeacherShell({
   // Capstone pages are shared with the /admin panel's web-admin login, which can't open
   // teacher pages - give it the admin panel's navigation and sign-out instead.
   const webAdmin = viewer.status === 'webAdmin';
-  const isAdminUser = viewer.status === 'teacher' && viewer.roles.includes('admin');
-  const items = webAdmin
-    ? adminSidebarItems
-    : isAdminUser
-      ? [...teacherSidebarItems, { title: 'Developer Settings', href: '/dashboard/developer', icon: Wrench }]
-      : teacherSidebarItems;
+  const teacherNav = useTeacherNavItems();
+  const items = webAdmin ? adminSidebarItems : teacherNav;
 
   const handleSignOut = async () => {
     if (webAdmin) {

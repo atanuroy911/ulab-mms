@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bug, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +16,12 @@ import { useSession } from 'next-auth/react';
 export default function BugReportButton() {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
+  // The global search's "Report a bug / request a feature" action opens this dialog.
+  useEffect(() => {
+    const openDialog = () => setOpen(true);
+    window.addEventListener('open-bug-report', openDialog);
+    return () => window.removeEventListener('open-bug-report', openDialog);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState('Bugs');
   const [issue, setIssue] = useState('');
@@ -68,6 +74,7 @@ export default function BugReportButton() {
         onClick={() => setOpen(true)}
         className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg z-50 p-0"
         aria-label="Report a Bug"
+        title="Report a bug or request a feature"
       >
         <Bug className="h-5 w-5" />
       </Button>

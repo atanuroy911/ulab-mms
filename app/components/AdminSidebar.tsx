@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Menu, LucideIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { Menu, LucideIcon, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { openGlobalSearch } from '@/app/components/GlobalSearch';
 import { useMediaQuery, BREAKPOINTS } from '@/lib/useMediaQuery';
 
 export interface SidebarItem {
@@ -243,6 +244,9 @@ export function AdminSidebar({
           <SheetHeader className="p-4 border-b">
             <SheetTitle>{title}</SheetTitle>
           </SheetHeader>
+          <div className="px-3 pt-3">
+            <SearchTrigger expanded onOpen={() => setMobileOpen(false)} />
+          </div>
           <GroupedNav items={items} isOpen pathname={pathname} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
@@ -257,8 +261,38 @@ export function AdminSidebar({
             {isOpen && <span className="ml-2 font-medium">{title}</span>}
           </Button>
         </div>
+        <div className={isOpen ? 'px-3 pt-3' : 'flex justify-center pt-3'}>
+          <SearchTrigger expanded={isOpen} />
+        </div>
         <GroupedNav items={items} isOpen={isOpen} pathname={pathname} />
       </aside>
     </>
+  );
+}
+
+/** Opens the global search (app/components/GlobalSearch.tsx) - the visible twin of Ctrl/Cmd+K. */
+function SearchTrigger({ expanded, onOpen }: { expanded: boolean; onOpen?: () => void }) {
+  const open = () => {
+    onOpen?.();
+    openGlobalSearch();
+  };
+  if (!expanded) {
+    return (
+      <Button variant="ghost" size="icon" className="h-9 w-9" onClick={open} title="Search (Ctrl+K)" aria-label="Search">
+        <Search className="h-4 w-4" />
+      </Button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={open}
+      title="Search pages, courses, students and capstone groups"
+      className="flex w-full items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+    >
+      <Search className="h-4 w-4 shrink-0" />
+      <span className="flex-1 text-left">Search…</span>
+      <kbd className="rounded border bg-muted px-1.5 font-mono text-[10px]">Ctrl K</kbd>
+    </button>
   );
 }

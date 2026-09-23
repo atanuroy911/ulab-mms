@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cleanSemesterName, findSemesterByName } from '@/lib/semesterName';
 import dbConnect from '@/lib/mongodb';
 import Semester from '@/models/Semester';
 import { getCapstoneActor, isAdmin } from '@/lib/capstoneAuth';
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    const name = typeof body?.name === 'string' ? cleanSemesterName(body.name) : '';
     if (!name) {
       return NextResponse.json({ error: 'A semester name is required' }, { status: 400 });
     }
@@ -56,10 +57,10 @@ export async function POST(request: NextRequest) {
 
     // `name` is uniquely indexed; check first so the common "it already exists" case comes
     // back as a clear message rather than a duplicate-key error.
-    const existing = await Semester.findOne({ name });
+    const existing = await findSemesterByName(name);
     if (existing) {
       return NextResponse.json(
-        { error: `A semester named "${name}" already exists` },
+        { error: `A semester named "${existing.name}" already exists` },
         { status: 409 }
       );
     }

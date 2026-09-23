@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
@@ -79,6 +79,7 @@ import {
   Info
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { openGlobalSearch } from '@/app/components/GlobalSearch';
 import { notify } from '@/app/utils/notifications';
 import { toast } from 'sonner';
 import { computeCoMarks } from '@/app/utils/bulkGridParsing';
@@ -189,6 +190,45 @@ export default function CoursePage() {
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias' | 'copo'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
+
+  // The active view lives in the URL (?view=marks), so a refresh, the Back button, a shared
+  // link and the global search all land on the same section. Read once after mount (reading
+  // during render would differ between server and client), then mirrored with replaceState so
+  // switching views doesn't flood the browser history.
+  const viewFromUrlRead = useRef(false);
+  useEffect(() => {
+    if (viewFromUrlRead.current) return;
+    viewFromUrlRead.current = true;
+    const requested = new URLSearchParams(window.location.search).get('view');
+    const views = ['overview', 'exams', 'students', 'marks', 'attendance', 'copo', 'project'] as const;
+    const match = views.find((v) => v === requested);
+    if (match && match !== 'overview') setActiveView(match);
+  }, []);
+  // ?student=<student ID> (from the global search) opens that student's details once the
+  // roster has loaded, then drops the parameter so a refresh doesn't reopen it.
+  const studentFromUrlHandled = useRef(false);
+  useEffect(() => {
+    if (studentFromUrlHandled.current || students.length === 0) return;
+    studentFromUrlHandled.current = true;
+    const url = new URL(window.location.href);
+    const wanted = url.searchParams.get('student');
+    if (!wanted) return;
+    const match = students.find((st) => st.studentId === wanted);
+    if (match) {
+      setSelectedStudent(match);
+      setShowStudentDetail(true);
+    }
+    url.searchParams.delete('student');
+    window.history.replaceState(window.history.state, '', url);
+  }, [students]);
+
+  useEffect(() => {
+    if (!viewFromUrlRead.current) return;
+    const url = new URL(window.location.href);
+    if (activeView === 'overview') url.searchParams.delete('view');
+    else url.searchParams.set('view', activeView);
+    window.history.replaceState(window.history.state, '', url);
+  }, [activeView]);
   const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
   const [showPopulateModal, setShowPopulateModal] = useState(false);
   const [searchStudentId, setSearchStudentId] = useState('');
@@ -2029,6 +2069,7 @@ export default function CoursePage() {
           </>
         }
         actions={[
+          { key: 'search', label: 'Search', icon: Search, onClick: openGlobalSearch, variant: 'outline', hint: 'Search courses, students and pages (Ctrl+K)' },
           { key: 'settings', label: 'Settings', icon: Settings, href: '/settings', variant: 'outline' },
           { key: 'dashboard', label: 'Dashboard', icon: ArrowLeft, href: '/dashboard', variant: 'outline' },
           {

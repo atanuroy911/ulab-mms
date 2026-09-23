@@ -712,12 +712,13 @@ export default function StudentsView({
         </div>
       </Card>
 
-      {/* Floating Action Buttons */}
+      {/* Floating Action Buttons - bottom-24 keeps them above the site-wide bug-report button (bottom-6 right-6, 48px tall). */}
       {showFloatingButtons && (
-        <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+        <div className="fixed bottom-24 right-6 flex flex-col items-end gap-3 z-50">
           {selectedStudentIds.size > 0 && (
             <Button
               onClick={() => setShowBulkDeleteModal(true)}
+              title="Delete the selected students - you'll be asked to confirm"
               variant="destructive"
               className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
               size="lg"
@@ -728,6 +729,7 @@ export default function StudentsView({
           )}
           <Button
             onClick={onShowAddStudentModal}
+            title="Add a student to this course"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"
           >
@@ -736,6 +738,7 @@ export default function StudentsView({
           </Button>
           <Button
             onClick={onShowBulkAddStudentModal}
+            title="Add many students at once by pasting or importing a list"
             variant="secondary"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"
@@ -745,6 +748,7 @@ export default function StudentsView({
           </Button>
           <Button
             onClick={() => setShowDeleteAllModal(true)}
+            title="Remove every student from this course - you'll be asked to confirm"
             variant="destructive"
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
             size="lg"

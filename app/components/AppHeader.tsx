@@ -19,6 +19,8 @@ export interface AppHeaderAction {
   variant?: 'default' | 'outline' | 'destructive' | 'secondary' | 'ghost';
   /** Keep the label visible even on small screens (icon-only is the default below sm). */
   alwaysShowLabel?: boolean;
+  /** Tooltip; defaults to the label, which matters when the button is icon-only on phones. */
+  hint?: string;
 }
 
 interface AppHeaderProps {
@@ -107,19 +109,20 @@ export function AppHeader({
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <RoleSwitcher />
               <ThemeToggle />
-              {actions.map(({ key, label, icon: ActionIcon, href, onClick, variant = 'outline', alwaysShowLabel }) => {
+              {actions.map(({ key, label, icon: ActionIcon, href, onClick, variant = 'outline', alwaysShowLabel, hint }) => {
                 const content = (
                   <>
                     <ActionIcon className={cn('h-4 w-4', alwaysShowLabel ? 'mr-2' : 'sm:mr-2')} />
                     <span className={alwaysShowLabel ? 'inline' : 'hidden sm:inline'}>{label}</span>
                   </>
                 );
+                // Below sm the label is hidden, so the button needs its own accessible name.
                 return href ? (
                   <Button key={key} variant={variant} size="sm" asChild>
-                    <Link href={href}>{content}</Link>
+                    <Link href={href} title={hint || label} aria-label={label}>{content}</Link>
                   </Button>
                 ) : (
-                  <Button key={key} variant={variant} size="sm" onClick={onClick}>
+                  <Button key={key} variant={variant} size="sm" onClick={onClick} title={hint || label} aria-label={label}>
                     {content}
                   </Button>
                 );
