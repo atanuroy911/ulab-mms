@@ -1,23 +1,32 @@
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
+import { isUlabEmail } from '@/lib/googleAccount';
+
+type CachedSettings = {
+  credentialsLoginEnabled: boolean;
+  courseCodeEditableByTeacher: boolean;
+  devAllowAnyEmailDomain: boolean;
+};
 
 // These two settings are read on every /auth/signin mount and every teacher
 // course-settings panel open, but only ever change when an admin flips a
 // toggle. A short TTL cache avoids hammering Mongo with the same findOne on
 // every page load while still picking up admin changes within a few seconds.
 const CACHE_TTL_MS = 30_000;
-let cachedSettings: { credentialsLoginEnabled: boolean; courseCodeEditableByTeacher: boolean } | null = null;
+let cachedSettings: CachedSettings | null = null;
 let cachedAt = 0;
-let pending: Promise<{ credentialsLoginEnabled: boolean; courseCodeEditableByTeacher: boolean }> | null = null;
+let pending: Promise<CachedSettings> | null = null;
 
-async function loadSettings() {
+async function loadSettings(): Promise<CachedSettings> {
   await dbConnect();
   const settings = await AdminSettings.findOne()
-    .select('credentialsLoginEnabled courseCodeEditableByTeacher')
+    .select('credentialsLoginEnabled courseCodeEditableByTeacher devAllowAnyEmailDomain')
     .lean();
   return {
     credentialsLoginEnabled: settings?.credentialsLoginEnabled !== false,
     courseCodeEditableByTeacher: settings?.courseCodeEditableByTeacher !== false,
+    // Opt-in only: a missing document or field means restrictions stay on.
+    devAllowAnyEmailDomain: settings?.devAllowAnyEmailDomain === true,
   };
 }
 
@@ -53,4 +62,18 @@ export async function isCredentialsLoginEnabled(): Promise<boolean> {
 export async function isCourseCodeEditableByTeacher(): Promise<boolean> {
   const settings = await getCachedSettings();
   return settings.courseCodeEditableByTeacher;
+}
+
+// Developer setting: when on, teacher accounts may use any email domain, so the app can be
+// tested without real @ulab.edu.bd inboxes. Off by default. Student Google flows (check-in,
+// marks, project, student portal) are never relaxed - see the signIn callback.
+export async function isDevAnyEmailDomainAllowed(): Promise<boolean> {
+  const settings = await getCachedSettings();
+  return settings.devAllowAnyEmailDomain;
+}
+
+/** The domain check for teacher accounts: @ulab.edu.bd, or anything while the developer setting is on. */
+export async function isAllowedTeacherEmail(email: string | null | undefined): Promise<boolean> {
+  if (isUlabEmail(email)) return true;
+  return !!email && (await isDevAnyEmailDomainAllowed());
 }

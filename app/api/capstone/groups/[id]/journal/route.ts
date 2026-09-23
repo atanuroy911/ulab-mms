@@ -53,6 +53,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!isGroupSupervisor(actor, group) && !(await canManageGroup(actor, group))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    // A journal comment is written as the supervisor, so it needs a person. The /admin
+    // panel's web-admin manages capstone but does not take part in marking or feedback.
+    if (actor.systemAccount) {
+      return NextResponse.json(
+        { error: 'The admin panel cannot comment on journals. Sign in as a teacher account to do that.' },
+        { status: 403 }
+      );
+    }
 
     const entry = await WeeklyJournalEntry.findOne({ _id: entryId, groupId: id });
     if (!entry) return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 });

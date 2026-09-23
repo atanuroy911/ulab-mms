@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Course from '@/models/Course';
 import { verifyAdminToken } from '@/lib/adminAuth';
 import { cascadeDeleteCourseData } from '@/lib/courseCascadeDelete';
+import { PEOPLE_ONLY } from '@/lib/webAdminAccount';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     await dbConnect();
 
     const [users, courseCounts] = await Promise.all([
-      User.find().select('name email role roles departmentId coordinatorDepartments googleId createdAt').sort({ createdAt: -1 }).lean(),
+      User.find(PEOPLE_ONLY).select('name email role roles departmentId coordinatorDepartments googleId invitePending inviteTokenExpiry createdAt').sort({ createdAt: -1 }).lean(),
       Course.aggregate([{ $group: { _id: '$userId', count: { $sum: 1 } } }]),
     ]);
 
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
       departmentId: user.departmentId ? String(user.departmentId) : null,
       coordinatorDepartments: user.coordinatorDepartments || [],
       provider: user.googleId ? 'google' : 'credentials',
+      // Invited via capstone but not activated yet (lib/userInvites.ts).
+      invitePending: !!user.invitePending,
+      inviteExpired: !!user.invitePending && (!user.inviteTokenExpiry || new Date(user.inviteTokenExpiry) < new Date()),
       createdAt: user.createdAt,
       courseCount: countByUserId.get(String(user._id)) || 0,
     }));

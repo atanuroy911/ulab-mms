@@ -1,17 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Department from '@/models/Department';
+import { verifyAdminAccess } from '@/lib/adminAuth';
 
 // Requires a signed-in session (any authenticated user - teacher or student, for onboarding
 // pickers) but no particular role; department names/codes aren't secret among signed-in
 // users, but this must not be reachable anonymously, and it must not perform a write (seeding
 // now happens once via the migration runner, not on every GET - see lib/migrations/).
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    // The /admin panel login has no NextAuth session but manages capstone sessions, whose
+    // create wizard needs this list.
+    if (!session?.user?.id && !(await verifyAdminAccess(request)).ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

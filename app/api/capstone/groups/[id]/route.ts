@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup, { CHOOSABLE_COMPONENTS, MAX_CHOSEN_EVALUATORS } from '@/models/CapstoneGroup';
 import { getCapstoneActor, canManageGroup, isGroupSupervisor, isGroupGrader } from '@/lib/capstoneAuth';
+import { assignableUserError } from '@/lib/webAdminAccount';
 
 const VALID_REMOVE_REASONS = ['dropped', 'transferred', 'withdrawn', 'admin-correction'];
 import { deleteGroupCascade } from '@/lib/capstoneCascadeDelete';
@@ -77,6 +78,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           { status: 400 }
         );
       }
+      const supervisorError = await assignableUserError(body.supervisorId);
+      if (supervisorError) return NextResponse.json({ error: supervisorError }, { status: 400 });
       group.supervisorId = body.supervisorId;
     }
 

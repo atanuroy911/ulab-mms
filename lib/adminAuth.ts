@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions, isStudentOnlySessionUser } from '@/app/api/auth/[...nextauth]/route';
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error('NEXTAUTH_SECRET must be set - admin auth cannot fall back to a hardcoded secret');
@@ -36,14 +36,20 @@ export interface AdminAccess {
  * additive over the old cookie-only check - nothing that worked before stops working.
  */
 export async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
-  if (await verifyAdminCookie(request)) {
-    return { ok: true, userId: null };
+  const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as { id?: string; roles?: string[] } | undefined;
+  // Student-only tokens carry an OAuth id, not a User id - never treat them as a person here.
+  const personId =
+    sessionUser?.id && !isStudentOnlySessionUser(sessionUser) ? sessionUser.id : null;
+
+  if (personId && sessionUser?.roles?.includes('admin')) {
+    return { ok: true, userId: personId };
   }
 
-  const session = await getServerSession(authOptions);
-  const roles = (session?.user as any)?.roles as string[] | undefined;
-  if (session?.user?.id && roles?.includes('admin')) {
-    return { ok: true, userId: session.user.id };
+  // The admin-panel cookie: if a teacher is also signed in in this browser, that person is
+  // the one acting, so report them for audit; otherwise the caller records "Web Admin".
+  if (await verifyAdminCookie(request)) {
+    return { ok: true, userId: personId };
   }
 
   return { ok: false, userId: null };

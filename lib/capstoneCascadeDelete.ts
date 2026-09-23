@@ -3,6 +3,24 @@ import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
 import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
 import CapstoneSession from '@/models/CapstoneSession';
 
+/** What deleteSessionCascade would remove, so the UI can show the damage before confirming. */
+export async function previewSessionCascade(sessionId: string) {
+  const session = await CapstoneSession.findById(sessionId).select('status');
+  if (!session) return null;
+  const groups = await CapstoneGroup.find({ sessionId }).select('members');
+  const [marks, journalEntries] = await Promise.all([
+    CapstoneMarkSubmission.countDocuments({ sessionId }),
+    WeeklyJournalEntry.countDocuments({ sessionId }),
+  ]);
+  return {
+    status: session.status,
+    groups: groups.length,
+    students: groups.reduce((n, g) => n + g.members.filter((m) => !m.removedAt).length, 0),
+    marks,
+    journalEntries,
+  };
+}
+
 /**
  * Deletes a whole capstone session and everything under it. Refuses on a closed session
  * unless explicitly forced - once results are snapshotted, deleting is a deliberate,

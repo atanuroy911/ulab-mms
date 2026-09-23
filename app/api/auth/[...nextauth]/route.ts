@@ -5,7 +5,8 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { isUlabEmail, looksLikeStudentName, extractStudentId } from '@/lib/googleAccount';
-import { isCredentialsLoginEnabled } from '@/lib/authSettings';
+import { clearInvite } from '@/lib/userInvites';
+import { isCredentialsLoginEnabled, isAllowedTeacherEmail } from '@/lib/authSettings';
 import { sendMail, mailShell } from '@/lib/mail';
 import Student from '@/models/Student';
 import StudentAccount from '@/models/StudentAccount';
@@ -65,14 +66,20 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email/password sign-in is currently disabled. Please use "Continue with Google" instead.');
         }
 
-        if (!isUlabEmail(credentials.email)) {
+        if (!(await isAllowedTeacherEmail(credentials.email))) {
           throw new Error('Please sign in with your @ulab.edu.bd email address');
         }
 
         const user = await User.findOne({ email: credentials.email });
 
-        if (!user) {
+        if (!user || user.systemAccount) {
           throw new Error('No user found with this email');
+        }
+
+        if (!user.password && user.invitePending) {
+          throw new Error(
+            'Your account has not been set up yet. Use the link in your invitation email, or "Continue with Google".'
+          );
         }
 
         if (!user.password) {
@@ -182,7 +189,10 @@ export const authOptions: NextAuthOptions = {
 
       const email = (user.email || '').toLowerCase();
 
-      if (!isUlabEmail(email)) {
+      // Student-only providers are always ULAB-only; the developer "any email domain"
+      // setting only relaxes teacher sign-in.
+      const domainOk = isStudentOnlyProvider ? isUlabEmail(email) : await isAllowedTeacherEmail(email);
+      if (!domainOk) {
         return '/auth/error?reason=domain';
       }
 
@@ -287,8 +297,11 @@ export const authOptions: NextAuthOptions = {
           `),
         }).catch(() => {});
       } else if (!existing.googleId) {
-        // A teacher with an existing (e.g. email/password) account is linking Google.
+        // A teacher with an existing (e.g. email/password) account is linking Google - or an
+        // invited supervisor/evaluator activating their pending account (lib/userInvites.ts):
+        // signing in with the Google account for that address proves they own it.
         existing.googleId = account.providerAccountId;
+        if (existing.invitePending) clearInvite(existing);
         await existing.save();
       }
 

@@ -5,6 +5,11 @@ export interface IAdminSettings extends Document {
   username: string; // Always 'admin'
   credentialsLoginEnabled: boolean; // Whether teachers can sign in/up with email+password
   courseCodeEditableByTeacher: boolean; // Whether teachers can edit a course's New/UNESCO code (aliasEnabled/alternateCode)
+  /** Developer setting: accept any email domain for teacher accounts (sign-up, sign-in,
+   *  invites) instead of only @ulab.edu.bd. For testing only - see lib/authSettings.ts. */
+  devAllowAnyEmailDomain: boolean;
+  devSettingsUpdatedBy?: mongoose.Types.ObjectId | null;
+  devSettingsUpdatedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +32,19 @@ const AdminSettingsSchema: Schema = new Schema(
     courseCodeEditableByTeacher: {
       type: Boolean,
       default: true, // Matches the alias/New Code feature's pre-existing always-editable behavior
+    },
+    devAllowAnyEmailDomain: {
+      type: Boolean,
+      default: false,
+    },
+    devSettingsUpdatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    devSettingsUpdatedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

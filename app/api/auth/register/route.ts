@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
-import { isCredentialsLoginEnabled } from '@/lib/authSettings';
-import { isUlabEmail } from '@/lib/googleAccount';
+import { isCredentialsLoginEnabled, isAllowedTeacherEmail } from '@/lib/authSettings';
 import { sendMail, mailShell } from '@/lib/mail';
 
 export const runtime = 'nodejs';
@@ -20,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isUlabEmail(email)) {
+    if (!(await isAllowedTeacherEmail(email))) {
       return NextResponse.json(
         { error: 'Please use your @ulab.edu.bd email address to register' },
         { status: 400 }
@@ -45,6 +44,20 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
+
+    // A pending capstone invite (lib/userInvites.ts) must NOT be claimable here: sign-up never
+    // proves the person owns the inbox, so anyone typing an invited colleague's address would
+    // take over their account and group assignments. Point them at the routes that do prove
+    // it - the invite link, Google, or a password-reset email.
+    if (existingUser?.invitePending) {
+      return NextResponse.json(
+        {
+          error:
+            'You have already been invited. Use the link in your invitation email, "Continue with Google", or "Forgot password" to get a new link.',
+        },
+        { status: 409 }
+      );
+    }
 
     if (existingUser) {
       return NextResponse.json(

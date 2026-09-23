@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Trash2, Plus, Info, Users, ExternalLink } from 'lucide-react';
+import { inputName } from './nodes';
 
 /**
  * Side panel for editing the selected node. Kept out of the node renderers themselves so
@@ -92,7 +93,7 @@ export function NodeInspector({
   // the keys a sum node may weight. Showing them removes the guesswork of matching an edge
   // label to an expression variable.
   const incomingEdges = edges.filter((e) => e.target === node.id);
-  const incomingHandles = incomingEdges.map((e) => e.targetHandle || 'in');
+  const incomingHandles = incomingEdges.map(inputName);
 
   return (
     <div className="flex h-full flex-col">
@@ -116,7 +117,7 @@ export function NodeInspector({
             </p>
             <div className="space-y-1.5">
               {incomingEdges.map((edge) => {
-                const handle = edge.targetHandle || 'in';
+                const handle = inputName(edge);
                 return (
                   <div key={edge.id} className="flex items-center gap-1.5">
                     <button

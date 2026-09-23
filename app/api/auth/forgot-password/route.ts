@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
     );
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!user) {
+    // The Web Admin system account (lib/webAdminAccount.ts) must never get a password.
+    if (!user || user.systemAccount) {
       return genericResponse;
     }
 

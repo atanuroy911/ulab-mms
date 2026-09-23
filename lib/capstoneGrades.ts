@@ -40,6 +40,7 @@ export interface MemberGrade {
   /** Raw submitted marks, for the detail sheet of the export. */
   submissions: Array<{
     component: CapstoneMarkComponent;
+    submitterId: string;
     submitterName: string;
     submitterRole: 'supervisor' | 'evaluator';
     counted: boolean;
@@ -47,6 +48,11 @@ export interface MemberGrade {
     rubricMax: number | null;
   }>;
   error?: string;
+  /**
+   * Set by redactMemberForGrader: the components this grader still owes. While non-empty,
+   * score/letter/trace are withheld, since the total would reveal other graders' marks.
+   */
+  gradeHiddenUntil?: CapstoneMarkComponent[];
 }
 
 export interface GroupGrades {
@@ -234,6 +240,7 @@ export async function computeSessionGrades(
           }
           return {
             component: sub.component,
+            submitterId,
             submitterName: userById.get(submitterId)?.name || submitterId,
             submitterRole: sub.submitterRole,
             counted,
@@ -290,4 +297,30 @@ export async function computeSessionGrades(
   });
 
   return { tracks, groups: groupGrades };
+}
+
+/** Components each grading role submits (see the marks route's SUPERVISOR_ONLY_COMPONENTS). */
+export const COMPONENTS_BY_ROLE: Record<'supervisor' | 'evaluator', CapstoneMarkComponent[]> = {
+  supervisor: ['report', 'presentation', 'peer', 'weeklyJournal'],
+  evaluator: ['report', 'presentation'],
+};
+
+/**
+ * What a supervisor/evaluator may see of one student's grade (coordinators see everything).
+ *
+ * To keep graders from being anchored by someone else's score, another grader's mark for a
+ * component is shown only once this grader has submitted their own for that component. The
+ * computed total and component breakdown would reveal those marks indirectly, so they stay
+ * hidden until the grader has submitted every component their role grades.
+ */
+export function redactMemberForGrader(
+  member: MemberGrade,
+  viewerId: string,
+  role: 'supervisor' | 'evaluator'
+): MemberGrade {
+  const mine = new Set(member.submissions.filter((s) => s.submitterId === viewerId).map((s) => s.component));
+  const submissions = member.submissions.filter((s) => s.submitterId === viewerId || mine.has(s.component));
+  const owed = COMPONENTS_BY_ROLE[role].filter((c) => !mine.has(c));
+  if (owed.length === 0) return { ...member, submissions };
+  return { ...member, submissions, score: null, letter: null, trace: [], gradeHiddenUntil: owed };
 }

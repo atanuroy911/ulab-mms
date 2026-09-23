@@ -37,7 +37,10 @@ const StudentAccountSchema: Schema = new Schema(
     },
     googleId: {
       type: String,
-      default: null,
+      // No `default: null` - a sparse unique index still indexes an explicit null, so a null
+      // default let only ONE placeholder account (created when a coordinator adds a student to
+      // a capstone group, before they've ever signed in) exist; the next failed with E11000 on
+      // googleId_1. Accounts not yet linked to Google must simply not have the field.
       unique: true,
       sparse: true,
     },

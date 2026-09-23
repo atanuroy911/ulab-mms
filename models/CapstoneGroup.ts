@@ -15,7 +15,7 @@ export interface ICapstoneGroupMember {
 export interface ICapstoneGroupEvaluator {
   evaluatorId: mongoose.Types.ObjectId;
   assignedAt: Date;
-  assignedBy: mongoose.Types.ObjectId;
+  assignedBy: mongoose.Types.ObjectId | null;
   unassignedAt?: Date | null;
 }
 
@@ -54,8 +54,10 @@ export interface ICapstoneGroup extends Document {
   chosenEvaluators: ICapstoneChosenEvaluators;
   /** Google Drive / external link for the group's submitted report. */
   reportUrl?: string | null;
+  /** When the supervisor/coordinator last emailed this group a journal reminder. */
+  lastJournalReminderAt?: Date | null;
   previousGroupId?: mongoose.Types.ObjectId | null;
-  createdBy: mongoose.Types.ObjectId;
+  createdBy: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -81,7 +83,8 @@ const EvaluatorSchema = new Schema(
   {
     evaluatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     assignedAt: { type: Date, default: Date.now },
-    assignedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    // null when assigned through the /admin panel's web-admin login (lib/capstoneAuth.ts).
+    assignedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     unassignedAt: { type: Date, default: null },
   },
   { _id: false }
@@ -144,15 +147,20 @@ const CapstoneGroupSchema: Schema = new Schema(
       type: String,
       default: null,
     },
+    lastJournalReminderAt: {
+      type: Date,
+      default: null,
+    },
     previousGroupId: {
       type: Schema.Types.ObjectId,
       ref: 'CapstoneGroup',
       default: null,
     },
     createdBy: {
+      // null when done through the /admin panel's web-admin login, which is not a User (lib/capstoneAuth.ts).
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
   },
   {

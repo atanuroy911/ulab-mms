@@ -14,7 +14,11 @@ import {
   Loader2, ArrowLeft, MessageSquare, Save, ExternalLink, Link2, CheckCircle2, AlertCircle, Users, Download,
 } from 'lucide-react';
 import { TeacherShell } from '@/app/components/TeacherShell';
+import { Tip } from '@/app/components/Tip';
+import { StudentDetailDialog } from '../../components/StudentDetailDialog';
+import { JournalReminderButton } from '../../components/JournalReminderButton';
 import { toast } from 'sonner';
+import { REPORT_RUBRICS } from '@/lib/capstoneRubrics';
 
 interface StudentAccountRef { _id: string; studentId: string; name: string; }
 interface EvaluatorRef { evaluatorId: { _id: string; name: string; email: string } | string; unassignedAt?: string | null; }
@@ -30,6 +34,7 @@ interface GroupDetail {
   evaluators: EvaluatorRef[];
   chosenEvaluators?: { presentation: string[]; report: string[] };
   reportUrl?: string | null;
+  lastJournalReminderAt?: string | null;
 }
 
 interface JournalEntry {
@@ -50,38 +55,29 @@ interface MarkSubmission {
   submitterId: string;
 }
 
-// Rubric criterion for presentation (5 criteria, 0/3/6/9 scale)
+// Rubric criterion for presentation (5 criteria, 0/3/6/9 scale), scored per student to
+// match the department's printed "Assessment Rubrics for Term Final Presentation" sheet.
+// Keys stay c0..c4 so rubricScores saved before per-student scoring still load.
 const PRESENTATION_CRITERIA = [
   'Presentation Skills (Eye contact, Language, Visual aid)',
-  'Organization of Presentation Material',
+  'Organization of the Presentation Material [CO5: A1]',
   'Contents',
-  'Question & Answer',
+  'Question Answer',
   'Time Management',
 ];
+const PRESENTATION_LEVELS = [
+  { value: 0, label: 'No or Wrong Answer' },
+  { value: 3, label: 'Poor' },
+  { value: 6, label: 'Satisfactory' },
+  { value: 9, label: 'Excellent' },
+];
+const PRESENTATION_MAX = PRESENTATION_CRITERIA.length * 9;
 
-// Report criteria by track
-const REPORT_CRITERIA: Record<string, string[]> = {
-  A: [
-    'Abstract', 'Background Literature [CO1]', 'Problem Statement [CO1]',
-    'Objective & Significance [CO1]', 'Scope & Limitation [CO1]', 'Tools [CO1]',
-    'Literature Review & Analysis [CO2]', 'Requirements, Task Distribution & Budgets [CO3]',
-    'Conclusion', 'References & Citations', 'Communication (Spelling, Grammar, Punctuation, Plagiarism)',
-  ],
-  B: [
-    'Abstract, Background, Problem Statement, Objective, Scope',
-    'Literature Review [CO1]', 'Performance Evaluation Criterion [CO1]',
-    'Literature Analysis [CO2]', 'Project Management & Financial Activity [CO3]',
-    'Usage of Modern Tools [CO4]', 'Design the Solution [CO5]',
-    'Implement the Solution [CO6]', 'Investigate Experimental Result [CO6]',
-    'Societal, Health, Safety, Legal & Cultural Aspects [CO7]',
-    'Environment & Sustainability [CO8]', 'Ethical & Professional Principles [CO9]',
-    'Conclusion', 'References, Spelling, Grammar, Punctuation & Plagiarism',
-  ],
-  C: [], // same as B
-};
-REPORT_CRITERIA.C = REPORT_CRITERIA.B;
-
-const REPORT_MAX: Record<string, number> = { A: 33, B: 42, C: 42 };
+// Report criteria by track, with the level wording from the department's rubric docs.
+const REPORT_LEVEL_NAMES = ['No / wrong answer', 'Poor', 'Satisfactory', 'Excellent'];
+function reportRubric(track: string) {
+  return REPORT_RUBRICS[(track as 'A' | 'B' | 'C')] || REPORT_RUBRICS.B;
+}
 
 const CHOOSABLE_COMPONENTS = [
   {
@@ -96,6 +92,22 @@ const CHOOSABLE_COMPONENTS = [
   },
 ];
 
+function memberId(m: Member): string {
+  return typeof m.studentAccountId === 'object' ? m.studentAccountId._id : m.studentAccountId;
+}
+
+function memberName(m: Member): string {
+  return typeof m.studentAccountId === 'object' ? m.studentAccountId.name : m.studentIdText;
+}
+
+function sumScores(scores: Record<string, number> | undefined): number {
+  return Object.values(scores || {}).reduce((a, b) => a + (b || 0), 0);
+}
+
+function isPresentationComplete(scores: Record<string, number> | undefined): boolean {
+  return !!scores && PRESENTATION_CRITERIA.every((_, idx) => typeof scores[`c${idx}`] === 'number');
+}
+
 export default function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params);
   const { data: session } = useSession();
@@ -109,7 +121,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
   const [peerMarks, setPeerMarks] = useState<Record<string, string>>({});
   // Rubric scores: component -> studentId or 'group' -> criterionIndex -> score
   const [reportScores, setReportScores] = useState<Record<string, number>>({});
-  const [presentationScores, setPresentationScores] = useState<Record<string, number>>({});
+  // Presentation is scored per student: studentAccountId -> criterion key -> score
+  const [presentationScores, setPresentationScores] = useState<Record<string, Record<string, number>>>({});
   const [savingMarks, setSavingMarks] = useState(false);
   const [reportUrl, setReportUrl] = useState('');
   const [savingReportUrl, setSavingReportUrl] = useState(false);
@@ -123,6 +136,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
   const [savingChosen, setSavingChosen] = useState(false);
   // Export
   const [exportingJournal, setExportingJournal] = useState(false);
+  const [openStudentId, setOpenStudentId] = useState<string | null>(null);
 
   const myId = session?.user?.id;
   const myRoles: string[] = (session?.user as any)?.roles || [];
@@ -174,7 +188,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
         const jMarks: Record<string, string> = {};
         const pMarks: Record<string, string> = {};
         const rScores: Record<string, number> = {};
-        const presScores: Record<string, number> = {};
+        const presScores: Record<string, Record<string, number>> = {};
         for (const m of marksData) {
           if (m.component === 'weeklyJournal') jMarks[m.studentAccountId] = String(m.rawScore);
           if (m.component === 'peer') pMarks[m.studentAccountId] = String(m.rawScore);
@@ -182,7 +196,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
             if (m.rubricScores) Object.assign(rScores, m.rubricScores);
           }
           if (m.component === 'presentation' && m.submitterId === myId) {
-            if (m.rubricScores) Object.assign(presScores, m.rubricScores);
+            if (m.rubricScores) presScores[m.studentAccountId] = { ...m.rubricScores };
           }
         }
         setJournalMarks(jMarks);
@@ -251,22 +265,42 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
 
   const submitRubricMarks = async (component: 'report' | 'presentation') => {
     if (!group) return;
-    const scores = component === 'report' ? reportScores : presentationScores;
-    const criteria = component === 'report' ? REPORT_CRITERIA[group.track] : PRESENTATION_CRITERIA;
-    const max = component === 'report' ? REPORT_MAX[group.track] : 45;
-    const rawScore = Object.values(scores).reduce((a, b) => a + (b || 0), 0);
+    const max = component === 'report' ? reportRubric(group.track).length * 3 : PRESENTATION_MAX;
 
-    // Report is group-wise — one submission per group; use all active members as targets
     const activeMembers = group.members.filter((m) => !m.removedAt);
     if (activeMembers.length === 0) { toast.error('No active members in this group'); return; }
 
+    // Report is group-level: the same rubric applies to every member. Presentation is
+    // per student, and a student must have every criterion scored before it is sent - a
+    // half-filled row would otherwise be saved as a low total instead of "not graded yet".
+    let marksPayload: Array<{ studentAccountId: string; rawScore: number; rubricScores: Record<string, number> }>;
+    if (component === 'report') {
+      const unscored = reportRubric(group.track).filter((_, idx) => typeof reportScores[`c${idx}`] !== 'number');
+      if (unscored.length > 0) {
+        toast.error(`Score every criterion first (${unscored.length} left)`);
+        return;
+      }
+      const rawScore = sumScores(reportScores);
+      marksPayload = activeMembers.map((m) => ({ studentAccountId: memberId(m), rawScore, rubricScores: reportScores }));
+    } else {
+      const partial = activeMembers.filter((m) => {
+        const scores = presentationScores[memberId(m)];
+        return scores && Object.keys(scores).length > 0 && !isPresentationComplete(scores);
+      });
+      if (partial.length > 0) {
+        toast.error(`Finish every criterion for ${partial.map(memberName).join(', ')} first`);
+        return;
+      }
+      const complete = activeMembers.filter((m) => isPresentationComplete(presentationScores[memberId(m)]));
+      if (complete.length === 0) { toast.error('Score at least one student first'); return; }
+      marksPayload = complete.map((m) => {
+        const scores = presentationScores[memberId(m)];
+        return { studentAccountId: memberId(m), rawScore: sumScores(scores), rubricScores: scores };
+      });
+    }
+
     setSavingMarks(true);
     try {
-      // Submit same rubric score for each active member (report is group-level)
-      const marksPayload = activeMembers.map((m) => {
-        const sid = typeof m.studentAccountId === 'object' ? m.studentAccountId._id : m.studentAccountId;
-        return { studentAccountId: sid, rawScore, rubricScores: scores };
-      });
       const res = await fetch(`/api/capstone/groups/${id}/marks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -274,7 +308,11 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save marks');
-      toast.success(`${component === 'report' ? 'Report' : 'Presentation'} marks saved (${rawScore}/${max})`);
+      toast.success(
+        component === 'report'
+          ? `Report marks saved (${marksPayload[0].rawScore}/${max})`
+          : `Presentation marks saved for ${data.saved} student${data.saved === 1 ? '' : 's'}`
+      );
       fetchAll();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save marks');
@@ -340,42 +378,89 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!group) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Group not found or access denied.</div>;
+  // Keep the page frame while loading so the sidebar and header don't flash away.
+  if (loading) return <TeacherShell title="Capstone Group"><div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></TeacherShell>;
+  if (!group) {
+    return (
+      <TeacherShell title="Capstone Group">
+        <div className="flex items-center justify-center py-24 text-muted-foreground">Group not found or access denied.</div>
+      </TeacherShell>
+    );
+  }
 
   const activeMembers = group.members.filter((m) => !m.removedAt);
   const activeEvaluators = group.evaluators.filter((e) => !e.unassignedAt);
-  const reportCriteria = REPORT_CRITERIA[group.track] || REPORT_CRITERIA.B;
-  const reportMax = REPORT_MAX[group.track] || 42;
+  const reportCriteria = reportRubric(group.track);
+  const reportMax = reportCriteria.length * 3;
   const reportCurrentScore = Object.values(reportScores).reduce((a, b) => a + (b || 0), 0);
-  const presCurrentScore = Object.values(presentationScores).reduce((a, b) => a + (b || 0), 0);
 
   return (
     <TeacherShell
       title={group.projectTitle || 'Untitled Project'}
       subtitle={`Track ${group.track}`}
       actions={
-        <Button asChild variant="outline" size="sm">
-          <Link href="/capstone">
-            <ArrowLeft className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Back</span>
-          </Link>
-        </Button>
+        <>
+          {(isSupervisor || canManage) && (
+            <JournalReminderButton
+              groupId={id}
+              lastSentAt={group.lastJournalReminderAt}
+              onSent={(at) => setGroup((g) => (g ? { ...g, lastJournalReminderAt: at } : g))}
+            />
+          )}
+          <Tip label="Back to My Groups">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/capstone">
+                <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
+              </Link>
+            </Button>
+          </Tip>
+        </>
       }
     >
       <div className="mx-auto max-w-4xl p-4 pt-8">
         {/* Group info */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-4">
           <Badge variant="outline">Track {group.track}</Badge>
           {isSupervisor && <Badge>Supervisor</Badge>}
           {isEvaluator && <Badge variant="secondary">Evaluator</Badge>}
           {canManage && <Badge variant="secondary">Coordinator/Admin</Badge>}
-          {activeMembers.map((m) => (
-            <Badge key={typeof m.studentAccountId === 'object' ? m.studentAccountId._id : m.studentIdText} variant="outline">
-              {typeof m.studentAccountId === 'object' ? m.studentAccountId.name : m.studentIdText}
-            </Badge>
-          ))}
         </div>
+
+        {/* Students - click one for their marks, grade and journal. */}
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" /> Students
+            </CardTitle>
+            <CardDescription>Click a student to see their marks, grade and weekly journal progress.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 sm:grid-cols-2">
+            {activeMembers.map((m) => (
+              <Tip key={memberId(m)} label="View marks, grade and journal">
+                <button
+                  type="button"
+                  onClick={() => setOpenStudentId(memberId(m))}
+                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{memberName(m)}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{m.studentIdText}</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {entries.filter((e) => e.studentAccountId === memberId(m) && e.submittedAt).length} journal
+                  </span>
+                </button>
+              </Tip>
+            ))}
+          </CardContent>
+        </Card>
+        <StudentDetailDialog
+          groupId={openStudentId ? id : null}
+          studentAccountId={openStudentId}
+          onClose={() => setOpenStudentId(null)}
+          onUpdated={() => fetchAll()}
+        />
 
         <Tabs defaultValue="journal">
           <TabsList className="flex-wrap h-auto gap-1">
@@ -389,10 +474,12 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           {/* ── Journal Tab ── */}
           <TabsContent value="journal" className="space-y-4 mt-4">
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={exportJournal} disabled={exportingJournal}>
-                {exportingJournal ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                <span className="ml-1.5">Export CSV</span>
-              </Button>
+              <Tip label="Download every student's journal entries and your comments as a spreadsheet">
+                <Button variant="outline" size="sm" onClick={exportJournal} disabled={exportingJournal}>
+                  {exportingJournal ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <span className="ml-1.5">Export CSV</span>
+                </Button>
+              </Tip>
             </div>
             {activeMembers.map((member) => {
               const sid = typeof member.studentAccountId === 'object' ? member.studentAccountId._id : member.studentAccountId;
@@ -471,17 +558,19 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                       </div>
                     );
                   })}
-                  <Button onClick={() => submitFinalMarks('weeklyJournal')} disabled={savingMarks} size="sm">
-                    {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Journal Marks
-                  </Button>
+                  <Tip label="Save each student's own journal mark (0-10). You can change them while the session is open.">
+                    <Button onClick={() => submitFinalMarks('weeklyJournal')} disabled={savingMarks} size="sm">
+                      {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                      Save Journal Marks
+                    </Button>
+                  </Tip>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Peer Mark (0–5)</CardTitle>
-                  <CardDescription>Contribution to the group, as assessed by the supervisor.</CardDescription>
+                  <CardDescription>Per student: each member&apos;s own contribution to the group, as assessed by the supervisor.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {activeMembers.map((member) => {
@@ -496,10 +585,12 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                       </div>
                     );
                   })}
-                  <Button onClick={() => submitFinalMarks('peer')} disabled={savingMarks} size="sm">
-                    {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Peer Marks
-                  </Button>
+                  <Tip label="Save each student's own peer mark (0-5) - their individual contribution to the group.">
+                    <Button onClick={() => submitFinalMarks('peer')} disabled={savingMarks} size="sm">
+                      {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                      Save Peer Marks
+                    </Button>
+                  </Tip>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -531,7 +622,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex gap-2 mt-3">
                       <Input placeholder="https://drive.google.com/..." value={reportUrl}
                         onChange={(e) => setReportUrl(e.target.value)} className="flex-1" />
-                      <Button size="sm" onClick={saveReportUrl} disabled={savingReportUrl}>
+                      <Button size="sm" onClick={saveReportUrl} disabled={savingReportUrl} title="Save the report link">
                         {savingReportUrl ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       </Button>
                     </div>
@@ -551,12 +642,21 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {reportCriteria.map((criterion, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-3">
-                      <Label className="flex-1 text-sm">{idx + 1}. {criterion}</Label>
+                    <div key={idx} className="flex items-start justify-between gap-3 border-b pb-3 last:border-b-0">
+                      <div className="flex-1">
+                        <Label className="text-sm">{idx + 1}. {criterion.label}</Label>
+                        {typeof reportScores[`c${idx}`] === 'number' && reportScores[`c${idx}`] > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {criterion.levels[reportScores[`c${idx}`] - 1]}
+                          </p>
+                        )}
+                      </div>
                       <div className="flex gap-1.5 shrink-0">
                         {[0, 1, 2, 3].map((score) => (
                           <button
                             key={score}
+                            type="button"
+                            title={`${REPORT_LEVEL_NAMES[score]} (${score})${score > 0 ? `: ${criterion.levels[score - 1]}` : ''}`}
                             onClick={() => setReportScores((prev) => ({ ...prev, [`c${idx}`]: score }))}
                             className={`h-8 w-8 rounded-md border text-sm font-medium transition-colors ${
                               reportScores[`c${idx}`] === score
@@ -570,10 +670,12 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                       </div>
                     </div>
                   ))}
-                  <Button onClick={() => submitRubricMarks('report')} disabled={savingMarks} size="sm" className="mt-2">
-                    {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    Submit Report Marks ({reportCurrentScore}/{reportMax})
-                  </Button>
+                  <Tip label="Submit your report rubric - one mark for the whole group, applied to every member. Every criterion must be scored.">
+                    <Button onClick={() => submitRubricMarks('report')} disabled={savingMarks} size="sm" className="mt-2">
+                      {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                      Submit Report Marks ({reportCurrentScore}/{reportMax})
+                    </Button>
+                  </Tip>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -586,36 +688,77 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                 <CardHeader>
                   <CardTitle className="text-base">Presentation Evaluation Rubric</CardTitle>
                   <CardDescription>
-                    Score each criterion 0/3/6/9. Max: 45.
-                    Current total: <strong>{presCurrentScore}/45</strong>
-                    &nbsp;— group-level mark applied to all members.
+                    Score each student on every criterion: No or Wrong Answer (0), Poor (3),
+                    Satisfactory (6), Excellent (9). Max {PRESENTATION_MAX} per student.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {PRESENTATION_CRITERIA.map((criterion, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-3">
-                      <Label className="flex-1 text-sm">{idx + 1}. {criterion}</Label>
-                      <div className="flex gap-1.5 shrink-0">
-                        {[0, 3, 6, 9].map((score) => (
-                          <button
-                            key={score}
-                            onClick={() => setPresentationScores((prev) => ({ ...prev, [`c${idx}`]: score }))}
-                            className={`h-8 w-8 rounded-md border text-sm font-medium transition-colors ${
-                              presentationScores[`c${idx}`] === score
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'hover:bg-muted'
-                            }`}
-                          >
-                            {score}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <Button onClick={() => submitRubricMarks('presentation')} disabled={savingMarks} size="sm" className="mt-2">
-                    {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    Submit Presentation Marks ({presCurrentScore}/45)
-                  </Button>
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-xs">
+                        <tr>
+                          <th className="p-2 text-left font-medium">Student</th>
+                          {PRESENTATION_CRITERIA.map((criterion, idx) => (
+                            <th key={idx} className="p-2 text-center font-medium min-w-[9rem]">{criterion}</th>
+                          ))}
+                          <th className="p-2 text-center font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeMembers.map((member) => {
+                          const sid = memberId(member);
+                          const scores = presentationScores[sid] || {};
+                          const filled = Object.keys(scores).length;
+                          return (
+                            <tr key={sid} className="border-t">
+                              <td className="p-2 align-middle">
+                                <div className="font-medium">{memberName(member)}</div>
+                                <div className="text-xs text-muted-foreground">{member.studentIdText}</div>
+                              </td>
+                              {PRESENTATION_CRITERIA.map((criterion, idx) => (
+                                <td key={idx} className="p-2 text-center align-middle">
+                                  <div className="inline-flex gap-1">
+                                    {PRESENTATION_LEVELS.map((level) => (
+                                      <button
+                                        key={level.value}
+                                        type="button"
+                                        title={`${criterion}: ${level.label}`}
+                                        onClick={() =>
+                                          setPresentationScores((prev) => ({
+                                            ...prev,
+                                            [sid]: { ...prev[sid], [`c${idx}`]: level.value },
+                                          }))
+                                        }
+                                        className={`h-7 w-7 rounded-md border text-xs font-medium transition-colors ${
+                                          scores[`c${idx}`] === level.value
+                                            ? 'bg-primary text-primary-foreground border-primary'
+                                            : 'hover:bg-muted'
+                                        }`}
+                                      >
+                                        {level.value}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </td>
+                              ))}
+                              <td className="p-2 text-center align-middle whitespace-nowrap">
+                                <strong>{sumScores(scores)}</strong>/{PRESENTATION_MAX}
+                                {filled > 0 && filled < PRESENTATION_CRITERIA.length && (
+                                  <div className="text-[11px] text-amber-600">{PRESENTATION_CRITERIA.length - filled} left</div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Tip label="Submit presentation marks for every student whose five criteria are all scored.">
+                    <Button onClick={() => submitRubricMarks('presentation')} disabled={savingMarks} size="sm" className="mt-2">
+                      {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                      Submit Presentation Marks
+                    </Button>
+                  </Tip>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -706,7 +849,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                         );
                       })}
 
-                      <Button size="sm" onClick={saveChosenEvaluators} disabled={savingChosen}>
+                      <Button size="sm" onClick={saveChosenEvaluators} disabled={savingChosen} title="Save which evaluators' marks count toward the grade">
                         {savingChosen ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                         Save Selection
                       </Button>

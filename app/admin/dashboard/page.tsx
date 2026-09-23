@@ -4,69 +4,27 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users, ClipboardList, DatabaseBackup, Building2, LayoutGrid } from 'lucide-react';
+import { Loader2, LogOut, Settings, LayoutGrid } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { AdminSidebar, SidebarItem } from '@/app/components/AdminSidebar';
+import { AdminSidebar } from '@/app/components/AdminSidebar';
+import { adminSidebarItems } from '@/app/components/adminNav';
 import { notify } from '@/app/utils/notifications';
 import OverviewSection from './components/OverviewSection';
 import CourseManagement from './components/CourseManagement';
 import ResourcesManager from './components/ResourcesManager';
 import CapstoneSessionManagement from '@/app/capstone/sessions/SessionManagement';
+import { GradingSchemesList } from '@/app/capstone/grading-schemes/GradingSchemesList';
 import SemesterManagement from './components/SemesterManagement';
 import AccountManagement from './components/AccountManagement';
 import DepartmentManagement from './components/DepartmentManagement';
 import RubricManagement from './components/RubricManagement';
 import BackupManagement from './components/BackupManagement';
+import { DeveloperSettingsPanel } from '@/app/components/DeveloperSettingsPanel';
+import { DevModeBanner } from '@/app/components/DevModeBanner';
 
-const sidebarItems: SidebarItem[] = [
-  {
-    title: 'Overview',
-    href: '/admin/dashboard?tab=overview',
-    icon: LayoutDashboard,
-  },
-  {
-    title: 'Account Manager',
-    href: '/admin/dashboard?tab=accounts',
-    icon: Users,
-  },
-  {
-    title: 'Departments',
-    href: '/admin/dashboard?tab=departments',
-    icon: Building2,
-  },
-  {
-    title: 'Course Management',
-    href: '/admin/dashboard?tab=courses',
-    icon: BookOpen,
-  },
-  {
-    title: 'Resources',
-    href: '/admin/dashboard?tab=resources',
-    icon: FolderOpen,
-  },
-  {
-    title: 'Semester Management',
-    href: '/admin/dashboard?tab=semesters',
-    icon: Calendar,
-  },
-  {
-    title: 'Capstone Management',
-    href: '/admin/dashboard?tab=capstone',
-    icon: GraduationCap,
-  },
-  {
-    title: 'Rubric Management',
-    href: '/admin/dashboard?tab=rubrics',
-    icon: ClipboardList,
-  },
-  {
-    title: 'Backup & Restore',
-    href: '/admin/dashboard?tab=backup',
-    icon: DatabaseBackup,
-  },
-];
+const sidebarItems = adminSidebarItems;
 
 function AdminDashboardContent() {
   const router = useRouter();
@@ -130,6 +88,7 @@ function AdminDashboardContent() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
+        <DevModeBanner manageHref="/admin/dashboard?tab=developer" canManage />
         {/* Top Navigation Bar */}
         <nav className="border-b bg-background sticky top-0 z-30">
           <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
@@ -180,8 +139,14 @@ function AdminDashboardContent() {
           {activeTab === 'resources' && <ResourcesManager />}
           {activeTab === 'semesters' && <SemesterManagement />}
           {activeTab === 'capstone' && <CapstoneSessionManagement />}
+          {activeTab === 'grading-schemes' && <GradingSchemesList canCreate />}
           {activeTab === 'rubrics' && <RubricManagement />}
           {activeTab === 'backup' && <BackupManagement />}
+          {activeTab === 'developer' && (
+            <div className="max-w-3xl">
+              <DeveloperSettingsPanel />
+            </div>
+          )}
         </main>
       </div>
     </div>

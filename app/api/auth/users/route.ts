@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { verifyAdminToken } from '@/lib/adminAuth';
+import { PEOPLE_ONLY } from '@/lib/webAdminAccount';
 
 // GET all users for dropdown selection (supervisors, evaluators)
 export async function GET(request: NextRequest) {
@@ -25,7 +26,8 @@ export async function GET(request: NextRequest) {
     await dbConnect();
 
     // Fetch all users with basic info needed for supervisor/evaluator selection
-    const users = await User.find({}, 'name email _id')
+    // invitePending lets pickers label people who haven't activated their invite yet.
+    const users = await User.find(PEOPLE_ONLY, 'name email _id invitePending')
       .sort({ name: 1 });
 
     return NextResponse.json(users, { status: 200 });

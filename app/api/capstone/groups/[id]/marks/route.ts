@@ -4,6 +4,7 @@ import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
 import CapstoneMarkSubmission, { CapstoneMarkComponent } from '@/models/CapstoneMarkSubmission';
 import { getCapstoneActor, isGroupGrader, isGroupSupervisor } from '@/lib/capstoneAuth';
+import { REPORT_RUBRICS } from '@/lib/capstoneRubrics';
 
 // Per-component ceilings, matching the source spreadsheets/docs - see
 // docs/capstone-marking-and-rubrics.md. No blanket max:100 (the old bug).
@@ -17,6 +18,9 @@ const COMPONENT_MAX_BY_TRACK: Record<string, Record<string, number>> = {
 const COMPONENT_MAX_DEFAULT: Record<string, number> = {
   weeklyJournal: 10, peer: 5, report: 42, presentation: 45, poster: 100,
 };
+
+const PRESENTATION_CRITERIA_COUNT = 5;
+const PRESENTATION_LEVELS = [0, 3, 6, 9];
 
 // weeklyJournal and peer are supervisor-only (the spreadsheet has no evaluator column for
 // either); report/presentation/poster can come from either role.
@@ -107,6 +111,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (!activeMemberIds.has(studentAccountId)) continue;
       if (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > max) continue;
 
+      // Presentation is scored per student on 5 criteria at 0/3/6/9. Reject a total that
+      // doesn't match its own rubric, so a tampered or stale payload can't record a score
+      // no evaluator actually gave.
+      if (component === 'presentation' && entry.rubricScores) {
+        const values = Object.values(entry.rubricScores);
+        const valid =
+          values.length === PRESENTATION_CRITERIA_COUNT &&
+          values.every((v) => PRESENTATION_LEVELS.includes(Number(v))) &&
+          values.reduce((a, b) => a + Number(b), 0) === rawScore;
+        if (!valid) continue;
+      }
+      // Same check for the report rubric: one 0-3 score per criterion of this track's rubric.
+      if (component === 'report' && entry.rubricScores) {
+        const values = Object.values(entry.rubricScores);
+        const criteriaCount = (REPORT_RUBRICS[group.track as 'A' | 'B' | 'C'] || REPORT_RUBRICS.B).length;
+        const valid =
+          values.length === criteriaCount &&
+          values.every((v) => [0, 1, 2, 3].includes(Number(v))) &&
+          values.reduce((a, b) => a + Number(b), 0) === rawScore;
+        if (!valid) continue;
+      }
+
       const doc = await CapstoneMarkSubmission.findOneAndUpdate(
         {
           sessionId: group.sessionId,
@@ -125,6 +151,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             submitterRole,
             rawScore,
             rubricScores: entry.rubricScores || null,
+            rubricMax: max,
             comment: entry.comment || '',
             status: 'submitted',
             submittedAt: new Date(),

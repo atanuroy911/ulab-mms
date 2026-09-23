@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, use as usePromise } from 'react';
+import { useStaffViewer } from '@/app/components/useStaffViewer';
 import { useRouter } from 'next/navigation';
 import {
   ReactFlow,
@@ -41,7 +42,7 @@ import {
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { toast } from 'sonner';
 
-import { nodeTypes, NODE_PALETTE } from './nodes';
+import { nodeTypes, NODE_PALETTE, inputName } from './nodes';
 import { NodeInspector } from './NodeInspector';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { useMediaQuery, BREAKPOINTS } from '@/lib/useMediaQuery';
@@ -87,6 +88,10 @@ function newNodeId(type: string) {
 
 function EditorInner({ id }: { id: string }) {
   const router = useRouter();
+  const viewer = useStaffViewer();
+  // The /admin panel's web-admin goes back to its own Grading Schemes tab.
+  const schemesListHref =
+    viewer.status === 'webAdmin' ? '/admin/dashboard?tab=grading-schemes' : '/capstone/grading-schemes';
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const [scheme, setScheme] = useState<SchemeDoc | null>(null);
@@ -159,7 +164,8 @@ function EditorInner({ id }: { id: string }) {
             id: e.id,
             source: e.source,
             target: e.target,
-            targetHandle: e.targetHandle || 'in',
+            targetHandle: null,
+            data: { input: e.targetHandle || 'in' },
             label: e.targetHandle || 'in',
             animated: true,
           }))
@@ -205,7 +211,7 @@ function EditorInner({ id }: { id: string }) {
         // A formula/sum node keyed by name must not receive two inputs under the same
         // name - the second would overwrite the first with no visible cause.
         const taken = new Set(
-          eds.filter((e) => e.target === connection.target).map((e) => e.targetHandle || 'in')
+          eds.filter((e) => e.target === connection.target).map(inputName)
         );
         let unique = handle;
         let n = 2;
@@ -217,7 +223,8 @@ function EditorInner({ id }: { id: string }) {
           {
             ...connection,
             id: `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-            targetHandle: unique,
+            targetHandle: null,
+            data: { input: unique },
             label: unique,
             animated: true,
           },
@@ -336,7 +343,7 @@ function EditorInner({ id }: { id: string }) {
       if (readOnly) return;
       const next = window.prompt(
         'Name this input.\n\nFormula blocks reference it as a variable; Sum blocks weight it by this name.',
-        edge.targetHandle || 'in'
+        inputName(edge)
       );
       if (!next) return;
       const clean = next.trim().replace(/[^A-Za-z0-9_]/g, '_');
@@ -345,14 +352,14 @@ function EditorInner({ id }: { id: string }) {
         return;
       }
       const clash = edges.some(
-        (e) => e.id !== edge.id && e.target === edge.target && (e.targetHandle || 'in') === clean
+        (e) => e.id !== edge.id && e.target === edge.target && inputName(e) === clean
       );
       if (clash) {
         toast.error(`That block already has an input called "${clean}"`);
         return;
       }
       setEdges((eds) =>
-        eds.map((e) => (e.id === edge.id ? { ...e, targetHandle: clean, label: clean } : e))
+        eds.map((e) => (e.id === edge.id ? { ...e, data: { ...e.data, input: clean }, label: clean } : e))
       );
       markDirty();
     },
@@ -372,7 +379,7 @@ function EditorInner({ id }: { id: string }) {
         id: e.id,
         source: e.source,
         target: e.target,
-        targetHandle: e.targetHandle || 'in',
+        targetHandle: inputName(e),
       })),
     }),
     [nodes, edges]
@@ -499,9 +506,9 @@ function EditorInner({ id }: { id: string }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <TeacherShell title="Grading Scheme">
+        <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      </TeacherShell>
     );
   }
 
@@ -510,7 +517,7 @@ function EditorInner({ id }: { id: string }) {
       <TeacherShell title="Grading Scheme">
         <div className="mx-auto max-w-2xl p-8 text-center">
           <p className="text-muted-foreground">This grading scheme could not be loaded.</p>
-          <Button variant="outline" className="mt-4" onClick={() => router.push('/capstone/grading-schemes')}>
+          <Button variant="outline" className="mt-4" onClick={() => router.push(schemesListHref)}>
             Back to grading schemes
           </Button>
         </div>
@@ -558,7 +565,7 @@ function EditorInner({ id }: { id: string }) {
             variant="ghost"
             size="sm"
             className="shrink-0"
-            onClick={() => router.push('/capstone/grading-schemes')}
+            onClick={() => router.push(schemesListHref)}
           >
             <ArrowLeft className="h-4 w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Back</span>
@@ -759,7 +766,7 @@ function EditorInner({ id }: { id: string }) {
                   ? ((nodes.find((n) => n.id === menu.nodeId)?.data as Record<string, unknown>)
                       ?.label as string) || 'Block'
                   : menu.kind === 'edge'
-                    ? `Connection: ${edges.find((e) => e.id === menu.edgeId)?.targetHandle || 'in'}`
+                    ? `Connection: ${(() => { const found = edges.find((e) => e.id === menu.edgeId); return found ? inputName(found) : 'in'; })()}`
                     : 'Add a block'
               }
               sections={

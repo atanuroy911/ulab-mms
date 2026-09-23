@@ -9,7 +9,8 @@
     "lint": "eslint",
     "migrate": "node scripts/migrate.js",
     "cleanup:legacy": "node scripts/cleanup-legacy-collections.js",
-    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts"
+    "fix:sparse-nulls": "node scripts/fix-sparse-unique-nulls.js",
+    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts && npx tsx scripts/test-grade-redaction.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

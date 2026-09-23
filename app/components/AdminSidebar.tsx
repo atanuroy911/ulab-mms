@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -177,6 +177,9 @@ function GroupedNav({
   );
 }
 
+/** The user's explicit open/closed choice for the desktop sidebar; null = follow the screen. */
+let savedPreference: boolean | null = null;
+
 export function AdminSidebar({
   items,
   title = 'Admin Portal',
@@ -194,9 +197,22 @@ export function AdminSidebar({
   // null = "follow the screen". Any explicit toggle pins the state until the breakpoint
   // itself changes, so a deliberate choice is respected while resizing still does the
   // sensible thing rather than stranding someone in a state they didn't pick.
-  const [userPreference, setUserPreference] = useState<boolean | null>(null);
+  //
+  // Every page renders its own sidebar, so the choice is kept in a module variable: it
+  // survives client-side page changes (the sidebar doesn't spring back on each tab) but
+  // resets on a full reload.
+  const [userPreference, setUserPreferenceState] = useState<boolean | null>(savedPreference);
+  const setUserPreference = (value: boolean | null) => {
+    savedPreference = value;
+    setUserPreferenceState(value);
+  };
 
+  // Reset only when the breakpoint actually changes - not on mount, which would throw away
+  // the saved choice every time a page loads.
+  const lastIsWide = useRef(isWide);
   useEffect(() => {
+    if (lastIsWide.current === isWide) return;
+    lastIsWide.current = isWide;
     setUserPreference(null);
   }, [isWide]);
 

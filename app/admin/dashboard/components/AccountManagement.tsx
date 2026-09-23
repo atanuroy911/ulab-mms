@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   GraduationCap,
   X,
+  MailPlus,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,9 @@ interface Account {
   departmentId: string | null;
   coordinatorDepartments: string[];
   provider: 'google' | 'credentials';
+  /** Invited as a capstone supervisor/evaluator but hasn't set up the account yet. */
+  invitePending?: boolean;
+  inviteExpired?: boolean;
   createdAt: string;
   courseCount: number;
 }
@@ -81,6 +85,23 @@ function mostRecentSemesterKey(courses: { semester: string; year: number }[]): s
 }
 
 export default function AccountManagement() {
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const handleResendInvite = async (account: Account) => {
+    setResendingId(account._id);
+    try {
+      const res = await fetch(`/api/admin/accounts/${account._id}/resend-invite`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to resend invitation');
+      if (data.emailSent) notify.success(`Invitation re-sent to ${account.email}`);
+      else notify.error('A new link was created, but the email could not be sent. Check the mail settings.');
+      fetchAccounts();
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'Failed to resend invitation');
+    } finally {
+      setResendingId(null);
+    }
+  };
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -507,7 +528,17 @@ export default function AccountManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{account.provider === 'google' ? 'Google' : 'Email/Password'}</Badge>
+                          {account.invitePending ? (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500/50 text-amber-700 dark:text-amber-300"
+                              title="Invited, but hasn't set up the account yet"
+                            >
+                              {account.inviteExpired ? 'Invite expired' : 'Invited'}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">{account.provider === 'google' ? 'Google' : 'Email/Password'}</Badge>
+                          )}
                         </TableCell>
                         <TableCell>{account.courseCount}</TableCell>
                         <TableCell className="text-muted-foreground">
@@ -515,6 +546,21 @@ export default function AccountManagement() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            {account.invitePending && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Resend invitation email"
+                                disabled={resendingId === account._id}
+                                onClick={() => handleResendInvite(account)}
+                              >
+                                {resendingId === account._id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <MailPlus className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" title="View courses" onClick={() => openView(account)}>
                               <Eye className="h-4 w-4" />
                             </Button>

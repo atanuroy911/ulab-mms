@@ -4,11 +4,14 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { signOut } from 'next-auth/react';
+import { useStaffViewer } from '@/app/components/useStaffViewer';
+import { adminSidebarItems } from '@/app/components/adminNav';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { LogOut } from 'lucide-react';
+import { LogOut, Wrench } from 'lucide-react';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
 import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { DevModeBanner } from '@/app/components/DevModeBanner';
 
 /**
  * The standard teacher-side page frame: persistent sidebar plus a sticky top bar.
@@ -40,15 +43,40 @@ export function TeacherShell({
   children,
   noScroll = false,
 }: TeacherShellProps) {
+  const viewer = useStaffViewer();
+  // Capstone pages are shared with the /admin panel's web-admin login, which can't open
+  // teacher pages - give it the admin panel's navigation and sign-out instead.
+  const webAdmin = viewer.status === 'webAdmin';
+  const isAdminUser = viewer.status === 'teacher' && viewer.roles.includes('admin');
+  const items = webAdmin
+    ? adminSidebarItems
+    : isAdminUser
+      ? [...teacherSidebarItems, { title: 'Developer Settings', href: '/dashboard/developer', icon: Wrench }]
+      : teacherSidebarItems;
+
+  const handleSignOut = async () => {
+    if (webAdmin) {
+      await fetch('/api/admin/signout', { method: 'POST' }).catch(() => {});
+      window.location.href = '/admin/signin';
+      return;
+    }
+    signOut({ callbackUrl: '/auth/signin' });
+  };
+
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+      <AdminSidebar items={items} title={webAdmin ? 'Admin Portal' : 'Teacher Portal'} />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {webAdmin ? (
+          <DevModeBanner manageHref="/admin/dashboard?tab=developer" canManage />
+        ) : (
+          <DevModeBanner />
+        )}
         <nav className="sticky top-0 z-30 border-b bg-background">
           <div className="flex h-16 items-center justify-between gap-3 px-4 pl-16 sm:px-6 md:pl-6">
             <div className="flex min-w-0 items-center gap-3">
-              <Link href="/dashboard" className="hidden shrink-0 sm:block">
+              <Link href={webAdmin ? '/admin/dashboard' : '/dashboard'} className="hidden shrink-0 sm:block">
                 <Image src="/ulab.svg" alt="ULAB Logo" width={32} height={32} />
               </Link>
               <div className="min-w-0">
@@ -67,7 +95,7 @@ export function TeacherShell({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                onClick={handleSignOut}
               >
                 <LogOut className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Sign Out</span>

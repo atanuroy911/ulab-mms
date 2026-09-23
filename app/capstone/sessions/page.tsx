@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useStaffViewer } from '@/app/components/useStaffViewer';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { TeacherShell } from '@/app/components/TeacherShell';
@@ -17,27 +17,22 @@ import SessionManagement from './SessionManagement';
  * canManageDepartment, so a coordinator sees exactly their department and an admin sees all.
  */
 export default function CapstoneSessionsPage() {
-  const { data: session, status } = useSession();
+  const viewer = useStaffViewer();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
 
-  const user = session?.user as { roles?: string[] } | undefined;
-  const roles = user?.roles || [];
+  // Teacher accounts and the /admin panel's web-admin login both manage sessions here.
+  const roles = viewer.status === 'teacher' || viewer.status === 'webAdmin' ? viewer.roles : [];
   const canManage = roles.includes('admin') || roles.includes('coordinator');
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/signin');
-      return;
-    }
-    if (status === 'authenticated') setReady(true);
-  }, [status, router]);
+    if (viewer.status === 'none') router.push('/auth/signin');
+  }, [viewer.status, router]);
 
-  if (!ready) {
+  if (viewer.status === 'loading' || viewer.status === 'none') {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <TeacherShell title="Capstone Sessions">
+        <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      </TeacherShell>
     );
   }
 

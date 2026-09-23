@@ -17,6 +17,17 @@ export interface IUser extends Document {
   coordinatorDepartments?: string[];
   passwordResetToken?: string | null;
   passwordResetTokenExpiry?: Date | null;
+  /** True for a placeholder account created by a capstone invite (lib/userInvites.ts) that
+   *  the person hasn't activated yet. It can be assigned as supervisor/evaluator but has no
+   *  way to sign in until they set a password or link Google. */
+  invitePending?: boolean;
+  inviteTokenHash?: string | null;
+  inviteTokenExpiry?: Date | null;
+  invitedBy?: mongoose.Types.ObjectId | null;
+  /** The single "Web Admin" record that stands in for the /admin panel's built-in login in
+   *  audit fields (lib/webAdminAccount.ts). Can't sign in, is hidden from people pickers,
+   *  and can never be a supervisor or evaluator. */
+  systemAccount?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,12 +53,19 @@ const UserSchema: Schema = new Schema(
     password: {
       type: String,
       // Accounts created/linked via Google sign-in have no password.
-      required: [function (this: IUser) { return !this.googleId; }, 'Please provide a password'],
+      // Invited placeholder accounts have neither until the person activates the invite.
+      required: [
+        function (this: IUser) { return !this.googleId && !this.invitePending && !this.systemAccount; },
+        'Please provide a password',
+      ],
       minlength: [6, 'Password should be at least 6 characters'],
     },
     googleId: {
       type: String,
-      default: null,
+      // No `default: null`. A sparse unique index skips documents that LACK the field but
+      // still indexes an explicit null - so defaulting to null let only one non-Google
+      // account exist, and the next invite/sign-up failed with E11000 on googleId_1.
+      // Accounts without Google must simply not have the field.
       unique: true,
       sparse: true,
     },
@@ -58,6 +76,27 @@ const UserSchema: Schema = new Schema(
     passwordResetTokenExpiry: {
       type: Date,
       default: null,
+    },
+    invitePending: {
+      type: Boolean,
+      default: false,
+    },
+    inviteTokenHash: {
+      type: String,
+      default: null,
+    },
+    inviteTokenExpiry: {
+      type: Date,
+      default: null,
+    },
+    invitedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    systemAccount: {
+      type: Boolean,
+      default: false,
     },
     role: {
       type: String,

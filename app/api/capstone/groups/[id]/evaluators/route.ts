@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import { getCapstoneActor, canManageGroup } from '@/lib/capstoneAuth';
+import { assignableUserError } from '@/lib/webAdminAccount';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,6 +28,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 400 }
       );
     }
+
+    const evaluatorError = await assignableUserError(evaluatorId);
+    if (evaluatorError) return NextResponse.json({ error: evaluatorError }, { status: 400 });
 
     const alreadyActive = group.evaluators.some((e) => !e.unassignedAt && String(e.evaluatorId) === evaluatorId);
     if (alreadyActive) {

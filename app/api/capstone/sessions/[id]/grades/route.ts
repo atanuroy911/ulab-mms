@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import CapstoneSession from '@/models/CapstoneSession';
 import CapstoneGroup from '@/models/CapstoneGroup';
-import { getCapstoneActor, isAdmin, isCoordinatorFor, isGroupGrader } from '@/lib/capstoneAuth';
-import { computeSessionGrades } from '@/lib/capstoneGrades';
+import { getCapstoneActor, isAdmin, isCoordinatorFor, isGroupGrader, isGroupSupervisor } from '@/lib/capstoneAuth';
+import { computeSessionGrades, redactMemberForGrader } from '@/lib/capstoneGrades';
 
 /**
  * GET /api/capstone/sessions/[id]/grades
@@ -36,18 +36,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const filter: Record<string, unknown> = {};
     if (groupIdFilter) filter._id = groupIdFilter;
 
+    // Group id -> this grader's role in it, for redacting other graders' marks below.
+    const roleByGroup = new Map<string, 'supervisor' | 'evaluator'>();
     if (!canSeeWholeSession) {
       const candidates = await CapstoneGroup.find({ sessionId: id, ...filter }).select(
         'supervisorId evaluators'
       );
-      const allowed = candidates.filter((g) => isGroupGrader(actor, g)).map((g) => g._id);
+      const allowedGroups = candidates.filter((g) => isGroupGrader(actor, g));
+      for (const g of allowedGroups) {
+        roleByGroup.set(String(g._id), isGroupSupervisor(actor, g) ? 'supervisor' : 'evaluator');
+      }
+      const allowed = allowedGroups.map((g) => g._id);
       if (allowed.length === 0) {
         return NextResponse.json({ sessionId: id, canSeeWholeSession, tracks: [], groups: [] });
       }
       filter._id = { $in: allowed };
     }
 
-    const { tracks, groups } = await computeSessionGrades(session, filter);
+    const computed = await computeSessionGrades(session, filter);
+    const tracks = computed.tracks;
+    // Graders see another grader's marks only after submitting their own (anchoring).
+    const groups = canSeeWholeSession
+      ? computed.groups
+      : computed.groups.map((g) => ({
+          ...g,
+          members: g.members.map((m) => redactMemberForGrader(m, actor.userId, roleByGroup.get(g.groupId) || 'evaluator')),
+        }));
 
     return NextResponse.json({
       sessionId: id,

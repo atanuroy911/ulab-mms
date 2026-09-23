@@ -35,14 +35,16 @@ export async function GET(request: NextRequest) {
       }
 
       // Sessions from groups where this user is supervisor or active evaluator
-      const uid = new mongoose.Types.ObjectId(actor.userId);
-      const graderGroups = await CapstoneGroup.find({
-        $or: [
-          { supervisorId: uid },
-          { evaluators: { $elemMatch: { evaluatorId: uid, unassignedAt: null } } },
-        ],
-      }).select('sessionId');
-      graderGroups.forEach((g) => sessionIds!.add(String(g.sessionId)));
+      if (!actor.systemAccount) {
+        const uid = new mongoose.Types.ObjectId(actor.userId);
+        const graderGroups = await CapstoneGroup.find({
+          $or: [
+            { supervisorId: uid },
+            { evaluators: { $elemMatch: { evaluatorId: uid, unassignedAt: null } } },
+          ],
+        }).select('sessionId');
+        graderGroups.forEach((g) => sessionIds!.add(String(g.sessionId)));
+      }
     }
 
     let query: Record<string, unknown> = {};
@@ -110,7 +112,8 @@ export async function POST(request: NextRequest) {
       tracks: tracks.map((track) => ({ track, isOpen: true })),
       status: 'draft',
       statusHistory: [{ status: 'draft', at: new Date(), byUserId: actor.userId }],
-      coordinatorIds: [actor.userId],
+      // The Web Admin system account is not a coordinator anyone can reach.
+      coordinatorIds: actor.systemAccount ? [] : [actor.userId],
       createdBy: actor.userId,
     });
 

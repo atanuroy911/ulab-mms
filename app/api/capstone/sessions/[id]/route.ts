@@ -3,7 +3,7 @@ import dbConnect from '@/lib/mongodb';
 import GradingScheme from '@/models/GradingScheme';
 import CapstoneSession, { CapstoneSessionStatus } from '@/models/CapstoneSession';
 import { getCapstoneActor, canManageDepartment, isAdmin } from '@/lib/capstoneAuth';
-import { deleteSessionCascade } from '@/lib/capstoneCascadeDelete';
+import { deleteSessionCascade, previewSessionCascade } from '@/lib/capstoneCascadeDelete';
 
 const VALID_TRANSITIONS: Record<CapstoneSessionStatus, CapstoneSessionStatus[]> = {
   draft: ['open'],
@@ -24,6 +24,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     if (!canManageDepartment(actor, session.department)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // ?deletePreview=1 reports what deleting would remove, for the confirmation dialog. A GET
+    // so that no retry or prefetch of the preview can ever delete anything.
+    if (request.nextUrl.searchParams.get('deletePreview') === '1') {
+      return NextResponse.json({ ...(await previewSessionCascade(id)), canForceDelete: isAdmin(actor) });
     }
 
     return NextResponse.json(session);
@@ -129,7 +135,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
 
       session.status = nextStatus;
-      session.statusHistory.push({ status: nextStatus, at: new Date(), byUserId: actor.userId as any });
+      session.statusHistory.push({
+        status: nextStatus,
+        at: new Date(),
+        byUserId: actor.userId as any,
+        ...(typeof body?.reason === 'string' && body.reason.trim() ? { reason: body.reason.trim() } : {}),
+      });
       if (nextStatus === 'closed') session.closedAt = new Date();
       if (nextStatus === 'grading' && session.closedAt) session.closedAt = null;
     }
@@ -156,10 +167,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const result = await deleteSessionCascade(id);
+    // A closed session holds final results, so deleting it needs an explicit ?force=1 - the
+    // UI only sends that after the user has seen the "results will be lost" warning.
+    // Admin-only, matching the rule that only an admin may reopen a closed session.
+    const force = request.nextUrl.searchParams.get('force') === '1' && isAdmin(actor);
+    const result = await deleteSessionCascade(id, { force });
     if (!result.deleted) {
       const reason = 'reason' in result ? result.reason : 'unknown';
-      return NextResponse.json({ error: `Cannot delete: ${reason}` }, { status: 409 });
+      const message =
+        reason === 'closed'
+          ? isAdmin(actor)
+            ? 'This session is closed and holds final results. Confirm again to delete it anyway.'
+            : 'This session is closed and holds final results. Only an admin can delete it.'
+          : `Cannot delete: ${reason}`;
+      return NextResponse.json({ error: message, reason }, { status: 409 });
     }
 
     return NextResponse.json({ message: 'Session deleted', groupsDeleted: result.groupsDeleted });

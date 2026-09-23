@@ -5,6 +5,7 @@ import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { isValidEmail } from '@/lib/utils';
 import { sendMail, mailShell } from '@/lib/mail';
+import { clearInvite } from '@/lib/userInvites';
 
 export const runtime = 'nodejs';
 
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
     user.password = hashedPassword;
     user.passwordResetToken = null;
     user.passwordResetTokenExpiry = null;
+    // A reset link proves inbox ownership just like an invite link, so it activates a pending invite.
+    if (user.invitePending) clearInvite(user);
     await user.save();
 
     // Confirmation only - never blocks the reset itself if it fails to send.

@@ -18,10 +18,10 @@ export interface ICapstoneSession extends Document {
   tracks: ICapstoneSessionTrack[];
   journalWeekCount: number;
   status: CapstoneSessionStatus;
-  statusHistory: { status: CapstoneSessionStatus; at: Date; byUserId?: mongoose.Types.ObjectId }[];
+  statusHistory: { status: CapstoneSessionStatus; at: Date; byUserId?: mongoose.Types.ObjectId; reason?: string }[];
   coordinatorIds: mongoose.Types.ObjectId[];
   resultsReleasedAt?: Date | null;
-  createdBy: mongoose.Types.ObjectId;
+  createdBy: mongoose.Types.ObjectId | null;
   closedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +44,8 @@ const StatusHistoryEntrySchema = new Schema(
     status: { type: String, enum: ['draft', 'open', 'grading', 'closed'], required: true },
     at: { type: Date, default: Date.now },
     byUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+    // Why a closed session was reopened (required for that transition), for the record.
+    reason: { type: String, default: undefined },
   },
   { _id: false }
 );
@@ -96,9 +98,10 @@ const CapstoneSessionSchema: Schema = new Schema(
       default: null,
     },
     createdBy: {
+      // null when done through the /admin panel's web-admin login, which is not a User (lib/capstoneAuth.ts).
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     closedAt: {
       type: Date,

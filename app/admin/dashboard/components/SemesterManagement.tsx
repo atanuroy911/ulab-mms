@@ -23,8 +23,6 @@ interface Semester {
 interface FormData {
   name: string;
   description: string;
-  startDate: string;
-  endDate: string;
   isActive: boolean;
 }
 
@@ -39,8 +37,6 @@ export default function SemesterManagement() {
   const [formData, setFormData] = useState<FormData>({
     name: '',
     description: '',
-    startDate: '',
-    endDate: '',
     isActive: true,
   });
 
@@ -70,8 +66,6 @@ export default function SemesterManagement() {
       setFormData({
         name: semester.name,
         description: semester.description,
-        startDate: semester.startDate ? new Date(semester.startDate).toISOString().split('T')[0] : '',
-        endDate: semester.endDate ? new Date(semester.endDate).toISOString().split('T')[0] : '',
         isActive: semester.isActive,
       });
     } else {
@@ -80,8 +74,6 @@ export default function SemesterManagement() {
       setFormData({
         name: '',
         description: '',
-        startDate: '',
-        endDate: '',
         isActive: true,
       });
     }
@@ -107,8 +99,6 @@ export default function SemesterManagement() {
         body: JSON.stringify({
           name: formData.name.trim(),
           description: formData.description.trim(),
-          startDate: formData.startDate || null,
-          endDate: formData.endDate || null,
           isActive: formData.isActive,
         }),
       });
@@ -197,15 +187,6 @@ export default function SemesterManagement() {
                   <p className="text-sm text-muted-foreground">
                     {semester.description}
                   </p>
-                  {(semester.startDate || semester.endDate) && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {semester.startDate &&
-                        `Start: ${new Date(semester.startDate).toLocaleDateString()}`}
-                      {semester.startDate && semester.endDate && ' • '}
-                      {semester.endDate &&
-                        `End: ${new Date(semester.endDate).toLocaleDateString()}`}
-                    </p>
-                  )}
                   <div className="mt-2">
                     <span
                       className={`text-xs px-2 py-1 rounded-full ${
@@ -284,30 +265,6 @@ export default function SemesterManagement() {
                   setFormData({ ...formData, description: e.target.value })
                 }
               />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, startDate: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="endDate">End Date</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, endDate: e.target.value })
-                  }
-                />
-              </div>
             </div>
             <div className="flex items-center gap-2">
               <input

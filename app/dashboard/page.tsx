@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward, Users, ClipboardList, LayoutGrid, List as ListIcon, Clock, MapPin } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward, Users, ClipboardList, LayoutGrid, List as ListIcon, Clock, MapPin, Wrench } from 'lucide-react';
 import { formatClassRoomDisplay } from '@/app/utils/classInfo';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -27,6 +27,7 @@ import { teacherSidebarItems } from '@/app/components/teacherNav';
 import ImportCourseFileWizard from './components/ImportCourseFileWizard';
 import DepartmentOnboardingDialog from '@/app/components/DepartmentOnboardingDialog';
 import CoordinatorCapstonePanel from './components/CoordinatorCapstonePanel';
+import { DevModeBanner } from '@/app/components/DevModeBanner';
 
 interface Course {
   _id: string;
@@ -662,10 +663,15 @@ export default function Dashboard() {
     }
   };
 
+
+  const sidebarItems = ((session?.user as { roles?: string[] } | undefined)?.roles || []).includes('admin')
+    ? [...teacherSidebarItems, { title: 'Developer Settings', href: '/dashboard/developer', icon: Wrench }]
+    : teacherSidebarItems;
+
   if (status === 'loading' || loading) {
     return (
       <div className="h-dvh bg-background flex overflow-hidden">
-        <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+        <AdminSidebar items={sidebarItems} title="Teacher Portal" />
         <div className="flex-1 flex flex-col">
           <div className="h-16 border-b px-4 sm:px-6 pl-16 md:pl-6 flex items-center">
             <div className="flex items-center gap-3">
@@ -710,12 +716,13 @@ export default function Dashboard() {
   return (
     <div className="h-dvh bg-background flex overflow-hidden">
       <DepartmentOnboardingDialog />
-      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
+      <AdminSidebar items={sidebarItems} title="Teacher Portal" />
 
       <div className="flex-1 flex flex-col">
         <ChromeExtensionPromo />
 
         {/* Top Navigation Bar */}
+        <DevModeBanner />
         <nav className="border-b bg-background sticky top-0 z-30">
           <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
             <div className="flex items-center gap-3 min-w-0">
@@ -738,6 +745,14 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <ThemeToggle />
+              {((session?.user as { roles?: string[] } | undefined)?.roles || []).includes('admin') && (
+                <Button variant="outline" size="sm" asChild title="Developer Settings">
+                  <Link href="/dashboard/developer">
+                    <Wrench className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Developer</span>
+                  </Link>
+                </Button>
+              )}
               <Button variant="default" size="sm" asChild>
                 <Link href="/capstone">
                   <FlaskConical className="h-4 w-4 sm:mr-2" />

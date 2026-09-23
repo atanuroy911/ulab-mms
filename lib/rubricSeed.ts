@@ -12,7 +12,7 @@ const PRESENTATION_LEVELS: [string, string, string, string] = [...STANDARD_LEVEL
 
 const PRESENTATION_CRITERIA: IRubricCriterion[] = [
   { key: 'c1', label: 'Presentation Skills (Eye contact, Language, Visual aid)', co: '', descriptions: PRESENTATION_LEVELS },
-  { key: 'c2', label: 'Organization of the Presentation Material', co: '', descriptions: PRESENTATION_LEVELS },
+  { key: 'c2', label: 'Organization of the Presentation Material', co: 'CO5', descriptions: PRESENTATION_LEVELS },
   { key: 'c3', label: 'Contents', co: '', descriptions: PRESENTATION_LEVELS },
   { key: 'c4', label: 'Question Answer', co: '', descriptions: PRESENTATION_LEVELS },
   { key: 'c5', label: 'Time Management', co: '', descriptions: PRESENTATION_LEVELS },

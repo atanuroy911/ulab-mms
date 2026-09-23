@@ -1,30 +1,35 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 /**
  * Subscribes to a CSS media query from React.
  *
- * Returns `false` on the server and on the first client render, then the real value after
- * hydration. That ordering matters: reading `window.matchMedia` during render would make the
- * server and client markup disagree and trip a hydration mismatch, so the first paint is
- * always the "not matching" branch and the effect corrects it immediately.
+ * Uses useSyncExternalStore so the value is right on the FIRST render of any component that
+ * mounts after the app has loaded (every client-side page change). The old useState+useEffect
+ * version always rendered `false` first and corrected itself a frame later, which made the
+ * sidebar visibly collapse and slide open again on every page.
+ *
+ * During hydration of a fresh page load React uses the server snapshot (`false`) so server
+ * and client markup agree, then switches to the real value - so that one-time adjustment
+ * only happens when someone first lands on the site.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+      const list = window.matchMedia(query);
+      list.addEventListener('change', onChange);
+      return () => list.removeEventListener('change', onChange);
+    },
+    [query]
+  );
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-
-    const list = window.matchMedia(query);
-    setMatches(list.matches);
-
-    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
-    list.addEventListener('change', onChange);
-    return () => list.removeEventListener('change', onChange);
-  }, [query]);
-
-  return matches;
+  return useSyncExternalStore(
+    subscribe,
+    () => (typeof window !== 'undefined' && !!window.matchMedia ? window.matchMedia(query).matches : false),
+    () => false
+  );
 }
 
 /** Tailwind's breakpoints, so components don't hand-write pixel values that can drift. */

@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
 import { resolveMembers } from '@/lib/capstoneStudentAccounts';
+import { sendGroupJournalEmails } from '@/lib/capstoneJournalEmails';
 import { getCapstoneActor, canManageGroup } from '@/lib/capstoneAuth';
 
 // Add a member to an existing group. Coordinator/admin only.
@@ -70,7 +71,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } as any);
     await group.save();
 
-    return NextResponse.json(warnings.length > 0 ? { ...group.toObject(), warnings } : group);
+    // "Save & email" in the Add Members dialog: tell the student they've joined and how the
+    // weekly journal works. Sent only after the save succeeded; a mail failure never undoes it.
+    const emailResult =
+      body?.notify === true
+        ? await sendGroupJournalEmails(id, 'added', { studentAccountIds: [String(account._id)] })
+        : undefined;
+
+    const payload = {
+      ...group.toObject(),
+      ...(warnings.length > 0 ? { warnings } : {}),
+      ...(emailResult ? { email: emailResult } : {}),
+    };
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error('POST /api/capstone/groups/[id]/members error:', error);
     return NextResponse.json({ error: error.message || 'Failed to add member' }, { status: 500 });

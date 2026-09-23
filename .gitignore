@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Database backups written by scripts/ (may contain real records - never commit)
+backups/

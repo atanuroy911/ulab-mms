@@ -2,7 +2,7 @@
  * The member line parser resolves fields by shape rather than position, so the cases where
  * it could silently put a name in the email column (or drop an ID) are worth pinning down.
  */
-import { parseMemberLine } from '../app/capstone/sessions/MemberEntry';
+import { parseMemberLine, mergeMemberText } from '../app/capstone/sessions/MemberEntry';
 
 let pass = 0;
 let fail = 0;
@@ -92,6 +92,23 @@ check('separators only', parseMemberLine(', , ,'), null);
 
 // An email alone is not enough to identify a student - there is no ID to key the account on.
 check('email only', parseMemberLine('jane@ulab.edu.bd'), null);
+
+// mergeMemberText: what the create-group dialog uses to count lines left in the paste box.
+// An existing row's fetched details survive a re-paste of just the ID; CRLF, blank lines and
+// junk lines are handled, and junk is reported rather than silently dropped.
+const merged = mergeMemberText(
+  [{ studentId: '2021-1-60-123', name: 'Jane Doe', email: 'jane@ulab.edu.bd' }],
+  '2021-1-60-123\r\n2021-1-60-124, John Smith\n\nnot an id line'
+);
+check('merge keeps existing details', merged.rows[0], {
+  studentId: '2021-1-60-123',
+  name: 'Jane Doe',
+  email: 'jane@ulab.edu.bd',
+});
+check('merge adds new row', merged.rows[1], { studentId: '2021-1-60-124', name: 'John Smith', email: '' });
+check('merge row count', merged.rows.length, 2);
+check('merge reports junk', merged.rejected, ['not an id line']);
+check('merge of empty text is a no-op', mergeMemberText([], '   ').rows, []);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

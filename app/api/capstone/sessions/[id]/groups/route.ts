@@ -4,6 +4,8 @@ import CapstoneSession from '@/models/CapstoneSession';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import { parseMemberInputs, resolveMembers } from '@/lib/capstoneStudentAccounts';
 import { getCapstoneActor, canManageDepartment } from '@/lib/capstoneAuth';
+import { assignableUserError } from '@/lib/webAdminAccount';
+import { sendGroupJournalEmails } from '@/lib/capstoneJournalEmails';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,8 +22,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const groups = await CapstoneGroup.find({ sessionId: id })
-      .populate('supervisorId', 'name email')
+      .populate('supervisorId', 'name email invitePending')
       .populate('evaluators.evaluatorId', 'name email')
+      .populate('members.studentAccountId', 'studentId name email')
       .sort({ track: 1, groupNumber: 1 });
 
     return NextResponse.json(groups);
@@ -72,6 +75,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (session.status === 'closed') {
       return NextResponse.json({ error: 'This session is closed' }, { status: 409 });
     }
+
+    const supervisorError = await assignableUserError(supervisorId);
+    if (supervisorError) return NextResponse.json({ error: supervisorError }, { status: 400 });
 
     const { resolved, warnings } = await resolveMembers(memberInputs, session.department);
     const memberDocs = resolved.map(({ account, studentIdText }) => ({
@@ -128,10 +134,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
+    // "Save & email" in the New Group dialog: welcome every member and explain the weekly
+    // journal. Sent only after the group exists; a mail failure never undoes the create.
+    const email = body?.notifyStudents === true
+      ? await sendGroupJournalEmails(String(group!._id), 'added')
+      : undefined;
+
     // Warnings travel with the created group rather than failing the request - a duplicate
     // email on one member shouldn't undo the other four.
     return NextResponse.json(
-      warnings.length > 0 ? { ...group!.toObject(), warnings } : group,
+      { ...group!.toObject(), ...(warnings.length > 0 ? { warnings } : {}), ...(email ? { email } : {}) },
       { status: 201 }
     );
   } catch (error: any) {

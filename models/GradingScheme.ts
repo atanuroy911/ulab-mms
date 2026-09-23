@@ -62,7 +62,7 @@ export interface IGradingSchemeVersion {
   nodes: IGradingNode[];
   edges: IGradingEdge[];
   createdAt: Date;
-  createdBy: mongoose.Types.ObjectId;
+  createdBy: mongoose.Types.ObjectId | null;
   note?: string;
 }
 
@@ -80,7 +80,7 @@ export interface IGradingScheme extends Document {
   versions: IGradingSchemeVersion[];
   currentVersion: number;
   isArchived: boolean;
-  createdBy: mongoose.Types.ObjectId;
+  createdBy: mongoose.Types.ObjectId | null;
   updatedBy?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
@@ -124,7 +124,8 @@ const GradingSchemeVersionSchema = new Schema(
     nodes: { type: [GradingNodeSchema], default: [] },
     edges: { type: [GradingEdgeSchema], default: [] },
     createdAt: { type: Date, default: Date.now },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    // null when done through the /admin panel's web-admin login (lib/capstoneAuth.ts).
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     note: { type: String, default: '' },
   },
   { _id: false }
@@ -141,7 +142,8 @@ const GradingSchemeSchema: Schema = new Schema(
     versions: { type: [GradingSchemeVersionSchema], default: [] },
     currentVersion: { type: Number, default: 0 },
     isArchived: { type: Boolean, default: false },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    // null when done through the /admin panel's web-admin login (lib/capstoneAuth.ts).
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }

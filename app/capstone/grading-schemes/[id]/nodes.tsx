@@ -131,6 +131,16 @@ export const ConstantNode = memo(({ data, selected }: NodeProps) => {
 });
 ConstantNode.displayName = 'ConstantNode';
 
+/**
+ * The variable name an edge binds to on its target. Kept in edge.data rather than
+ * targetHandle: nodes expose a single target handle, and React Flow refuses to draw an
+ * edge whose targetHandle doesn't match a rendered handle id.
+ */
+export function inputName(edge: { data?: Record<string, unknown>; targetHandle?: string | null }): string {
+  const name = edge.data?.input;
+  return (typeof name === 'string' && name) || edge.targetHandle || 'in';
+}
+
 export const ScaleNode = memo(({ data, selected }: NodeProps) => {
   const d = data as Record<string, any>;
   return (

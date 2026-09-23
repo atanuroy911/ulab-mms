@@ -61,6 +61,8 @@ interface Member {
   missingComponents: string[];
   submissions: Submission[];
   error?: string;
+  /** Set for a supervisor/evaluator who still owes these components - see redactMemberForGrader. */
+  gradeHiddenUntil?: string[];
 }
 
 interface Group {
@@ -180,9 +182,9 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <TeacherShell title="Capstone Grades">
+        <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      </TeacherShell>
     );
   }
 
@@ -194,12 +196,12 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
       subtitle={data ? `${data.department} · computed from submitted marks` : undefined}
       actions={
         <>
-          <Button variant="outline" size="sm" onClick={() => router.push('/capstone/sessions')}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/capstone/sessions')} title="Back to capstone sessions">
             <ArrowLeft className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Sessions</span>
           </Button>
           {data?.canSeeWholeSession && (
-            <Button size="sm" onClick={exportXlsx} disabled={exporting}>
+            <Button size="sm" onClick={exportXlsx} disabled={exporting} title="Download every group's grades, components and raw marks as an Excel workbook">
               {exporting ? (
                 <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
               ) : (
@@ -287,7 +289,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
                         )}
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="outline" size="sm" asChild title="Open this group's journals and marks">
                       <Link href={`/capstone/groups/${group.groupId}`}>Open group</Link>
                     </Button>
                   </div>
@@ -343,7 +345,14 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
                               })}
 
                               <TableCell className="text-center font-semibold tabular-nums">
-                                {member.score === null ? '—' : member.score.toFixed(2)}
+                                {member.gradeHiddenUntil?.length ? (
+                                  <span
+                                    className="text-xs font-normal text-muted-foreground"
+                                    title={`Shown once you've submitted your own ${member.gradeHiddenUntil.join(', ')} mark(s)`}
+                                  >
+                                    after your marks
+                                  </span>
+                                ) : member.score === null ? '—' : member.score.toFixed(2)}
                               </TableCell>
                               <TableCell
                                 className={`text-center font-bold ${gradeTone(member.letter)}`}

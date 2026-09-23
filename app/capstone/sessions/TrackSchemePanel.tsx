@@ -114,13 +114,13 @@ export function TrackSchemePanel({ sessionId, department, tracks, onUpdated }: P
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild title="Build or edit how component marks combine into a final grade">
               <Link href="/capstone/grading-schemes">
                 <ExternalLink className="h-3.5 w-3.5 sm:mr-1.5" />
                 <span className="hidden sm:inline">Edit schemes</span>
               </Link>
             </Button>
-            <Button size="sm" asChild>
+            <Button size="sm" asChild title="See every student's computed grade and export the gradebook">
               <Link href={`/capstone/sessions/${sessionId}/grades`}>
                 <FileSpreadsheet className="h-3.5 w-3.5 sm:mr-1.5" />
                 <span className="hidden sm:inline">View grades</span>
