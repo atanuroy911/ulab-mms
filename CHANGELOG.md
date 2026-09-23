@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/atanuroy911/ulab-mms/compare/v1.14.1...v1.15.0) (2026-09-23)
+
+
+### Features
+
+* role-aware global search and UX consistency fixes ([1662ea9](https://github.com/atanuroy911/ulab-mms/commit/1662ea94aac0e91b3b7c38c0f1c2723ec84d6e77))
+
 ## [1.14.1](https://github.com/atanuroy911/ulab-mms/compare/v1.14.0...v1.14.1) (2026-08-31)
 
 
