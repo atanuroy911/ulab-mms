@@ -130,36 +130,11 @@ export const typeDefs = `#graphql
     stats: AttendanceStats
   }
 
-  # Capstone Types
-  type CapstoneGroup {
-    id: ID!
-    courseId: ID!
-    groupName: String!
-    groupNumber: Int
-    description: String
-    semester: String
-    studentIds: [ID!]!
-    supervisorId: ID!
-    supervisor: User
-    evaluatorAssignments: [EvaluatorAssignment!]!
-  }
-
-  type EvaluatorAssignment {
-    evaluatorId: ID!
-    assignedAt: String!
-    status: String!
-    evaluator: User
-  }
-
-  type CapstoneMarks {
-    id: ID!
-    groupId: ID!
-    studentId: String!
-    category: String!
-    marks: Float
-    comments: String
-    group: CapstoneGroup
-  }
+  # Capstone GraphQL types were removed along with the old CapstoneGroup/CapstoneMarks models
+  # during the capstone rebuild (see docs/capstone-marking-and-rubrics.md and the plan at
+  # .claude/plans/okay-so-here-is-robust-cloud.md). Re-add against the new
+  # CapstoneSession/CapstoneGroup/CapstoneMarkSubmission models if the mobile app needs
+  # capstone data.
 
   # Input Types
   input LoginInput {
@@ -207,7 +182,6 @@ export const typeDefs = `#graphql
     myCourses: [Course!]!
     myMarks(courseId: ID!): [ExamMark!]!
     courseDetails(courseId: ID!): Course
-    myCapstoneGroups: [CapstoneGroup!]!
     myAttendanceStats(courseId: ID!): AttendanceStats!
     studentAttendanceStats(courseId: ID!, studentId: String!): AttendanceStats!
 
@@ -220,8 +194,6 @@ export const typeDefs = `#graphql
     instructorCourses: [Course!]!
     courseStudents(courseId: ID!): [StudentMarkSummary!]!
     attendanceSessions(courseId: ID!): [AttendanceSession!]!
-    capstoneGroupsBySupervisor: [CapstoneGroup!]!
-    capstoneGroupsByEvaluator: [CapstoneGroup!]!
 
     # Shared Queries
     course(id: ID!): Course

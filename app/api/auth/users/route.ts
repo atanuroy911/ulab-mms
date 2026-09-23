@@ -8,11 +8,17 @@ import { verifyAdminToken } from '@/lib/adminAuth';
 // GET all users for dropdown selection (supervisors, evaluators)
 export async function GET(request: NextRequest) {
   try {
-    // Only used by the admin dashboard (capstone supervisor/evaluator pickers) - restricted to
-    // admins, not just any signed-in teacher, since it lists every user's name/email.
+    // Used by the admin dashboard and by coordinators picking capstone supervisors/
+    // evaluators - restricted to admins/coordinators, not just any signed-in teacher, since
+    // it lists every user's name/email.
     const session = await getServerSession(authOptions);
-    const isAdmin = (session?.user as any)?.role === 'admin' || (await verifyAdminToken(request));
-    if (!isAdmin) {
+    const roles = (session?.user as any)?.roles as string[] | undefined;
+    const isAuthorized =
+      (session?.user as any)?.role === 'admin' ||
+      roles?.includes('admin') ||
+      roles?.includes('coordinator') ||
+      (await verifyAdminToken(request));
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

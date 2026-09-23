@@ -3,7 +3,8 @@ import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
-import { verifyAdminToken } from '@/lib/adminAuth';
+import Department from '@/models/Department';
+import { verifyAdminToken, verifyAdminAccess } from '@/lib/adminAuth';
 import { cascadeDeleteCourseData } from '@/lib/courseCascadeDelete';
 
 async function resolveId(params: Promise<{ id: string }>) {
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     await dbConnect();
     const id = await resolveId(params);
 
-    const user = await User.findById(id).select('name email role googleId createdAt').lean();
+    const user = await User.findById(id)
+      .select('name email role roles departmentId coordinatorDepartments googleId createdAt')
+      .lean();
     if (!user) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
@@ -43,6 +46,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         name: user.name,
         email: user.email,
         role: user.role || 'user',
+        roles: user.roles?.length ? user.roles : ['teacher'],
+        departmentId: user.departmentId ? String(user.departmentId) : null,
+        coordinatorDepartments: user.coordinatorDepartments || [],
         provider: user.googleId ? 'google' : 'credentials',
         createdAt: user.createdAt,
       },
@@ -67,26 +73,87 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ok = await verifyAdminToken(request);
-    if (!ok) {
+    const access = await verifyAdminAccess(request);
+    if (!access.ok) {
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 401 });
     }
 
     await dbConnect();
     const id = await resolveId(params);
     const body = await request.json().catch(() => ({}));
-    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    const name = typeof body?.name === 'string' ? body.name.trim() : undefined;
+    const roles = Array.isArray(body?.roles) ? body.roles : undefined;
+    const departmentId = body?.departmentId !== undefined ? body.departmentId || null : undefined;
+    const coordinatorDepartments = Array.isArray(body?.coordinatorDepartments) ? body.coordinatorDepartments : undefined;
 
-    if (!name) {
+    // Granting/revoking roles or department authority is a privilege change - it must be
+    // traceable to a real, identity-bearing admin account, not just "whoever knows the
+    // shared admin password" (which carries no userId at all - see lib/adminAuth.ts).
+    // Renaming an account (name only) stays available to the shared-password login.
+    const isPrivilegeChange = roles !== undefined || departmentId !== undefined || coordinatorDepartments !== undefined;
+    if (isPrivilegeChange && !access.userId) {
+      return NextResponse.json(
+        { error: 'Changing roles/department requires signing in with an admin-role account, not the shared admin password' },
+        { status: 403 }
+      );
+    }
+
+    if (name !== undefined && !name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    const user = await User.findByIdAndUpdate(id, { name }, { new: true, runValidators: true }).select('name email role');
+    if (roles !== undefined) {
+      const validRoles = new Set(['admin', 'coordinator', 'teacher']);
+      if (roles.length === 0 || !roles.every((r: unknown) => typeof r === 'string' && validRoles.has(r))) {
+        return NextResponse.json({ error: 'roles must be a non-empty array of admin/coordinator/teacher' }, { status: 400 });
+      }
+    }
+
+    let normalizedCoordinatorDepartments: string[] | undefined;
+    if (coordinatorDepartments !== undefined) {
+      if (!coordinatorDepartments.every((d: unknown) => typeof d === 'string')) {
+        return NextResponse.json({ error: 'coordinatorDepartments must be an array of department codes' }, { status: 400 });
+      }
+      const normalizedCodes: string[] = coordinatorDepartments.map((d: string) => d.trim().toUpperCase()).filter(Boolean);
+      normalizedCoordinatorDepartments = normalizedCodes;
+      // Validate against real departments so a typo doesn't silently produce a coordinator
+      // with permanent, invisible 403s (lib/capstoneAuth.ts compares this array verbatim
+      // against CapstoneSession.department, which is also always upper-cased).
+      if (normalizedCodes.length > 0) {
+        const validCodes = await Department.find({ code: { $in: normalizedCodes } }).select('code').lean();
+        const validCodeSet = new Set(validCodes.map((d) => d.code));
+        const unknown = normalizedCodes.filter((code) => !validCodeSet.has(code));
+        if (unknown.length > 0) {
+          return NextResponse.json({ error: `Unknown department code(s): ${unknown.join(', ')}` }, { status: 400 });
+        }
+      }
+    }
+
+    const user = await User.findById(id);
     if (!user) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ account: { _id: String(user._id), name: user.name, email: user.email, role: user.role } });
+    // findByIdAndUpdate would bypass the pre('save') hook that keeps the legacy `role`
+    // field in sync with `roles` - use .save() so app/api/auth/users/route.ts's
+    // role==='admin' check keeps working the moment roles change.
+    if (name !== undefined) user.name = name;
+    if (roles !== undefined) user.roles = roles;
+    if (departmentId !== undefined) user.departmentId = departmentId as any;
+    if (normalizedCoordinatorDepartments !== undefined) user.coordinatorDepartments = normalizedCoordinatorDepartments;
+    await user.save();
+
+    return NextResponse.json({
+      account: {
+        _id: String(user._id),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        roles: user.roles?.length ? user.roles : ['teacher'],
+        departmentId: user.departmentId ? String(user.departmentId) : null,
+        coordinatorDepartments: user.coordinatorDepartments || [],
+      },
+    });
   } catch (error) {
     console.error('Update admin account error:', error);
     return NextResponse.json({ error: 'Failed to update account' }, { status: 500 });

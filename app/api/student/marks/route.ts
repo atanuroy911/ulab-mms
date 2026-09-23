@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import { isUlabSessionOrAdminAuthorized } from '@/lib/studentAuth';
+import { extractStudentId } from '@/lib/googleAccount';
 import { escapeRegExp } from '@/lib/utils';
 import Student from '@/models/Student';
 import Mark from '@/models/Mark';
@@ -32,6 +35,23 @@ export async function POST(request: NextRequest) {
         { error: adminPassword ? 'Invalid admin password' : 'Please sign in with your ULAB Google account to check marks' },
         { status: 401 }
       );
+    }
+
+    // isUlabSessionOrAdminAuthorized only proves "some ULAB account (or the admin password)
+    // is present" - it never checked that the requested studentId belongs to whoever's
+    // signed in, so any signed-in ULAB account (student or teacher) could fetch any other
+    // student's marks by simply POSTing a different ID than their own. The admin-password
+    // override is exempt (a teacher/admin legitimately looks up arbitrary students); a real
+    // user session must match the ID embedded in their own Google display name.
+    if (!adminPassword) {
+      const session = await getServerSession(authOptions);
+      const sessionStudentId = extractStudentId(session?.user?.name);
+      if (!sessionStudentId || sessionStudentId.toLowerCase() !== studentId.toLowerCase()) {
+        return NextResponse.json(
+          { error: 'You can only check your own marks. Please sign in with your own ULAB Google account.' },
+          { status: 403 }
+        );
+      }
     }
 
     await dbConnect();

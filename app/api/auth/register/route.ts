@@ -4,6 +4,9 @@ import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 import { isUlabEmail } from '@/lib/googleAccount';
+import { sendMail, mailShell } from '@/lib/mail';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,6 +62,16 @@ export async function POST(request: NextRequest) {
       email,
       password: hashedPassword,
     });
+
+    sendMail({
+      to: user.email,
+      subject: 'Welcome to ULAB MMS',
+      html: mailShell(`
+        <h2 style="margin-top:0;">Welcome, ${user.name}!</h2>
+        <p>Your Marks Management System account has been created with the email <strong>${user.email}</strong>.</p>
+        <p>You can sign in any time at <a href="${process.env.NEXTAUTH_URL}/auth/signin">${process.env.NEXTAUTH_URL}/auth/signin</a>.</p>
+      `),
+    }).catch(() => {});
 
     return NextResponse.json(
       {

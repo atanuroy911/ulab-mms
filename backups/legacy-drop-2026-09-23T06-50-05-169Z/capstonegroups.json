@@ -1,0 +1,85 @@
+{
+  "collection": "capstonegroups",
+  "droppedAt": "2026-09-23T06:50:06.420Z",
+  "indexes": [
+    {
+      "v": 2,
+      "key": {
+        "_id": 1
+      },
+      "name": "_id_"
+    },
+    {
+      "v": 2,
+      "key": {
+        "courseId": 1
+      },
+      "name": "courseId_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "courseId": 1,
+        "supervisorId": 1
+      },
+      "name": "courseId_1_supervisorId_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "evaluatorAssignments.evaluatorId": 1
+      },
+      "name": "evaluatorAssignments.evaluatorId_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "createdAt": -1
+      },
+      "name": "createdAt_-1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "sessionId": 1,
+        "track": 1,
+        "groupNumber": 1
+      },
+      "name": "sessionId_1_track_1_groupNumber_1",
+      "background": true,
+      "unique": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "sessionId": 1,
+        "supervisorId": 1
+      },
+      "name": "sessionId_1_supervisorId_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "evaluators.evaluatorId": 1,
+        "sessionId": 1
+      },
+      "name": "evaluators.evaluatorId_1_sessionId_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "members.studentAccountId": 1,
+        "sessionId": 1
+      },
+      "name": "members.studentAccountId_1_sessionId_1",
+      "background": true
+    }
+  ],
+  "documents": []
+}

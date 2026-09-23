@@ -416,21 +416,83 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     setActiveSession((prev) => (prev && prev._id === updatedSession._id ? updatedSession : prev));
   };
 
-  const updateStudentStatus = async (sessionId: string, studentId: string, status: 'present' | 'absent') => {
-    try {
-      const res = await fetch(`/api/courses/${courseId}/attendance`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, studentId, status }),
+  // pendingUpdates: key = `${sessionId}:${studentId}` -> AbortController
+  // Used to cancel in-flight requests when the user clicks again before the
+  // previous one completes (ensures the last click wins, never a stale one).
+  const pendingUpdates = useRef<Map<string, AbortController>>(new Map());
+
+  const updateStudentStatus = (sessionId: string, studentId: string, status: 'present' | 'absent') => {
+    // --- Optimistic update: flip the UI immediately ---
+    const prevSessions = sessions; // snapshot for rollback
+    const applyOptimistic = (prev: Session[]) =>
+      prev.map((s) => {
+        if (s._id !== sessionId) return s;
+        const existing = s.records.find((r) => String(r.studentId) === studentId);
+        let records: AttendanceRecord[];
+        if (existing) {
+          records = s.records.map((r) =>
+            String(r.studentId) === studentId
+              ? { ...r, status, recordedAt: new Date().toISOString(), markedBy: 'manual' as const }
+              : r
+          );
+        } else {
+          records = [
+            ...s.records,
+            { studentId, status, recordedAt: new Date().toISOString(), markedBy: 'manual' as const },
+          ];
+        }
+        return { ...s, records };
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) applySessionUpdate(data.session);
-      }
-    } catch (err) {
-      console.error('Error updating attendance', err);
-    }
+    setSessions(applyOptimistic);
+    setActiveSession((prev) =>
+      prev && prev._id === sessionId
+        ? ({ ...prev, records: applyOptimistic([prev])[0]?.records ?? prev.records })
+        : prev
+    );
+
+    // Cancel any previous in-flight request for this exact cell
+    const key = `${sessionId}:${studentId}`;
+    pendingUpdates.current.get(key)?.abort();
+    const controller = new AbortController();
+    pendingUpdates.current.set(key, controller);
+
+    // --- Background sync ---
+    fetch(`/api/courses/${courseId}/attendance`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, studentId, status }),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        pendingUpdates.current.delete(key);
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          // Reconcile with server truth (handles edge-cases like concurrent edits)
+          if (data.session) applySessionUpdate(data.session);
+        } else {
+          // Server rejected — roll back
+          setSessions(prevSessions);
+          setActiveSession((prev) =>
+            prev && prev._id === sessionId
+              ? (prevSessions.find((s) => s._id === sessionId) ?? prev)
+              : prev
+          );
+          notify.error('Failed to save attendance change');
+        }
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return; // superseded by a newer click — ignore
+        pendingUpdates.current.delete(key);
+        // Network error — roll back
+        setSessions(prevSessions);
+        setActiveSession((prev) =>
+          prev && prev._id === sessionId
+            ? (prevSessions.find((s) => s._id === sessionId) ?? prev)
+            : prev
+        );
+        notify.error('Network error — attendance not saved');
+      });
   };
 
   const bulkSetSession = async (sessionId: string, status: 'present' | 'absent') => {
@@ -917,8 +979,8 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[260px]">Student</TableHead>
-                <TableHead className="min-w-32">Present / Absent</TableHead>
+                <TableHead className="sticky left-0 z-20 bg-background min-w-[180px] sm:min-w-[260px]">Student</TableHead>
+                <TableHead className="min-w-28">Present / Absent</TableHead>
                 {sessionLabels.map((session) => (
                   <TableHead key={session._id} className="w-[84px] min-w-[84px] px-2 text-center">
                     <div className="group flex items-center justify-center gap-1">
@@ -967,7 +1029,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                 return (
                   <Fragment key={student._id}>
                     <TableRow key={student._id}>
-                      <TableCell>
+                      <TableCell className="sticky left-0 z-10 bg-background">
                         <button
                           type="button"
                           onClick={() => setExpandedStudentId(isExpanded ? null : student._id)}

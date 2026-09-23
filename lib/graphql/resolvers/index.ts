@@ -2,7 +2,9 @@ import { userResolvers } from './user';
 import { courseResolvers } from './course';
 import { markResolvers } from './mark';
 import { attendanceResolvers } from './attendance';
-import { capstoneResolvers } from './capstone';
+
+// Capstone resolvers were removed along with the old CapstoneGroup/CapstoneMarks models
+// during the capstone rebuild - see lib/graphql/schema.ts.
 
 export const resolvers = {
   Query: {
@@ -10,7 +12,6 @@ export const resolvers = {
     ...courseResolvers.Query,
     ...markResolvers.Query,
     ...attendanceResolvers.Query,
-    ...capstoneResolvers.Query,
   },
   Mutation: {
     ...userResolvers.Mutation,
@@ -20,5 +21,4 @@ export const resolvers = {
   },
   Course: courseResolvers.Course,
   AttendanceSession: attendanceResolvers.AttendanceSession,
-  CapstoneGroup: capstoneResolvers.CapstoneGroup,
 };

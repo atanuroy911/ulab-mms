@@ -1,86 +1,158 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export type CapstoneTrack = 'A' | 'B' | 'C';
+
+export interface ICapstoneGroupMember {
+  studentAccountId: mongoose.Types.ObjectId;
+  studentIdText: string;
+  joinedAt: Date;
+  removedAt?: Date | null;
+  removedReason?: 'dropped' | 'transferred' | 'withdrawn' | 'admin-correction' | null;
+  removedBy?: mongoose.Types.ObjectId | null;
+  role: 'member' | 'leader';
+}
+
+export interface ICapstoneGroupEvaluator {
+  evaluatorId: mongoose.Types.ObjectId;
+  assignedAt: Date;
+  assignedBy: mongoose.Types.ObjectId;
+  unassignedAt?: Date | null;
+}
+
+/** Components whose evaluator panel the coordinator narrows down before final grading. */
+export type CapstoneChoosableComponent = 'presentation' | 'report';
+
+export const CHOOSABLE_COMPONENTS: CapstoneChoosableComponent[] = ['presentation', 'report'];
+
+/** Max evaluators whose marks may be counted per component. */
+export const MAX_CHOSEN_EVALUATORS = 2;
+
+export interface ICapstoneChosenEvaluators {
+  presentation: mongoose.Types.ObjectId[];
+  report: mongoose.Types.ObjectId[];
+}
+
 export interface ICapstoneGroup extends Document {
-  courseId: mongoose.Types.ObjectId;
-  groupName: string;
-  groupNumber?: number;
-  description?: string;
-  semester?: string;
-  studentIds: mongoose.Types.ObjectId[]; // Array of student IDs in the group
+  sessionId: mongoose.Types.ObjectId;
+  track: CapstoneTrack;
+  groupNumber: number;
+  groupName?: string;
+  projectTitle: string;
+  projectAbstract?: string;
+  members: ICapstoneGroupMember[];
   supervisorId: mongoose.Types.ObjectId;
-  evaluatorAssignments: {
-    evaluatorId: mongoose.Types.ObjectId;
-    assignedAt: Date;
-    assignedBy: mongoose.Types.ObjectId;
-    status: 'pending' | 'in-progress' | 'completed';
-  }[];
-  createdBy?: mongoose.Types.ObjectId; // Admin who created the group
+  evaluators: ICapstoneGroupEvaluator[];
+  /**
+   * Coordinator-selected evaluators whose marks count toward the final grade, held
+   * SEPARATELY PER COMPONENT (max 2 each).
+   *
+   * Presentation and report are graded in different sittings by different people: a group
+   * may be presented to by evaluators X and Y, while its report is read by Y and Z. The
+   * previous single `chosenEvaluatorIds` list forced one choice to cover both, so choosing
+   * the right pair for the presentation silently mis-scored the report (and vice versa).
+   */
+  chosenEvaluators: ICapstoneChosenEvaluators;
+  /** Google Drive / external link for the group's submitted report. */
+  reportUrl?: string | null;
+  previousGroupId?: mongoose.Types.ObjectId | null;
+  createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
+const MemberSchema = new Schema(
+  {
+    studentAccountId: { type: Schema.Types.ObjectId, ref: 'StudentAccount', required: true },
+    studentIdText: { type: String, required: true, trim: true },
+    joinedAt: { type: Date, default: Date.now },
+    removedAt: { type: Date, default: null },
+    removedReason: {
+      type: String,
+      enum: ['dropped', 'transferred', 'withdrawn', 'admin-correction', null],
+      default: null,
+    },
+    removedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    role: { type: String, enum: ['member', 'leader'], default: 'member' },
+  },
+  { _id: false }
+);
+
+const EvaluatorSchema = new Schema(
+  {
+    evaluatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    assignedAt: { type: Date, default: Date.now },
+    assignedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    unassignedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const CapstoneGroupSchema: Schema = new Schema(
   {
-    courseId: {
+    sessionId: {
       type: Schema.Types.ObjectId,
-      ref: 'Course',
+      ref: 'CapstoneSession',
       required: true,
     },
-    groupName: {
+    track: {
       type: String,
+      enum: ['A', 'B', 'C'],
       required: true,
     },
     groupNumber: {
       type: Number,
-      required: false,
+      required: true,
     },
-    description: {
+    groupName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    projectTitle: {
+      type: String,
+      required: [true, 'Please provide a project title'],
+      trim: true,
+    },
+    projectAbstract: {
       type: String,
       default: '',
     },
-    semester: {
-      type: String,
-      default: '',
+    members: {
+      type: [MemberSchema],
+      default: [],
     },
-    studentIds: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Student',
-        required: true,
-      },
-    ],
     supervisorId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
-    evaluatorAssignments: [
-      {
-        evaluatorId: {
-          type: Schema.Types.ObjectId,
-          ref: 'User',
-          required: true,
+    evaluators: {
+      type: [EvaluatorSchema],
+      default: [],
+    },
+    chosenEvaluators: {
+      type: new Schema(
+        {
+          presentation: { type: [Schema.Types.ObjectId], ref: 'User', default: [] },
+          report: { type: [Schema.Types.ObjectId], ref: 'User', default: [] },
         },
-        assignedAt: {
-          type: Date,
-          default: Date.now,
-        },
-        assignedBy: {
-          type: Schema.Types.ObjectId,
-          ref: 'User',
-          required: true,
-        },
-        status: {
-          type: String,
-          enum: ['pending', 'in-progress', 'completed'],
-          default: 'pending',
-        },
-      },
-    ],
+        { _id: false }
+      ),
+      default: () => ({ presentation: [], report: [] }),
+    },
+    reportUrl: {
+      type: String,
+      default: null,
+    },
+    previousGroupId: {
+      type: Schema.Types.ObjectId,
+      ref: 'CapstoneGroup',
+      default: null,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      default: null,
+      required: true,
     },
   },
   {
@@ -88,19 +160,27 @@ const CapstoneGroupSchema: Schema = new Schema(
   }
 );
 
-// Indexes for efficient querying
-CapstoneGroupSchema.index({ courseId: 1 });
-CapstoneGroupSchema.index({ courseId: 1, supervisorId: 1 });
-CapstoneGroupSchema.index({ 'evaluatorAssignments.evaluatorId': 1 });
-CapstoneGroupSchema.index({ createdAt: -1 });
+CapstoneGroupSchema.index({ sessionId: 1, track: 1, groupNumber: 1 }, { unique: true });
+CapstoneGroupSchema.index({ sessionId: 1, supervisorId: 1 });
+CapstoneGroupSchema.index({ 'evaluators.evaluatorId': 1, sessionId: 1 });
+CapstoneGroupSchema.index({ 'members.studentAccountId': 1, sessionId: 1 });
 
-const CapstoneGroup: Model<ICapstoneGroup> =
-  mongoose.models.CapstoneGroup ||
-  mongoose.model<ICapstoneGroup>('CapstoneGroup', CapstoneGroupSchema);
+if (mongoose.models.CapstoneGroup) {
+  delete mongoose.models.CapstoneGroup;
+}
 
-// Force sync indexes to clean up old non-sparse indexes
-CapstoneGroup.syncIndexes().catch((err) => {
-  console.warn('Warning: Could not sync CapstoneGroup indexes:', err.message);
-});
+// Explicit collection name, deliberately NOT the Mongoose-default 'capstonegroups' - that
+// collection still holds documents and a unique index (courseId_1_groupNumber_1) from the
+// pre-rebuild capstone model. This rebuilt schema has a different shape (no `courseId` at
+// all) and a different unique index ({sessionId,track,groupNumber}); reusing the old
+// collection name would make the SECOND group ever created here fail with a duplicate-key
+// error on the stale legacy index (courseId: null collides for every group). A fresh
+// collection avoids the collision entirely instead of relying on a migration to clean up
+// the old one perfectly before first deploy.
+const CapstoneGroup: Model<ICapstoneGroup> = mongoose.model<ICapstoneGroup>(
+  'CapstoneGroup',
+  CapstoneGroupSchema,
+  'capstonegroups_v2'
+);
 
 export default CapstoneGroup;

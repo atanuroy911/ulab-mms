@@ -23,17 +23,30 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { notify } from '@/app/utils/notifications';
 import CourseGradesModal from './CourseGradesModal';
+
+const ALL_ROLES = ['admin', 'coordinator', 'teacher'] as const;
+type AccountRole = (typeof ALL_ROLES)[number];
 
 interface Account {
   _id: string;
   name: string;
   email: string;
   role: string;
+  roles: AccountRole[];
+  departmentId: string | null;
+  coordinatorDepartments: string[];
   provider: 'google' | 'credentials';
   createdAt: string;
   courseCount: number;
+}
+
+interface DepartmentOption {
+  _id: string;
+  code: string;
+  name: string;
 }
 
 interface AccountCourse {
@@ -79,8 +92,13 @@ export default function AccountManagement() {
   const [showTheory, setShowTheory] = useState(true);
   const [showLab, setShowLab] = useState(true);
 
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [editName, setEditName] = useState('');
+  const [editRoles, setEditRoles] = useState<Set<AccountRole>>(new Set(['teacher']));
+  const [editDepartmentId, setEditDepartmentId] = useState<string>('none');
+  const [editCoordinatorDepts, setEditCoordinatorDepts] = useState<Set<string>>(new Set());
   const [editSaving, setEditSaving] = useState(false);
 
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
@@ -119,8 +137,19 @@ export default function AccountManagement() {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch('/api/admin/departments');
+      const data = await res.json();
+      if (res.ok) setDepartments(data);
+    } catch (err) {
+      console.error('Error loading departments', err);
+    }
+  };
+
   useEffect(() => {
     fetchAccounts();
+    fetchDepartments();
   }, []);
 
   const openView = async (account: Account) => {
@@ -158,16 +187,46 @@ export default function AccountManagement() {
   const openEdit = (account: Account) => {
     setEditingAccount(account);
     setEditName(account.name);
+    setEditRoles(new Set(account.roles?.length ? account.roles : ['teacher']));
+    setEditDepartmentId(account.departmentId || 'none');
+    setEditCoordinatorDepts(new Set(account.coordinatorDepartments || []));
+  };
+
+  const toggleEditRole = (role: AccountRole) => {
+    setEditRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  };
+
+  const toggleCoordinatorDept = (code: string) => {
+    setEditCoordinatorDepts((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
   };
 
   const saveAccountEdit = async () => {
     if (!editingAccount) return;
+    if (editRoles.size === 0) {
+      notify.error('Select at least one role');
+      return;
+    }
     setEditSaving(true);
     try {
       const res = await fetch(`/api/admin/accounts/${editingAccount._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim() }),
+        body: JSON.stringify({
+          name: editName.trim(),
+          roles: Array.from(editRoles),
+          departmentId: editDepartmentId === 'none' ? null : editDepartmentId,
+          coordinatorDepartments: Array.from(editCoordinatorDepts),
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -411,6 +470,7 @@ export default function AccountManagement() {
                     </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Roles</TableHead>
                     <TableHead>Sign-in</TableHead>
                     <TableHead>Courses</TableHead>
                     <TableHead>Joined</TableHead>
@@ -420,7 +480,7 @@ export default function AccountManagement() {
                 <TableBody>
                   {filteredAccounts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                         No accounts found.
                       </TableCell>
                     </TableRow>
@@ -437,6 +497,15 @@ export default function AccountManagement() {
                         </TableCell>
                         <TableCell className="font-medium">{account.name}</TableCell>
                         <TableCell className="text-muted-foreground">{account.email}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(account.roles?.length ? account.roles : ['teacher']).map((r) => (
+                              <Badge key={r} variant={r === 'admin' ? 'default' : 'outline'} className="capitalize text-[11px]">
+                                {r}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="secondary">{account.provider === 'google' ? 'Google' : 'Email/Password'}</Badge>
                         </TableCell>
@@ -641,9 +710,62 @@ export default function AccountManagement() {
             <DialogTitle>Edit Account</DialogTitle>
             <DialogDescription>{editingAccount?.email}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="account-name">Name</Label>
-            <Input id="account-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="account-name">Name</Label>
+              <Input id="account-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Roles</Label>
+              <div className="flex flex-wrap gap-4">
+                {ALL_ROLES.map((role) => (
+                  <label key={role} className="flex items-center gap-2 text-sm capitalize cursor-pointer">
+                    <Checkbox checked={editRoles.has(role)} onCheckedChange={() => toggleEditRole(role)} />
+                    {role}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A person can hold several roles at once - e.g. a department head can be admin, coordinator, and
+                teacher together.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select value={editDepartmentId} onValueChange={setEditDepartmentId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No department</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {editRoles.has('coordinator') && (
+              <div className="space-y-2">
+                <Label>Coordinator authority (departments)</Label>
+                <div className="flex flex-wrap gap-3 rounded-md border p-3">
+                  {departments.map((d) => (
+                    <label key={d._id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={editCoordinatorDepts.has(d.code)}
+                        onCheckedChange={() => toggleCoordinatorDept(d.code)}
+                      />
+                      {d.code}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Which department(s) this coordinator can manage capstone sessions/groups for.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingAccount(null)} disabled={editSaving}>

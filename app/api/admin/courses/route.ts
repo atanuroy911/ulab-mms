@@ -5,8 +5,9 @@ import AdminCourse from '@/models/AdminCourse';
 import { verifyAdminToken } from '@/lib/adminAuth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-// GET all admin courses - readable by any signed-in teacher (used by the course-creation
-// combobox) as well as the admin dashboard's catalog manager.
+// GET admin courses — supports optional ?page, ?limit, ?search for paginated admin UI.
+// When called without pagination params (e.g. from the course-creation combobox), returns
+// all courses as before to preserve backward compatibility.
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions as any);
@@ -17,9 +18,36 @@ export async function GET(request: NextRequest) {
 
     await dbConnect();
 
-    const courses = await AdminCourse.find({}).sort({ courseCode: 1 });
+    const { searchParams } = new URL(request.url);
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
+    const search = searchParams.get('search')?.trim() || '';
 
-    return NextResponse.json({ courses }, { status: 200 });
+    // Build query
+    const query: Record<string, unknown> = {};
+    if (search) {
+      query.$or = [
+        { courseCode: { $regex: search, $options: 'i' } },
+        { courseTitle: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // If no pagination params, return all (backward compat)
+    if (!pageParam && !limitParam) {
+      const courses = await AdminCourse.find(query).sort({ courseCode: 1 });
+      return NextResponse.json({ courses }, { status: 200 });
+    }
+
+    const page = Math.max(1, parseInt(pageParam || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(limitParam || '20', 10)));
+    const skip = (page - 1) * limit;
+
+    const [courses, total] = await Promise.all([
+      AdminCourse.find(query).sort({ courseCode: 1 }).skip(skip).limit(limit),
+      AdminCourse.countDocuments(query),
+    ]);
+
+    return NextResponse.json({ courses, total, page, limit }, { status: 200 });
   } catch (error: any) {
     console.error('Get admin courses error:', error);
     return NextResponse.json(

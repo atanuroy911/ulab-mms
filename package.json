@@ -6,7 +6,10 @@
     "dev": "npx next dev",
     "build": "npx next build",
     "start": "npx next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "node scripts/migrate.js",
+    "cleanup:legacy": "node scripts/cleanup-legacy-collections.js",
+    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
@@ -29,6 +32,7 @@
     "@tiptap/starter-kit": "^3.16.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/uuid": "^10.0.0",
+    "@xyflow/react": "^12.11.6",
     "bcryptjs": "^3.0.3",
     "chromium": "^3.0.3",
     "class-variance-authority": "^0.7.1",

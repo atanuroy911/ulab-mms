@@ -306,7 +306,11 @@ function SignInForm() {
           </CardFooter>
         </Card>
 
-        {/* Student Check Marks */}
+        {/* Students belong in the student portal (/student/signin), which issues a
+            student-scoped session and fronts marks, attendance and capstone together.
+            This teacher sign-in page only points the way - it no longer deep-links into
+            /student/check-marks, which used to strand students on a single sub-page with
+            no route to the rest of their portal. */}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t" />
@@ -318,15 +322,16 @@ function SignInForm() {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          className="w-full transition-transform hover:scale-[1.01] active:scale-[0.99]"
-          asChild
-        >
-          <Link href="/student/check-marks">
-            📊 Check Marks (Student)
+        <div className="text-sm text-center text-muted-foreground">
+          Are you a student?{' '}
+          <Link
+            href="/student/signin"
+            className="text-primary hover:underline font-medium"
+          >
+            Go to the Student Portal
           </Link>
-        </Button>
+        </div>
+
       </div>
     </AuthShell>
   );

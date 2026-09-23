@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     await dbConnect();
 
     const [users, courseCounts] = await Promise.all([
-      User.find().select('name email role googleId createdAt').sort({ createdAt: -1 }).lean(),
+      User.find().select('name email role roles departmentId coordinatorDepartments googleId createdAt').sort({ createdAt: -1 }).lean(),
       Course.aggregate([{ $group: { _id: '$userId', count: { $sum: 1 } } }]),
     ]);
 
@@ -26,6 +26,9 @@ export async function GET(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role || 'user',
+      roles: user.roles?.length ? user.roles : ['teacher'],
+      departmentId: user.departmentId ? String(user.departmentId) : null,
+      coordinatorDepartments: user.coordinatorDepartments || [],
       provider: user.googleId ? 'google' : 'credentials',
       createdAt: user.createdAt,
       courseCount: countByUserId.get(String(user._id)) || 0,

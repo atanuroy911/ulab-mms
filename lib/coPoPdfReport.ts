@@ -106,6 +106,15 @@ function sheetHeader(left: string, center: string, right: string) {
   </div>`;
 }
 
+// Reproduces the "Generated on <date> <time>" / "<doc code>" print footer these same sheets
+// have in the template (see module comment above) - omits "Page X of Y" since a static HTML
+// print-out has no reliable way to know the browser's eventual page count.
+function sheetFooter(generatedAt: Date, docCode: string) {
+  return `<div style="display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#333;border-top:1px solid #999;padding-top:5px;margin-top:12px;">
+    <span>Generated on ${esc(generatedAt.toLocaleDateString())} ${esc(generatedAt.toLocaleTimeString())}</span><span>${esc(docCode)}</span>
+  </div>`;
+}
+
 // ─── A plain grid replica of the spreadsheet ───────────────────────────────────────────────
 
 function excelTable(headers: string[], rows: (string | number)[][], opts?: { fontSize?: number }) {
@@ -119,6 +128,7 @@ function excelTable(headers: string[], rows: (string | number)[][], opts?: { fon
 
 function buildExcelStyleReport(data: CoPoReportData): string {
   const { course, instructorName, rows, summary, gradingScale, coPoMatrix, coMarkDistribution } = data;
+  const generatedAt = new Date();
 
   const gradeSheetRows = rows.map((r, i) => [
     i + 1, r.student.studentId, r.student.name,
@@ -198,7 +208,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
   </div>
 
   <div class="sheet">
-    ${sheetHeader('Department of CSE, ULAB', 'Course Summary', 'AC18(00)')}
+    ${sheetHeader('Department of CSE, ULAB', 'Course Summary', 'AC018(00)')}
     <h2>Course Summary</h2>
     <table style="width:auto;margin-bottom:12px;">
       <tr><td style="font-weight:bold;padding:2px 8px;">Course Code</td><td style="padding:2px 8px;">${esc(course.code)}</td></tr>
@@ -226,6 +236,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
         ${excelTable(['CO', 'Students Achieved', 'Avg Score'], CO_LABELS.map((label, i) => [label, summary.coAttainedCounts[i], pct(summary.coPercentageAvg[i])]))}
       </div>
     </div>
+    ${sheetFooter(generatedAt, 'AC018(00)')}
   </div>
 
   <div class="sheet">
@@ -240,6 +251,7 @@ function buildExcelStyleReport(data: CoPoReportData): string {
     <h3 style="margin-top:12px;">Class Averages</h3>
     ${excelTable(CO_LABELS, [summary.coPercentageAvg.map((v) => pct(v))])}
     ${excelTable(PO_LABELS, [summary.poPercentageAvg.map((v) => pct(v))], { fontSize: 9 })}
+    ${sheetFooter(generatedAt, 'CSE004(00)')}
   </div>
 
   <div class="sheet">
@@ -255,7 +267,8 @@ function buildExcelStyleReport(data: CoPoReportData): string {
     <p style="border-bottom:1px solid #000;height:20px;"></p>
     <p style="margin-top:24px;">Signature of the Instructor: ____________________</p>
     <p>Name of the Instructor: ${esc(instructorName)}</p>
-    <p>Date: ${new Date().toLocaleDateString()}</p>
+    <p>Date: ${generatedAt.toLocaleDateString()}</p>
+    ${sheetFooter(generatedAt, 'CSE005(00)')}
   </div>
   `;
 }

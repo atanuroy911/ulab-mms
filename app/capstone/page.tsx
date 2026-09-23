@@ -1,29 +1,63 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, User, BarChart3 } from 'lucide-react';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { AdminSidebar } from '@/app/components/AdminSidebar';
-import { teacherSidebarItems } from '@/app/components/teacherNav';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, GraduationCap, Users, Settings } from 'lucide-react';
+import { TeacherShell } from '@/app/components/TeacherShell';
+import { toast } from 'sonner';
+
+interface Member {
+  studentAccountId: { _id: string; studentId: string; name: string } | string;
+  removedAt?: string | null;
+}
+
+interface GroupRow {
+  _id: string;
+  track: 'A' | 'B' | 'C';
+  groupNumber: number;
+  projectTitle: string;
+  members: Member[];
+  sessionId: { _id: string; department: string; status: string } | string;
+  supervisorId: string;
+  evaluators: { evaluatorId: string; unassignedAt?: string | null }[];
+}
 
 export default function CapstonePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [groups, setGroups] = useState<GroupRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
     } else if (status === 'authenticated') {
-      setLoading(false);
+      fetchGroups();
     }
   }, [status, router]);
+
+  const fetchGroups = async () => {
+    try {
+      const res = await fetch('/api/capstone/groups/mine');
+      const data = await res.json();
+      if (res.ok) setGroups(data);
+      else toast.error(data.error || 'Failed to load your capstone groups');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load your capstone groups');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const roles = (session?.user as any)?.roles as string[] | undefined;
+  const canManage = roles?.includes('admin') || roles?.includes('coordinator');
+  const myId = session?.user?.id;
 
   if (loading || status === 'loading') {
     return (
@@ -34,97 +68,75 @@ export default function CapstonePage() {
   }
 
   return (
-    <div className="h-dvh bg-background flex overflow-hidden">
-      <AdminSidebar items={teacherSidebarItems} title="Teacher Portal" />
-
-      <div className="flex-1 flex flex-col">
-        <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-lg font-bold truncate bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Capstone Marks Management</h1>
-              <p className="text-xs text-muted-foreground truncate">Submit capstone project marks</p>
-            </div>
-            <ThemeToggle />
-          </div>
-        </nav>
-
-        <main className="flex-1 overflow-auto">
-      <div className="max-w-6xl mx-auto p-4 pt-8">
-        {/* Header */}
+    <TeacherShell
+      title="Capstone"
+      subtitle="Groups you supervise or evaluate"
+      actions={
+        canManage ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href="/capstone/sessions">
+              <Settings className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Sessions</span>
+            </Link>
+          </Button>
+        ) : null
+      }
+    >
+      <div className="mx-auto max-w-5xl p-4 pt-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Submit Capstone Marks</h2>
+          <h2 className="text-3xl font-bold mb-2">My Capstone Groups</h2>
           <p className="text-muted-foreground">
-            Select your role and submit marks for capstone projects
+            Groups where you're the supervisor or an assigned evaluator. Review weekly journals and submit marks.
           </p>
         </div>
 
-        {/* Submit Marks Section */}
-        <div>
-          <div className="mb-6">
-            <h3 className="text-2xl font-bold mb-2">Submit Marks</h3>
-            <p className="text-muted-foreground">
-              Select your role and submit marks for capstone projects
-            </p>
-          </div>
-
-          {/* Options Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Supervisor Option */}
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-500">
-              <CardHeader>
-                <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
-                  <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        {groups.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6 text-center text-muted-foreground">
+              You are not currently assigned to any capstone group.
+              {canManage && (
+                <div className="mt-4">
+                  <Button asChild variant="outline">
+                    <Link href="/capstone/sessions">Manage Capstone Sessions</Link>
+                  </Button>
                 </div>
-                <CardTitle className="text-xl">Submit as Supervisor</CardTitle>
-                <CardDescription>
-                  Submit marks for students you are supervising
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-6">
-                  As a supervisor, you can evaluate and submit marks for your capstone students based on their project work, presentation, and overall performance.
-                </p>
-                <Button 
-                  asChild 
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                >
-                  <Link href="/capstone/supervisor">
-                    Submit as Supervisor
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Evaluator Option */}
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-500">
-              <CardHeader>
-                <div className="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-4">
-                  <BarChart3 className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                </div>
-                <CardTitle className="text-xl">Submit as Evaluator</CardTitle>
-                <CardDescription>
-                  Submit evaluation marks for assigned capstone projects
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-6">
-                  As an evaluator, you can assess and submit marks for assigned capstone projects based on the evaluation criteria and rubric.
-                </p>
-                <Button 
-                  asChild 
-                  className="w-full bg-purple-600 hover:bg-purple-700"
-                >
-                  <Link href="/capstone/evaluator">
-                    Submit as Evaluator
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {groups.map((group) => {
+              const activeMembers = group.members.filter((m) => !m.removedAt);
+              const isSupervisor = String(group.supervisorId) === myId;
+              const sessionInfo = typeof group.sessionId === 'object' ? group.sessionId : null;
+              return (
+                <Link key={group._id} href={`/capstone/groups/${group._id}`}>
+                  <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary/50 h-full">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{group.projectTitle}</CardTitle>
+                        <Badge variant="outline">Track {group.track}</Badge>
+                      </div>
+                      <CardDescription className="flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5" />
+                        {activeMembers.length} member(s) · {sessionInfo?.department}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Badge variant={isSupervisor ? 'default' : 'secondary'}>
+                        {isSupervisor ? 'Supervisor' : 'Evaluator'}
+                      </Badge>
+                      {sessionInfo && (
+                        <Badge variant="secondary" className="capitalize ml-2">{sessionInfo.status}</Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
-        </div>
+        )}
       </div>
-        </main>
-      </div>
-    </div>
+    </TeacherShell>
   );
 }

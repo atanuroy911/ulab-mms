@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -44,6 +46,26 @@ const GRADIENT_CLASSES: Record<NonNullable<AppHeaderProps['gradient']>, string> 
   none: '',
 };
 
+/**
+ * Shown next to the theme toggle when the signed-in account holds more than one portal
+ * (currently: admin, on top of their regular teacher dashboard). Lets a department head
+ * who holds all three roles jump into the admin portal without signing in separately.
+ */
+function RoleSwitcher() {
+  const { data: session } = useSession();
+  const roles = (session?.user as any)?.roles as string[] | undefined;
+  if (!roles?.includes('admin')) return null;
+
+  return (
+    <Button variant="outline" size="sm" asChild>
+      <Link href="/admin/dashboard">
+        <ShieldCheck className="h-4 w-4 sm:mr-2" />
+        <span className="hidden sm:inline">Admin Portal</span>
+      </Link>
+    </Button>
+  );
+}
+
 export function AppHeader({
   title,
   subtitle,
@@ -83,6 +105,7 @@ export function AppHeader({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <RoleSwitcher />
               <ThemeToggle />
               {actions.map(({ key, label, icon: ActionIcon, href, onClick, variant = 'outline', alwaysShowLabel }) => {
                 const content = (

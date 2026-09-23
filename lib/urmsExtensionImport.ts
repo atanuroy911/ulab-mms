@@ -205,3 +205,116 @@ export function connectAndStartGradeFill(
     disconnect: () => port.disconnect(),
   };
 }
+
+export interface SyncedEmail {
+  studentId: string;
+  email: string;
+}
+
+export type UrmsEmailSyncStatus =
+  | { type: 'EMAIL_SYNC_PROGRESS'; done: number; total: number }
+  | { type: 'EMAILS'; emails: SyncedEmail[] }
+  | { type: 'EMAIL_SYNC_ERROR'; error: string };
+
+/**
+ * Asks the extension to look up each given student ID's email from URMS (via the
+ * StudentRegistration "Load student" response - the same field the Advising feature reads).
+ * Runs entirely in the extension's background using the browser's existing URMS session -
+ * no popup window. `onStatus` receives progress ticks, the final email list, or an error.
+ */
+export function connectAndStartEmailSync(
+  extensionId: string,
+  studentIds: string[],
+  onStatus: (status: UrmsEmailSyncStatus) => void,
+  onDisconnect?: () => void
+): ImportSession | null {
+  const runtime = getChromeRuntime();
+  if (!runtime || typeof runtime.connect !== 'function') return null;
+
+  const port = runtime.connect(extensionId, { name: 'mms-urms-emails' });
+
+  port.onMessage.addListener((message: any) => {
+    if (
+      message?.type === 'EMAIL_SYNC_PROGRESS' ||
+      message?.type === 'EMAILS' ||
+      message?.type === 'EMAIL_SYNC_ERROR'
+    ) {
+      onStatus(message as UrmsEmailSyncStatus);
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    onDisconnect?.();
+  });
+
+  port.postMessage({ type: 'START_EMAIL_SYNC', studentIds });
+
+  return {
+    disconnect: () => port.disconnect(),
+  };
+}
+
+// ── Student detail lookup (name + email) ─────────────────────────────────────────────────
+
+export interface UrmsStudentDetail {
+  studentId: string;
+  name: string;
+  email: string;
+}
+
+export type UrmsStudentLookupStatus =
+  | { type: 'STUDENT_LOOKUP_PROGRESS'; done: number; total: number }
+  | { type: 'STUDENT_DETAILS'; students: UrmsStudentDetail[]; notFound?: string[] }
+  | { type: 'URMS_LOGIN_REQUIRED' }
+  | { type: 'STUDENT_LOOKUP_ERROR'; error: string };
+
+export interface StudentLookupSession extends ImportSession {
+  /** Asks the extension to open URMS's login page in a popup window. */
+  openLogin: () => void;
+  /** Re-runs the lookup on the same connection, e.g. after the user logs in. */
+  retry: (studentIds: string[]) => void;
+}
+
+/**
+ * Looks up students' names and emails on URMS by student ID, using the user's existing URMS
+ * session cookies via the Faculty Companion extension.
+ *
+ * Unlike the course-roster import this opens no window on the happy path - it replays the
+ * StudentRegistration "Load student" request in the background. A missing URMS session comes
+ * back as `URMS_LOGIN_REQUIRED` rather than a generic error, so the caller can offer
+ * `openLogin()` and then `retry()` on the same port instead of making the user start over.
+ */
+export function connectAndLookupStudents(
+  extensionId: string,
+  studentIds: string[],
+  onStatus: (status: UrmsStudentLookupStatus) => void,
+  onDisconnect?: () => void
+): StudentLookupSession | null {
+  const runtime = getChromeRuntime();
+  if (!runtime || typeof runtime.connect !== 'function') return null;
+
+  const port = runtime.connect(extensionId, { name: 'mms-urms-students' });
+
+  port.onMessage.addListener((message: any) => {
+    if (
+      message?.type === 'STUDENT_LOOKUP_PROGRESS' ||
+      message?.type === 'STUDENT_DETAILS' ||
+      message?.type === 'URMS_LOGIN_REQUIRED' ||
+      message?.type === 'STUDENT_LOOKUP_ERROR'
+    ) {
+      onStatus(message as UrmsStudentLookupStatus);
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    onDisconnect?.();
+  });
+
+  port.postMessage({ type: 'START_STUDENT_LOOKUP', studentIds });
+
+  return {
+    disconnect: () => port.disconnect(),
+    openLogin: () => port.postMessage({ type: 'OPEN_URMS_LOGIN' }),
+    retry: (ids: string[]) => port.postMessage({ type: 'START_STUDENT_LOOKUP', studentIds: ids }),
+  };
+}

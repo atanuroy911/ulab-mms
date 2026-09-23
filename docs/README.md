@@ -78,7 +78,7 @@ Resource browsing and file access are handled through dedicated routes for share
 
 - `/auth/signin`, `/auth/signup`, `/auth/forgot-password`, `/auth/reset-password`
 - `/admin/signin`, `/admin/dashboard`, `/admin/settings`
-- `/dashboard`, `/dashboard/admin-portal`, `/dashboard/capstone-portal`, `/dashboard/archived`
+- `/dashboard`, `/dashboard/archived`
 - `/attendance/checkin/[sessionCode]`
 - `/course/[id]`, `/course/[id]/urms-grades`
 - `/capstone`, `/capstone/supervisor`, `/capstone/evaluator`

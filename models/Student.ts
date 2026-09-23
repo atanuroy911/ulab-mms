@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IStudent extends Document {
   studentId: string;
   name: string;
+  email?: string;
   probation: boolean;
   withdrawn?: boolean;
   useAlias?: boolean; // Whether this student is grouped under the course's alternate code
@@ -23,6 +24,16 @@ const StudentSchema: Schema = new Schema(
       type: String,
       required: [true, 'Please provide a student name'],
       trim: true,
+    },
+    // Populated lazily - either captured from a verified @ulab.edu.bd Google sign-in
+    // (attendance check-in / check-marks / project check-in), or synced in bulk from URMS
+    // via the ULAB Faculty Companion extension. Never required: most students won't have
+    // this until one of those happens.
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: undefined,
     },
     probation: {
       type: Boolean,
@@ -54,6 +65,10 @@ const StudentSchema: Schema = new Schema(
 
 // Ensure a student can't be added twice to the same course
 StudentSchema.index({ studentId: 1, courseId: 1 }, { unique: true });
+// Non-unique - lets StudentAccount (the person-level identity; see models/StudentAccount.ts)
+// join to every per-course Student row for a given human via a plain indexed scan, without
+// a denormalized FK to maintain on every course import.
+StudentSchema.index({ studentId: 1 });
 
 // Force re-registration with the latest schema on every load. Without this,
 // a long-running dev server can keep using a stale cached model from before a

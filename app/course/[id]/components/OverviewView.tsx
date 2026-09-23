@@ -36,6 +36,8 @@ import {
 } from 'lucide-react';
 import UrmsGradeSheet from './UrmsGradeSheet';
 import UrmsAutoFillGradesModal from './UrmsAutoFillGradesModal';
+import NotifyGradesButton from './NotifyGradesButton';
+import SyncEmailsButton from './SyncEmailsButton';
 import { computeAllCategoryStats } from '@/lib/markStats';
 import { format } from 'date-fns';
 
@@ -330,6 +332,8 @@ export default function OverviewView({
               <Upload className="w-4 h-4" />
               Import Students
             </Button>
+            <NotifyGradesButton courseId={course._id} />
+            <SyncEmailsButton courseId={course._id} studentIds={students.map((s) => s.studentId)} />
 
             <div className="mx-1 hidden h-6 w-px bg-border sm:block" />
 

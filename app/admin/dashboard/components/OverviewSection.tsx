@@ -10,6 +10,7 @@ interface Stats {
   courses: number;
   accounts: number;
   semesters: number;
+  departments: number;
 }
 
 const STAT_CARDS = [
@@ -24,21 +25,11 @@ export default function OverviewSection() {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const [coursesRes, accountsRes, semestersRes] = await Promise.all([
-          fetch('/api/admin/courses'),
-          fetch('/api/admin/accounts'),
-          fetch('/api/admin/semesters'),
-        ]);
-        const [coursesData, accountsData, semestersData] = await Promise.all([
-          coursesRes.json(),
-          accountsRes.json(),
-          semestersRes.json(),
-        ]);
-        setStats({
-          courses: (coursesData.courses || []).length,
-          accounts: (accountsData.accounts || []).length,
-          semesters: Array.isArray(semestersData) ? semestersData.length : 0,
-        });
+        const res = await fetch('/api/admin/stats');
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+        }
       } catch (error) {
         console.error('Error loading overview stats:', error);
       }

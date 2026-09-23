@@ -20,9 +20,14 @@ export function AuthGate({ onAdminOverride, loading, error }: AuthGateProps) {
   const [studentId, setStudentId] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
+  // Signs in with the *student portal* provider rather than the old marks-only one. Both
+  // prove ownership of an @ulab.edu.bd account, but 'google-student' also persists a
+  // StudentAccount, so a student who lands here first ends up with the same identity the
+  // rest of the portal (capstone, journal) keys off - instead of a marks-scoped session
+  // that silently can't reach anything else.
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
-    await signIn('google-marks', { callbackUrl: window.location.href });
+    await signIn('google-student', { callbackUrl: window.location.href });
   };
 
   const handleOverrideSubmit = async (e: React.FormEvent) => {
@@ -39,6 +44,11 @@ export function AuthGate({ onAdminOverride, loading, error }: AuthGateProps) {
         </CardTitle>
         <CardDescription>
           Sign in with your ULAB Google account so we can confirm it&apos;s really you before showing your marks.
+          This is the same sign-in as the{' '}
+          <a href="/student/signin" className="underline underline-offset-4 hover:text-foreground">
+            Student Portal
+          </a>
+          .
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

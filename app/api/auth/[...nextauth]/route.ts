@@ -4,8 +4,11 @@ import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
-import { isUlabEmail, looksLikeStudentName } from '@/lib/googleAccount';
+import { isUlabEmail, looksLikeStudentName, extractStudentId } from '@/lib/googleAccount';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
+import { sendMail, mailShell } from '@/lib/mail';
+import Student from '@/models/Student';
+import StudentAccount from '@/models/StudentAccount';
 
 // The student attendance QR check-in page and the "check marks" page also sign people in
 // with Google, but those are separate, purpose-built entry points (see
@@ -21,7 +24,27 @@ import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 const CHECKIN_GOOGLE_PROVIDER_ID = 'google-checkin';
 const MARKS_GOOGLE_PROVIDER_ID = 'google-marks';
 const PROJECT_GOOGLE_PROVIDER_ID = 'google-project';
-const STUDENT_ONLY_GOOGLE_PROVIDER_IDS = [CHECKIN_GOOGLE_PROVIDER_ID, MARKS_GOOGLE_PROVIDER_ID, PROJECT_GOOGLE_PROVIDER_ID];
+// The real student login (app/student/dashboard) - unlike the three scoped providers above,
+// this one DOES persist a StudentAccount (see signIn callback below), since it's meant to be
+// a durable "the student is logged in" session rather than a one-off identity proof.
+export const STUDENT_GOOGLE_PROVIDER_ID = 'google-student';
+export const STUDENT_ONLY_GOOGLE_PROVIDER_IDS = [
+  CHECKIN_GOOGLE_PROVIDER_ID,
+  MARKS_GOOGLE_PROVIDER_ID,
+  PROJECT_GOOGLE_PROVIDER_ID,
+  STUDENT_GOOGLE_PROVIDER_ID,
+];
+
+/**
+ * True for any session minted by a student-scoped provider (checkin/marks/project/student).
+ * This is the single source of truth for "is this session a student, never a teacher" - every
+ * place that authorizes teacher/coordinator/admin actions must reject when this is true. It
+ * previously diverged (lib/capstoneAuth.ts checked only 3 of these 4 flags), which let a
+ * student's `google-student` session pass as a teacher in capstone routes.
+ */
+export function isStudentOnlySessionUser(user: any): boolean {
+  return !!(user?.checkinOnly || user?.marksOnly || user?.projectOnly || user?.studentSession);
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -132,6 +155,20 @@ export const authOptions: NextAuthOptions = {
               },
             },
           }),
+          // The student dashboard's real login - persists a StudentAccount (see signIn
+          // callback), unlike the three scoped providers above which deliberately don't.
+          GoogleProvider({
+            id: STUDENT_GOOGLE_PROVIDER_ID,
+            name: 'Google (Student)',
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                prompt: 'select_account consent',
+                hd: 'ulab.edu.bd',
+              },
+            },
+          }),
         ]
       : []),
   ],
@@ -154,6 +191,69 @@ export const authOptions: NextAuthOptions = {
       // document, so a student checking their attendance/marks doesn't end up with a
       // login-capable account they never asked for.
       if (isStudentOnlyProvider) {
+        // Opportunistically capture the student's real email for every course they're
+        // enrolled in, keyed off the student ID embedded in their Google display name (the
+        // same pattern the attendance check-in route matches on). Best-effort only - never
+        // blocks sign-in if it fails.
+        const studentId = extractStudentId(user.name);
+        if (studentId) {
+          try {
+            await dbConnect();
+            await Student.updateMany({ studentId }, { email });
+
+            if (account.provider === STUDENT_GOOGLE_PROVIDER_ID) {
+              // Unlike the other three scoped providers, this one is a durable login - upsert
+              // the person-level StudentAccount (models/StudentAccount.ts didn't exist before
+              // the capstone rebuild; per-course Student rows have no cross-course identity).
+              const now = new Date();
+              const existingAccount = await StudentAccount.findOne({ studentId });
+              try {
+                await StudentAccount.findOneAndUpdate(
+                  { studentId },
+                  {
+                    $set: {
+                      name: user.name || existingAccount?.name || studentId,
+                      email,
+                      googleId: account.providerAccountId,
+                      lastSignInAt: now,
+                    },
+                    $setOnInsert: { firstSignInAt: now, status: 'active' },
+                  },
+                  { upsert: true }
+                );
+              } catch (conflictErr: any) {
+                // email/googleId are each unique - a stale/duplicate StudentAccount holding
+                // this email or googleId (e.g. a coordinator typo'd a placeholder account, or
+                // a reused Google alias) would previously make this whole upsert throw,
+                // silently caught by the outer try/catch below, leaving NO StudentAccount
+                // document for this studentId and the student unable to see their capstone
+                // group at all. Fall back to writing only the non-conflicting fields so the
+                // record for THIS studentId still exists and is resolvable, even if the
+                // email/googleId can't be claimed until the conflicting record is fixed.
+                if (conflictErr?.code === 11000) {
+                  console.error(`StudentAccount upsert conflict for studentId=${studentId}: ${conflictErr.message}`);
+                  await StudentAccount.findOneAndUpdate(
+                    { studentId },
+                    {
+                      $set: { name: user.name || existingAccount?.name || studentId, lastSignInAt: now },
+                      $setOnInsert: { firstSignInAt: now, status: 'active' },
+                    },
+                    { upsert: true }
+                  );
+                } else {
+                  throw conflictErr;
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Failed to capture student email on sign-in:', err);
+          }
+        } else if (account.provider === STUDENT_GOOGLE_PROVIDER_ID) {
+          // The student dashboard needs a resolvable ID to be usable at all - unlike the
+          // scoped check-in/marks/project flows, which can fall back to fuzzy name matching
+          // within a single course, this login has no course context to fall back within.
+          return '/auth/error?reason=student-id-missing';
+        }
         return true;
       }
 
@@ -177,6 +277,15 @@ export const authOptions: NextAuthOptions = {
           googleId: account.providerAccountId,
           role: 'user',
         });
+        sendMail({
+          to: email,
+          subject: 'Welcome to ULAB MMS',
+          html: mailShell(`
+            <h2 style="margin-top:0;">Welcome, ${user.name || email}!</h2>
+            <p>Your Marks Management System account has been created with the email <strong>${email}</strong>.</p>
+            <p>You can sign in any time at <a href="${process.env.NEXTAUTH_URL}/auth/signin">${process.env.NEXTAUTH_URL}/auth/signin</a>.</p>
+          `),
+        }).catch(() => {});
       } else if (!existing.googleId) {
         // A teacher with an existing (e.g. email/password) account is linking Google.
         existing.googleId = account.providerAccountId;
@@ -185,7 +294,7 @@ export const authOptions: NextAuthOptions = {
 
       return true;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       if (account) {
         // Tokens minted via the attendance check-in / check-marks providers are scoped to
         // those flows only - they must never grant access to the teacher dashboard/course
@@ -193,43 +302,96 @@ export const authOptions: NextAuthOptions = {
         token.checkinOnly = account.provider === CHECKIN_GOOGLE_PROVIDER_ID;
         token.marksOnly = account.provider === MARKS_GOOGLE_PROVIDER_ID;
         token.projectOnly = account.provider === PROJECT_GOOGLE_PROVIDER_ID;
+        token.studentSession = account.provider === STUDENT_GOOGLE_PROVIDER_ID;
       }
+
+      // Only trustworthy at sign-in (`account` is undefined on every later refresh call).
+      const isStudentOnlyProvider = STUDENT_ONLY_GOOGLE_PROVIDER_IDS.includes(account?.provider || '');
+      // Persists across refreshes via the token flags set above (this call, or a previous
+      // one) - this is what the refresh-throttle guard below must use instead, since
+      // `account` (and therefore `isStudentOnlyProvider`) is only ever present at sign-in.
+      const isStudentOnlySession = !!(token.checkinOnly || token.marksOnly || token.projectOnly || token.studentSession);
 
       if (user) {
-        // No User document is ever created for these providers (see signIn above), so
-        // there's nothing to look up - skip straight to the OAuth-account-only token.
-        const isStudentOnlyProvider = STUDENT_ONLY_GOOGLE_PROVIDER_IDS.includes(account?.provider || '');
-        const email = !isStudentOnlyProvider ? user.email?.toLowerCase() : undefined;
+        // No User document is ever created for these providers (see signIn above) - just
+        // carry the OAuth id through, same as before, and skip the DB-backed role/department
+        // resolution below entirely.
+        if (isStudentOnlyProvider) {
+          token.id = user.id;
+          token.role = 'user';
+          // Never 'teacher' here - a student token must fail every roles.includes(...) check
+          // in lib/capstoneAuth.ts and elsewhere, not fall through as a teacher by default.
+          token.roles = [];
 
-        if (email) {
-          await dbConnect();
-          const appUser = await User.findOne({ email });
-
-          if (appUser) {
-            token.id = (appUser._id as any).toString();
-            token.role = (appUser as any).role || (user as any).role || 'user';
-            token.googleLinked = !!appUser.googleId;
-            token.hasPassword = !!appUser.password;
-            return token;
+          if (account?.provider === STUDENT_GOOGLE_PROVIDER_ID) {
+            const studentId = extractStudentId(user.name);
+            if (studentId) {
+              await dbConnect();
+              const studentAccount = await StudentAccount.findOne({ studentId }).select('_id');
+              token.studentAccountId = studentAccount ? String(studentAccount._id) : null;
+              token.studentIdText = studentId;
+            }
           }
+        } else {
+          // First-ever call for this session (sign-in). Resolve the User id once here; the
+          // refresh branch below re-reads role/department from that id on every subsequent
+          // token refresh, so this only needs to run once per session lifetime.
+          const email = user.email?.toLowerCase();
+          if (email) {
+            await dbConnect();
+            const appUser = await User.findOne({ email });
+            token.id = appUser ? (appUser._id as any).toString() : user.id;
+          } else {
+            token.id = user.id;
+          }
+          token.googleLinked = false; // refined below once we read the User doc
+          token.hasPassword = false;
         }
-
-        token.id = user.id;
-        token.role = (user as any).role || 'user';
-        token.googleLinked = false;
-        token.hasPassword = false;
       }
+
+      // Re-read role/department from the DB periodically (not just at sign-in), so an admin
+      // granting/revoking a role takes effect on this session soon instead of waiting up to
+      // the full 30-minute session maxAge. NextAuth's jwt() callback runs on EVERY request
+      // with the JWT strategy (not only at token refresh), so this is throttled with our own
+      // timestamp rather than querying Mongo on every single page load. `trigger==='update'`
+      // (a client useSession().update() call) always forces an immediate re-read.
+      const ROLE_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // matches session.updateAge below
+      const needsRefresh =
+        trigger === 'update' ||
+        !token.roleRefreshedAt ||
+        Date.now() - token.roleRefreshedAt > ROLE_REFRESH_INTERVAL_MS;
+
+      if (!isStudentOnlySession && token.id && needsRefresh) {
+        await dbConnect();
+        const appUser = await User.findById(token.id);
+        if (appUser) {
+          token.role = appUser.role || 'user';
+          token.roles = appUser.roles?.length ? appUser.roles : ['teacher'];
+          token.departmentId = appUser.departmentId ? String(appUser.departmentId) : null;
+          token.coordinatorDepartments = appUser.coordinatorDepartments || [];
+          token.googleLinked = !!appUser.googleId;
+          token.hasPassword = !!appUser.password;
+        }
+        token.roleRefreshedAt = Date.now();
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role as string;
+        (session.user as any).roles = token.roles ?? [];
+        (session.user as any).departmentId = token.departmentId ?? null;
+        (session.user as any).coordinatorDepartments = token.coordinatorDepartments || [];
         (session.user as any).googleLinked = !!token.googleLinked;
         (session.user as any).hasPassword = !!token.hasPassword;
         (session.user as any).checkinOnly = !!token.checkinOnly;
         (session.user as any).marksOnly = !!token.marksOnly;
         (session.user as any).projectOnly = !!token.projectOnly;
+        (session.user as any).studentSession = !!token.studentSession;
+        (session.user as any).studentAccountId = token.studentAccountId ?? null;
+        (session.user as any).studentIdText = token.studentIdText ?? null;
       }
       return session;
     },

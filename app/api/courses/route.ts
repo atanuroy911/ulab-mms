@@ -45,33 +45,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const archived = searchParams.get('archived') === 'true';
 
-    // Get user's courses AND capstone courses (created by any user)
     const query = {
       isArchived: archived ? true : { $ne: true }
     };
-    
-    // Get user's own courses
-    let courses = await Course.find({ 
+
+    // Get user's own courses. Capstone no longer creates Course documents (it's a
+    // self-contained CapstoneSession/CapstoneGroup module instead), so there's no longer a
+    // cross-user merge here.
+    const combinedCourses = await Course.find({
       ...query,
       userId: new mongoose.Types.ObjectId(userObjectId),
     }).sort({
       createdAt: -1,
     });
-
-    // Also get capstone courses (check if they exist from any user)
-    const capstoneCodes = ['CSE4098A', 'CSE4098B', 'CSE4098C', 'CSE499'];
-    const capstoneCoursesExists = await Course.find({ 
-      code: { $in: capstoneCodes },
-      ...query
-    });
-
-    // Combine and remove duplicates
-    const combinedCourses = [...courses];
-    for (const capstoneCourse of capstoneCoursesExists) {
-      if (!combinedCourses.find(c => c.code === capstoneCourse.code)) {
-        combinedCourses.push(capstoneCourse);
-      }
-    }
 
     // Lightweight per-course stats for the dashboard cards (student count, exam count) - grouped
     // aggregates in one query per collection rather than N queries per course, so this stays

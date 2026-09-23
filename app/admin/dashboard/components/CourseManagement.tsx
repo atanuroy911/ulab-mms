@@ -118,6 +118,11 @@ export default function CourseManagement() {
   const [savingCourse, setSavingCourse] = useState(false);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCourses, setTotalCourses] = useState(0);
+  const PAGE_SIZE = 20;
+
   useEffect(() => {
     fetchCourses();
     fetchFixedPrograms();
@@ -244,14 +249,22 @@ export default function CourseManagement() {
     }
   };
 
-  const fetchCourses = async () => {
+  const fetchCourses = async (search?: string, page?: number) => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/courses');
+      const params = new URLSearchParams({
+        page: String(page ?? currentPage),
+        limit: String(PAGE_SIZE),
+      });
+      if (search !== undefined ? search : searchQuery) {
+        params.set('search', search !== undefined ? search : searchQuery);
+      }
+      const response = await fetch(`/api/admin/courses?${params}`);
       const data = await response.json();
 
       if (response.ok) {
         setCourses(data.courses || []);
+        setTotalCourses(data.total ?? data.courses?.length ?? 0);
       } else {
         toast.error('Failed to load courses');
       }
@@ -262,6 +275,21 @@ export default function CourseManagement() {
       setLoading(false);
     }
   };
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchCourses(searchQuery, 1);
+    }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  useEffect(() => {
+    fetchCourses(searchQuery, currentPage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -730,6 +758,7 @@ export default function CourseManagement() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <Card>
           <Table>
             <TableHeader>
@@ -813,6 +842,37 @@ export default function CourseManagement() {
             </TableBody>
           </Table>
         </Card>
+
+        {/* Pagination controls */}
+        {totalCourses > PAGE_SIZE && (
+          <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalCourses)}–{Math.min(currentPage * PAGE_SIZE, totalCourses)} of <strong>{totalCourses}</strong> courses
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || loading}
+              >
+                ← Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {Math.ceil(totalCourses / PAGE_SIZE)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(Math.ceil(totalCourses / PAGE_SIZE), p + 1))}
+                disabled={currentPage >= Math.ceil(totalCourses / PAGE_SIZE) || loading}
+              >
+                Next →
+              </Button>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* Add Course Modal */}

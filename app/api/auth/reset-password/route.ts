@@ -4,6 +4,9 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { isValidEmail } from '@/lib/utils';
+import { sendMail, mailShell } from '@/lib/mail';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,6 +69,17 @@ export async function POST(request: NextRequest) {
     user.passwordResetToken = null;
     user.passwordResetTokenExpiry = null;
     await user.save();
+
+    // Confirmation only - never blocks the reset itself if it fails to send.
+    sendMail({
+      to: user.email,
+      subject: 'Your password was changed - Marks Management System',
+      html: mailShell(`
+        <h2 style="margin-top:0;">Password Changed</h2>
+        <p>Your password was just changed for your ULAB MMS account (${user.email}).</p>
+        <p>If this wasn't you, please contact an administrator immediately.</p>
+      `),
+    }).catch(() => {});
 
     return NextResponse.json(
       { message: 'Password has been reset successfully' },

@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users, ClipboardList, DatabaseBackup } from 'lucide-react';
+import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar, Users, ClipboardList, DatabaseBackup, Building2, LayoutGrid } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar, SidebarItem } from '@/app/components/AdminSidebar';
@@ -12,9 +13,10 @@ import { notify } from '@/app/utils/notifications';
 import OverviewSection from './components/OverviewSection';
 import CourseManagement from './components/CourseManagement';
 import ResourcesManager from './components/ResourcesManager';
-import CapstoneManagement from './components/CapstoneManagement';
+import CapstoneSessionManagement from '@/app/capstone/sessions/SessionManagement';
 import SemesterManagement from './components/SemesterManagement';
 import AccountManagement from './components/AccountManagement';
+import DepartmentManagement from './components/DepartmentManagement';
 import RubricManagement from './components/RubricManagement';
 import BackupManagement from './components/BackupManagement';
 
@@ -28,6 +30,11 @@ const sidebarItems: SidebarItem[] = [
     title: 'Account Manager',
     href: '/admin/dashboard?tab=accounts',
     icon: Users,
+  },
+  {
+    title: 'Departments',
+    href: '/admin/dashboard?tab=departments',
+    icon: Building2,
   },
   {
     title: 'Course Management',
@@ -64,6 +71,7 @@ const sidebarItems: SidebarItem[] = [
 function AdminDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: teacherSession } = useSession();
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -141,6 +149,14 @@ function AdminDashboardContent() {
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <ThemeToggle />
+              {teacherSession?.user && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/dashboard">
+                    <LayoutGrid className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Teacher Dashboard</span>
+                  </Link>
+                </Button>
+              )}
               <Button variant="outline" size="sm" asChild>
                 <Link href="/admin/settings">
                   <Settings className="h-4 w-4 sm:mr-2" />
@@ -159,10 +175,11 @@ function AdminDashboardContent() {
         <main className="flex-1 p-6 overflow-auto">
           {activeTab === 'overview' && <OverviewSection />}
           {activeTab === 'accounts' && <AccountManagement />}
+          {activeTab === 'departments' && <DepartmentManagement />}
           {activeTab === 'courses' && <CourseManagement />}
           {activeTab === 'resources' && <ResourcesManager />}
           {activeTab === 'semesters' && <SemesterManagement />}
-          {activeTab === 'capstone' && <CapstoneManagement />}
+          {activeTab === 'capstone' && <CapstoneSessionManagement />}
           {activeTab === 'rubrics' && <RubricManagement />}
           {activeTab === 'backup' && <BackupManagement />}
         </main>
