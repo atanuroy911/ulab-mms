@@ -11,14 +11,20 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  Loader2, ArrowLeft, MessageSquare, Save, ExternalLink, Link2, CheckCircle2, AlertCircle, Users, Download,
+  Loader2, ArrowLeft, MessageSquare, Save, ExternalLink, Link2, CheckCircle2, AlertCircle, Users, Download, ClipboardEdit, Plus,
 } from 'lucide-react';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { Tip } from '@/app/components/Tip';
 import { StudentDetailDialog } from '../../components/StudentDetailDialog';
 import { JournalReminderButton } from '../../components/JournalReminderButton';
 import { toast } from 'sonner';
-import { REPORT_RUBRICS } from '@/lib/capstoneRubrics';
+import {
+  REPORT_RUBRICS,
+  PRESENTATION_MAX,
+  sumRubricScores,
+  isPresentationComplete,
+} from '@/lib/capstoneRubrics';
+import { PresentationRubricGrid } from '../../components/PresentationRubricGrid';
 
 interface StudentAccountRef { _id: string; studentId: string; name: string; }
 interface EvaluatorRef { evaluatorId: { _id: string; name: string; email: string } | string; unassignedAt?: string | null; }
@@ -33,9 +39,47 @@ interface GroupDetail {
   supervisorId: { _id: string; name: string } | string;
   evaluators: EvaluatorRef[];
   chosenEvaluators?: { presentation: string[]; report: string[] };
+  /** Average ('mean', default) or best ('max') of the chosen evaluators, per component. */
+  chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max' };
   reportUrl?: string | null;
   lastJournalReminderAt?: string | null;
+  /** Who marks what, read from the track's active grading scheme (lib/capstoneMarkingPlan.ts). */
+  markingPlan?: MarkingPlan;
 }
+
+interface MarkingPlan {
+  source: 'scheme' | 'default';
+  schemeName?: string;
+  schemeVersion?: number;
+  supervisor: Array<{ component: string; max: number }>;
+  evaluator: Array<{ component: string; max: number }>;
+}
+
+/** Before the plan loads (or from an older server): the department's default split. */
+const FALLBACK_PLAN: MarkingPlan = {
+  source: 'default',
+  supervisor: [
+    { component: 'report', max: 0 },
+    { component: 'presentation', max: 45 },
+    { component: 'peer', max: 5 },
+    { component: 'weeklyJournal', max: 10 },
+  ],
+  evaluator: [
+    { component: 'report', max: 0 },
+    { component: 'presentation', max: 45 },
+  ],
+};
+
+/** Components with their own rubric screen; every other component gets a score per student. */
+const RUBRIC_COMPONENTS = ['report', 'presentation'];
+
+const COMPONENT_INFO: Record<string, { label: string; description: string }> = {
+  weeklyJournal: { label: 'Weekly Journal Mark', description: "Each student's own journal mark, based on their weekly submissions." },
+  peer: { label: 'Peer Mark', description: "Each member's own contribution to the group." },
+  poster: { label: 'Poster Mark', description: "Each student's poster mark." },
+  report: { label: 'Report', description: '' },
+  presentation: { label: 'Presentation', description: '' },
+};
 
 interface JournalEntry {
   _id: string;
@@ -55,23 +99,7 @@ interface MarkSubmission {
   submitterId: string;
 }
 
-// Rubric criterion for presentation (5 criteria, 0/3/6/9 scale), scored per student to
-// match the department's printed "Assessment Rubrics for Term Final Presentation" sheet.
-// Keys stay c0..c4 so rubricScores saved before per-student scoring still load.
-const PRESENTATION_CRITERIA = [
-  'Presentation Skills (Eye contact, Language, Visual aid)',
-  'Organization of the Presentation Material [CO5: A1]',
-  'Contents',
-  'Question Answer',
-  'Time Management',
-];
-const PRESENTATION_LEVELS = [
-  { value: 0, label: 'No or Wrong Answer' },
-  { value: 3, label: 'Poor' },
-  { value: 6, label: 'Satisfactory' },
-  { value: 9, label: 'Excellent' },
-];
-const PRESENTATION_MAX = PRESENTATION_CRITERIA.length * 9;
+// Presentation rubric (5 criteria x 0/3/6/9, per student) lives in lib/capstoneRubrics.ts.
 
 // Report criteria by track, with the level wording from the department's rubric docs.
 const REPORT_LEVEL_NAMES = ['No / wrong answer', 'Poor', 'Satisfactory', 'Excellent'];
@@ -100,13 +128,7 @@ function memberName(m: Member): string {
   return typeof m.studentAccountId === 'object' ? m.studentAccountId.name : m.studentIdText;
 }
 
-function sumScores(scores: Record<string, number> | undefined): number {
-  return Object.values(scores || {}).reduce((a, b) => a + (b || 0), 0);
-}
-
-function isPresentationComplete(scores: Record<string, number> | undefined): boolean {
-  return !!scores && PRESENTATION_CRITERIA.every((_, idx) => typeof scores[`c${idx}`] === 'number');
-}
+const sumScores = sumRubricScores;
 
 export default function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params);
@@ -117,8 +139,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [savingComment, setSavingComment] = useState<string | null>(null);
-  const [journalMarks, setJournalMarks] = useState<Record<string, string>>({});
-  const [peerMarks, setPeerMarks] = useState<Record<string, string>>({});
+  // Per-student scores for components without a rubric screen (journal, peer, poster, ...):
+  // component -> studentAccountId -> typed value.
+  const [numericMarks, setNumericMarks] = useState<Record<string, Record<string, string>>>({});
   // Rubric scores: component -> studentId or 'group' -> criterionIndex -> score
   const [reportScores, setReportScores] = useState<Record<string, number>>({});
   // Presentation is scored per student: studentAccountId -> criterion key -> score
@@ -134,6 +157,19 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
     report: [],
   });
   const [savingChosen, setSavingChosen] = useState(false);
+  const [chosenAggregate, setChosenAggregate] = useState<{ presentation: 'mean' | 'max'; report: 'mean' | 'max' }>({
+    presentation: 'mean',
+    report: 'mean',
+  });
+  // Adding an evaluator from the paper-sheet card (someone who sat in but wasn't assigned).
+  const [staff, setStaff] = useState<Array<{ _id: string; name: string; email: string }>>([]);
+  const [evaluatorToAdd, setEvaluatorToAdd] = useState('');
+  const [addingEvaluator, setAddingEvaluator] = useState(false);
+  // Coordinator entering a grader's presentation marks from their paper sheet.
+  const [proxyGrader, setProxyGrader] = useState('');
+  const [proxyScores, setProxyScores] = useState<Record<string, Record<string, number>>>({});
+  const [proxyLoading, setProxyLoading] = useState(false);
+  const [proxySaving, setProxySaving] = useState(false);
   // Export
   const [exportingJournal, setExportingJournal] = useState(false);
   const [openStudentId, setOpenStudentId] = useState<string | null>(null);
@@ -198,17 +234,21 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           presentation: groupData.chosenEvaluators?.presentation?.map(String) || [],
           report: groupData.chosenEvaluators?.report?.map(String) || [],
         });
+        setChosenAggregate({
+          presentation: groupData.chosenAggregate?.presentation === 'max' ? 'max' : 'mean',
+          report: groupData.chosenAggregate?.report === 'max' ? 'max' : 'mean',
+        });
       }
 
       if (marksRes.ok) {
         setMarks(marksData);
-        const jMarks: Record<string, string> = {};
-        const pMarks: Record<string, string> = {};
+        const numeric: Record<string, Record<string, string>> = {};
         const rScores: Record<string, number> = {};
         const presScores: Record<string, Record<string, number>> = {};
         for (const m of marksData) {
-          if (m.component === 'weeklyJournal') jMarks[m.studentAccountId] = String(m.rawScore);
-          if (m.component === 'peer') pMarks[m.studentAccountId] = String(m.rawScore);
+          if (!RUBRIC_COMPONENTS.includes(m.component)) {
+            numeric[m.component] = { ...(numeric[m.component] || {}), [m.studentAccountId]: String(m.rawScore) };
+          }
           if (m.component === 'report' && m.submitterId === myId) {
             if (m.rubricScores) Object.assign(rScores, m.rubricScores);
           }
@@ -216,8 +256,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
             if (m.rubricScores) presScores[m.studentAccountId] = { ...m.rubricScores };
           }
         }
-        setJournalMarks(jMarks);
-        setPeerMarks(pMarks);
+        setNumericMarks(numeric);
         setReportScores(rScores);
         setPresentationScores(presScores);
       }
@@ -250,9 +289,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const submitFinalMarks = async (component: 'weeklyJournal' | 'peer') => {
+  const submitFinalMarks = async (component: string) => {
     if (!group) return;
-    const source = component === 'weeklyJournal' ? journalMarks : peerMarks;
+    const source = numericMarks[component] || {};
     const activeMembers = group.members.filter((m) => !m.removedAt);
     const marksPayload = activeMembers
       .map((m) => {
@@ -357,13 +396,117 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  /** Assigns another evaluator (who sat in on the presentation) and opens their sheet for entry. */
+  const addEvaluatorAndSelect = async () => {
+    if (!evaluatorToAdd) return;
+    setAddingEvaluator(true);
+    try {
+      const res = await fetch(`/api/capstone/groups/${id}/evaluators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ evaluatorId: evaluatorToAdd }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add evaluator');
+      toast.success('Evaluator added to this group');
+      const added = evaluatorToAdd;
+      setEvaluatorToAdd('');
+      await fetchAll();
+      loadProxyGrader(added);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add evaluator');
+    } finally {
+      setAddingEvaluator(false);
+    }
+  };
+
+  // The staff list for "add evaluator" - only coordinators need it, and only once.
+  useEffect(() => {
+    if (!canManage || staff.length > 0) return;
+    fetch('/api/auth/users')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((users) => setStaff(Array.isArray(users) ? users : []))
+      .catch(() => {});
+  }, [canManage, staff.length]);
+
+  /** Loads the chosen grader's existing presentation marks so the sheet can be completed or corrected. */
+  const loadProxyGrader = async (graderId: string) => {
+    setProxyGrader(graderId);
+    setProxyScores({});
+    if (!graderId) return;
+    setProxyLoading(true);
+    try {
+      const res = await fetch(`/api/capstone/groups/${id}/marks?submitterId=${graderId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load marks');
+      const next: Record<string, Record<string, number>> = {};
+      for (const m of data as Array<{ component: string; studentAccountId: string; rubricScores?: Record<string, number> | null }>) {
+        if (m.component === 'presentation' && m.rubricScores) next[String(m.studentAccountId)] = { ...m.rubricScores };
+      }
+      setProxyScores(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load marks');
+    } finally {
+      setProxyLoading(false);
+    }
+  };
+
+  const saveProxyMarks = async () => {
+    if (!group || !proxyGrader) return;
+    const active = group.members.filter((m) => !m.removedAt);
+    const partial = active.filter((m) => {
+      const sc = proxyScores[memberId(m)];
+      return sc && Object.keys(sc).length > 0 && !isPresentationComplete(sc);
+    });
+    if (partial.length > 0) {
+      toast.error(`Finish every criterion for ${partial.map(memberName).join(', ')} first`);
+      return;
+    }
+    const complete = active.filter((m) => isPresentationComplete(proxyScores[memberId(m)]));
+    if (complete.length === 0) {
+      toast.error('Score at least one student first');
+      return;
+    }
+    setProxySaving(true);
+    try {
+      const res = await fetch(`/api/capstone/groups/${id}/marks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          component: 'presentation',
+          onBehalfOf: proxyGrader,
+          marks: complete.map((m) => {
+            const scores = proxyScores[memberId(m)];
+            return { studentAccountId: memberId(m), rawScore: sumScores(scores), rubricScores: scores };
+          }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save marks');
+      toast.success(`Saved presentation marks for ${data.saved} student${data.saved === 1 ? '' : 's'}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save marks');
+    } finally {
+      setProxySaving(false);
+    }
+  };
+
   const saveChosenEvaluators = async () => {
+    const activeCount = group?.evaluators.filter((e) => !e.unassignedAt).length || 0;
+    const minimum = Math.min(2, activeCount);
+    const short = (['presentation', 'report'] as const).filter(
+      (k) => chosenEvaluators[k].length > 0 && chosenEvaluators[k].length < minimum
+    );
+    if (short.length > 0) {
+      toast.error(`Choose at least ${minimum} evaluators for ${short.join(' and ')} (or none)`);
+      return;
+    }
     setSavingChosen(true);
     try {
       const res = await fetch(`/api/capstone/groups/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chosenEvaluators }),
+        body: JSON.stringify({ chosenEvaluators, chosenAggregate }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save');
@@ -407,6 +550,14 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
 
   const activeMembers = group.members.filter((m) => !m.removedAt);
   const activeEvaluators = group.evaluators.filter((e) => !e.unassignedAt);
+  // What this viewer marks here comes from the track's active grading scheme.
+  const plan = group.markingPlan || FALLBACK_PLAN;
+  const myTasks = isSupervisor ? plan.supervisor : isEvaluator ? plan.evaluator : [];
+  const hasTask = (component: string) => myTasks.some((t) => t.component === component);
+  const numericTasks = myTasks.filter((t) => !RUBRIC_COMPONENTS.includes(t.component));
+  // Who the scheme reads presentation marks from - the paper-sheet card offers only them.
+  const presentationFromSupervisor = plan.supervisor.some((t) => t.component === 'presentation');
+  const presentationFromEvaluators = plan.evaluator.some((t) => t.component === 'presentation');
   const reportCriteria = reportRubric(group.track);
   const reportMax = reportCriteria.length * 3;
   const reportCurrentScore = Object.values(reportScores).reduce((a, b) => a + (b || 0), 0);
@@ -479,14 +630,19 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           onUpdated={() => fetchAll()}
         />
 
+        <p className="mb-3 text-xs text-muted-foreground">
+          {plan.source === 'scheme'
+            ? `Marking follows the ${plan.schemeName}${plan.schemeVersion ? ` (v${plan.schemeVersion})` : ''} grading scheme for this track.`
+            : 'No grading scheme is pinned to this track yet - marking follows the department default.'}
+        </p>
         <Tabs
           value={
             // A tab this viewer can't see (e.g. from a shared link) falls back to the journal.
             ({
               journal: true,
-              'supervisor-marks': isSupervisor,
-              report: isSupervisor || isEvaluator,
-              presentation: isSupervisor || isEvaluator,
+              'supervisor-marks': numericTasks.length > 0,
+              report: hasTask('report'),
+              presentation: hasTask('presentation'),
               manage: canManage,
             } as Record<string, boolean>)[tab]
               ? tab
@@ -496,9 +652,11 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
         >
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="journal">Weekly Journal</TabsTrigger>
-            {isSupervisor && <TabsTrigger value="supervisor-marks">Supervisor Marks</TabsTrigger>}
-            {(isSupervisor || isEvaluator) && <TabsTrigger value="report">Report</TabsTrigger>}
-            {(isSupervisor || isEvaluator) && <TabsTrigger value="presentation">Presentation</TabsTrigger>}
+            {numericTasks.length > 0 && (
+              <TabsTrigger value="supervisor-marks">{isSupervisor ? 'Supervisor Marks' : 'Marks'}</TabsTrigger>
+            )}
+            {hasTask('report') && <TabsTrigger value="report">Report</TabsTrigger>}
+            {hasTask('presentation') && <TabsTrigger value="presentation">Presentation</TabsTrigger>}
             {canManage && <TabsTrigger value="manage">Manage</TabsTrigger>}
           </TabsList>
 
@@ -568,67 +726,58 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
             })}
           </TabsContent>
 
-          {/* ── Supervisor Marks Tab ── */}
-          {isSupervisor && (
+          {/* ── Per-student marks the scheme asks this grader for (journal, peer, poster, ...) ── */}
+          {numericTasks.length > 0 && (
             <TabsContent value="supervisor-marks" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Weekly Journal Mark (0–10)</CardTitle>
-                  <CardDescription>Final journal mark per student, based on their weekly submissions.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {activeMembers.map((member) => {
-                    const sid = typeof member.studentAccountId === 'object' ? member.studentAccountId._id : member.studentAccountId;
-                    const name = typeof member.studentAccountId === 'object' ? member.studentAccountId.name : member.studentIdText;
-                    return (
-                      <div key={sid} className="flex items-center justify-between gap-3">
-                        <Label className="flex-1">{name}</Label>
-                        <Input type="number" min={0} max={10} step={0.5} className="w-28"
-                          value={journalMarks[sid] ?? ''}
-                          onChange={(e) => setJournalMarks((prev) => ({ ...prev, [sid]: e.target.value }))} />
-                      </div>
-                    );
-                  })}
-                  <Tip label="Save each student's own journal mark (0-10). You can change them while the session is open.">
-                    <Button onClick={() => submitFinalMarks('weeklyJournal')} disabled={savingMarks} size="sm">
-                      {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                      Save Journal Marks
-                    </Button>
-                  </Tip>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Peer Mark (0–5)</CardTitle>
-                  <CardDescription>Per student: each member&apos;s own contribution to the group, as assessed by the supervisor.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {activeMembers.map((member) => {
-                    const sid = typeof member.studentAccountId === 'object' ? member.studentAccountId._id : member.studentAccountId;
-                    const name = typeof member.studentAccountId === 'object' ? member.studentAccountId.name : member.studentIdText;
-                    return (
-                      <div key={sid} className="flex items-center justify-between gap-3">
-                        <Label className="flex-1">{name}</Label>
-                        <Input type="number" min={0} max={5} step={0.5} className="w-28"
-                          value={peerMarks[sid] ?? ''}
-                          onChange={(e) => setPeerMarks((prev) => ({ ...prev, [sid]: e.target.value }))} />
-                      </div>
-                    );
-                  })}
-                  <Tip label="Save each student's own peer mark (0-5) - their individual contribution to the group.">
-                    <Button onClick={() => submitFinalMarks('peer')} disabled={savingMarks} size="sm">
-                      {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                      Save Peer Marks
-                    </Button>
-                  </Tip>
-                </CardContent>
-              </Card>
+              {numericTasks.map(({ component, max }) => {
+                const info = COMPONENT_INFO[component] || { label: component, description: '' };
+                const values = numericMarks[component] || {};
+                return (
+                  <Card key={component}>
+                    <CardHeader>
+                      <CardTitle className="text-base">
+                        {info.label} (0–{max})
+                      </CardTitle>
+                      {info.description && <CardDescription>{info.description}</CardDescription>}
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {activeMembers.map((member) => {
+                        const sid = memberId(member);
+                        const typed = values[sid];
+                        const outOfRange = typed !== undefined && typed !== '' && (Number(typed) < 0 || Number(typed) > max);
+                        return (
+                          <div key={sid} className="flex items-center justify-between gap-3">
+                            <Label className="flex-1" htmlFor={`mark-${component}-${sid}`}>{memberName(member)}</Label>
+                            <Input
+                              id={`mark-${component}-${sid}`}
+                              type="number"
+                              min={0}
+                              max={max}
+                              step={0.5}
+                              className={`w-28 ${outOfRange ? 'border-destructive' : ''}`}
+                              value={typed ?? ''}
+                              onChange={(e) =>
+                                setNumericMarks((prev) => ({ ...prev, [component]: { ...(prev[component] || {}), [sid]: e.target.value } }))
+                              }
+                            />
+                          </div>
+                        );
+                      })}
+                      <Tip label={`Save each student's own ${info.label.toLowerCase()} (0-${max}). You can change them while the session is open.`}>
+                        <Button onClick={() => submitFinalMarks(component)} disabled={savingMarks} size="sm">
+                          {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                          Save {info.label}s
+                        </Button>
+                      </Tip>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </TabsContent>
           )}
 
           {/* ── Report Tab ── */}
-          {(isSupervisor || isEvaluator) && (
+          {hasTask('report') && (
             <TabsContent value="report" className="space-y-4 mt-4">
               {/* Report link section */}
               <Card>
@@ -713,7 +862,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           )}
 
           {/* ── Presentation Tab ── */}
-          {(isSupervisor || isEvaluator) && (
+          {hasTask('presentation') && (
             <TabsContent value="presentation" className="space-y-4 mt-4">
               <Card>
                 <CardHeader>
@@ -724,66 +873,13 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="overflow-x-auto rounded-md border">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50 text-xs">
-                        <tr>
-                          <th className="p-2 text-left font-medium">Student</th>
-                          {PRESENTATION_CRITERIA.map((criterion, idx) => (
-                            <th key={idx} className="p-2 text-center font-medium min-w-[9rem]">{criterion}</th>
-                          ))}
-                          <th className="p-2 text-center font-medium">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeMembers.map((member) => {
-                          const sid = memberId(member);
-                          const scores = presentationScores[sid] || {};
-                          const filled = Object.keys(scores).length;
-                          return (
-                            <tr key={sid} className="border-t">
-                              <td className="p-2 align-middle">
-                                <div className="font-medium">{memberName(member)}</div>
-                                <div className="text-xs text-muted-foreground">{member.studentIdText}</div>
-                              </td>
-                              {PRESENTATION_CRITERIA.map((criterion, idx) => (
-                                <td key={idx} className="p-2 text-center align-middle">
-                                  <div className="inline-flex gap-1">
-                                    {PRESENTATION_LEVELS.map((level) => (
-                                      <button
-                                        key={level.value}
-                                        type="button"
-                                        title={`${criterion}: ${level.label}`}
-                                        onClick={() =>
-                                          setPresentationScores((prev) => ({
-                                            ...prev,
-                                            [sid]: { ...prev[sid], [`c${idx}`]: level.value },
-                                          }))
-                                        }
-                                        className={`h-7 w-7 rounded-md border text-xs font-medium transition-colors ${
-                                          scores[`c${idx}`] === level.value
-                                            ? 'bg-primary text-primary-foreground border-primary'
-                                            : 'hover:bg-muted'
-                                        }`}
-                                      >
-                                        {level.value}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </td>
-                              ))}
-                              <td className="p-2 text-center align-middle whitespace-nowrap">
-                                <strong>{sumScores(scores)}</strong>/{PRESENTATION_MAX}
-                                {filled > 0 && filled < PRESENTATION_CRITERIA.length && (
-                                  <div className="text-[11px] text-amber-600">{PRESENTATION_CRITERIA.length - filled} left</div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PresentationRubricGrid
+                    students={activeMembers.map((m) => ({ id: memberId(m), name: memberName(m), studentId: m.studentIdText }))}
+                    scores={presentationScores}
+                    onScore={(sid, key, value) =>
+                      setPresentationScores((prev) => ({ ...prev, [sid]: { ...prev[sid], [key]: value } }))
+                    }
+                  />
                   <Tip label="Submit presentation marks for every student whose five criteria are all scored.">
                     <Button onClick={() => submitRubricMarks('presentation')} disabled={savingMarks} size="sm" className="mt-2">
                       {savingMarks ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
@@ -798,6 +894,127 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           {/* ── Manage Tab (Coordinator/Admin) ── */}
           {canManage && (
             <TabsContent value="manage" className="space-y-4 mt-4">
+              {/* Enter a grader's presentation marks from their paper sheet */}
+              {(presentationFromSupervisor || presentationFromEvaluators) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ClipboardEdit className="h-4 w-4" />
+                    Enter Presentation Marks from Paper Sheets
+                  </CardTitle>
+                  <CardDescription>
+                    Copy an evaluator&apos;s (or the supervisor&apos;s) printed marking sheet in. The marks are saved as
+                    theirs - counted exactly as if they had entered them - and recorded as entered by you.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(() => {
+                    const supervisor = typeof group.supervisorId === 'object' ? group.supervisorId : null;
+                    const graders = [
+                      ...(supervisor && presentationFromSupervisor ? [{ id: supervisor._id, name: supervisor.name, role: 'Supervisor' }] : []),
+                      ...(presentationFromEvaluators ? activeEvaluators : []).map((ev) => ({
+                        id: typeof ev.evaluatorId === 'object' ? ev.evaluatorId._id : String(ev.evaluatorId),
+                        name: typeof ev.evaluatorId === 'object' ? ev.evaluatorId.name : String(ev.evaluatorId),
+                        role: 'Evaluator',
+                      })),
+                    ];
+                    // Mirrors countedEvaluators: the choice, or everyone when there are only 1-2.
+                    const countsFor = (graderId: string, role: string) =>
+                      role === 'Supervisor'
+                        ? true
+                        : chosenEvaluators.presentation.length > 0
+                          ? chosenEvaluators.presentation.includes(graderId)
+                          : activeEvaluators.length <= 2;
+                    return (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Label htmlFor="proxy-grader" className="shrink-0">Marks from</Label>
+                          <select
+                            id="proxy-grader"
+                            value={proxyGrader}
+                            onChange={(e) => loadProxyGrader(e.target.value)}
+                            className="h-9 min-w-56 rounded-md border bg-background px-3 text-sm"
+                            disabled={proxySaving}
+                          >
+                            <option value="">Choose whose sheet this is…</option>
+                            {graders.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name} ({g.role}){countsFor(g.id, g.role) ? '' : ' - not counted'}
+                              </option>
+                            ))}
+                          </select>
+                          {proxyLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                        </div>
+                        {presentationFromEvaluators && (
+                          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2">
+                            <Label htmlFor="add-sheet-evaluator" className="shrink-0 text-xs text-muted-foreground">
+                              Sheet from someone not listed?
+                            </Label>
+                            <select
+                              id="add-sheet-evaluator"
+                              value={evaluatorToAdd}
+                              onChange={(e) => setEvaluatorToAdd(e.target.value)}
+                              className="h-8 min-w-48 flex-1 rounded-md border bg-background px-2 text-xs"
+                              disabled={addingEvaluator}
+                            >
+                              <option value="">Choose an evaluator to add…</option>
+                              {staff
+                                .filter(
+                                  (u) =>
+                                    u._id !== supervisor?._id &&
+                                    !activeEvaluators.some(
+                                      (ev) => (typeof ev.evaluatorId === 'object' ? ev.evaluatorId._id : String(ev.evaluatorId)) === u._id
+                                    )
+                                )
+                                .map((u) => (
+                                  <option key={u._id} value={u._id}>
+                                    {u.name} ({u.email})
+                                  </option>
+                                ))}
+                            </select>
+                            <Tip label="Assign this person as an evaluator of the group and open their sheet for entry">
+                              <Button size="sm" variant="outline" className="h-8" onClick={addEvaluatorAndSelect} disabled={!evaluatorToAdd || addingEvaluator}>
+                                {addingEvaluator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                                Add evaluator
+                              </Button>
+                            </Tip>
+                          </div>
+                        )}
+                        {proxyGrader && !proxyLoading && (
+                          <>
+                            {(() => {
+                              const g = graders.find((x) => x.id === proxyGrader);
+                              return g && !countsFor(g.id, g.role) ? (
+                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                  This evaluator isn&apos;t currently counted for the presentation grade - tick them under
+                                  &quot;Choose Evaluators for Final Grade&quot; below if their marks should count.
+                                </p>
+                              ) : null;
+                            })()}
+                            <PresentationRubricGrid
+                              students={activeMembers.map((m) => ({ id: memberId(m), name: memberName(m), studentId: m.studentIdText }))}
+                              scores={proxyScores}
+                              onScore={(sid, key, value) =>
+                                setProxyScores((prev) => ({ ...prev, [sid]: { ...prev[sid], [key]: value } }))
+                              }
+                              disabled={proxySaving}
+                            />
+                            <Tip label="Save these marks as this grader's presentation marks. Students left blank are skipped.">
+                              <Button size="sm" onClick={saveProxyMarks} disabled={proxySaving}>
+                                {proxySaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                                Save marks for {graders.find((x) => x.id === proxyGrader)?.name || 'grader'}
+                              </Button>
+                            </Tip>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              )}
+
               {/* Choose evaluators — one panel per component */}
               <Card>
                 <CardHeader>
@@ -807,8 +1024,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                   </CardTitle>
                   <CardDescription>
                     Presentation and report are graded by different panels, so pick each
-                    separately. Up to 2 evaluators count per component; everyone else&apos;s
-                    marks are still recorded, just not counted.
+                    separately. Choose two or more evaluators per component - their marks are
+                    averaged. Everyone else&apos;s marks are still recorded, just not counted. With
+                    only one or two evaluators, all of them count automatically.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -823,10 +1041,37 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                               <h4 className="text-sm font-semibold">{label}</h4>
                               <span className="text-xs text-muted-foreground">
-                                {selected.length}/2 chosen
+                                {selected.length === 0
+                                  ? activeEvaluators.length <= 2
+                                    ? 'All count automatically'
+                                    : 'None chosen yet'
+                                  : `${selected.length} chosen${selected.length < Math.min(2, activeEvaluators.length) ? ' - pick at least 2' : ''}`}
                               </span>
                             </div>
                             <p className="text-xs text-muted-foreground">{hint}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">Combine the counted evaluators by</span>
+                              <div className="inline-flex rounded-md border p-0.5" role="radiogroup" aria-label={`How to combine ${label} evaluators`}>
+                                {([
+                                  ['mean', 'Average', 'Use the average of the counted evaluators (default)'],
+                                  ['max', 'Best', 'Use the highest mark among the counted evaluators'],
+                                ] as const).map(([value, text, tip]) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={chosenAggregate[key] === value}
+                                    title={tip}
+                                    onClick={() => setChosenAggregate((prev) => ({ ...prev, [key]: value }))}
+                                    className={`rounded px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                                      chosenAggregate[key] === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                  >
+                                    {text}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
 
                             <div className="space-y-2">
                               {activeEvaluators.map((ev) => {
@@ -834,7 +1079,6 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                                 const evName = typeof ev.evaluatorId === 'object' ? ev.evaluatorId.name : evId;
                                 const evEmail = typeof ev.evaluatorId === 'object' ? ev.evaluatorId.email : '';
                                 const isChosen = selected.includes(evId);
-                                const atLimit = !isChosen && selected.length >= 2;
                                 return (
                                   <div
                                     key={evId}
@@ -848,7 +1092,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                                     </div>
                                     <button
                                       type="button"
-                                      disabled={atLimit}
+                                      title={isChosen ? "Stop counting this evaluator's marks" : "Count this evaluator's marks toward the grade"}
+                                      aria-pressed={isChosen}
                                       onClick={() =>
                                         setChosenEvaluators((prev) => ({
                                           ...prev,
@@ -860,9 +1105,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                                       className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium rounded-full px-3 py-1 transition-colors ${
                                         isChosen
                                           ? 'bg-primary text-primary-foreground'
-                                          : atLimit
-                                            ? 'bg-muted/50 text-muted-foreground/50 cursor-not-allowed'
-                                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                       }`}
                                     >
                                       {isChosen ? (
@@ -870,7 +1113,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
                                       ) : (
                                         <AlertCircle className="h-3.5 w-3.5" />
                                       )}
-                                      {isChosen ? 'Counted' : atLimit ? 'Limit reached' : 'Count'}
+                                      {isChosen ? 'Counted' : 'Count'}
                                     </button>
                                   </div>
                                 );

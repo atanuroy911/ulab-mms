@@ -1,7 +1,8 @@
 'use client';
+import { signInWithGoogle } from '@/lib/teacherGoogleSignIn';
 
 import { useState, useEffect } from 'react';
-import { useSession, signOut, signIn } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { notify } from '@/app/utils/notifications';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -40,7 +41,7 @@ export default function SettingsPage() {
 
   const handleLinkGoogle = () => {
     setGoogleLoading(true);
-    signIn('google', { callbackUrl: '/settings' });
+    signInWithGoogle('/settings');
   };
 
   const [defaultMidWeightage, setDefaultMidWeightage] = useState('25');

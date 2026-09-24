@@ -1,7 +1,7 @@
 'use client';
+import { signInStudentWithGoogle } from '@/lib/studentGoogleSignIn';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { Chrome, Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ export function AuthGate({ onAdminOverride, loading, error }: AuthGateProps) {
 
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
-    await signIn('google-checkin', { callbackUrl: window.location.href });
+    await signInStudentWithGoogle('google-checkin', window.location.href);
   };
 
   const handleOverrideSubmit = async (e: React.FormEvent) => {

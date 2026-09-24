@@ -134,5 +134,21 @@ twoOutputs.nodes.push({ id: 'final2', type: 'output', position: { x: 0, y: 0 }, 
 twoOutputs.edges.push({ id: 'e11', source: 'bands', target: 'final2', targetHandle: 'in' });
 check('two output nodes rejected', validateScheme(twoOutputs).some((i) => i.message.includes('exactly one')), true);
 
+// Coordinator's per-group "Average / Best" for the chosen evaluators. Presentation evaluator
+// marks above are 38 and 36 of 45: average = 37/45, best = 38/45. Only the chosen-evaluator
+// block changes; the supervisor's block is untouched.
+const presentationChosen = (r: ReturnType<typeof evaluateScheme>) =>
+  r.trace.find((t) => t.type === 'source' && /Presentation.*Chosen/i.test(t.label))?.value;
+const presentationSupervisor = (r: ReturnType<typeof evaluateScheme>) =>
+  r.trace.find((t) => t.type === 'source' && /Presentation.*Supervisor/i.test(t.label))?.value;
+const avg = evaluateScheme(defaultCseScheme('A'), ctx);
+const best = evaluateScheme(defaultCseScheme('A'), { ...ctx, chosenAggregate: { presentation: 'max' } });
+const explicitAvg = evaluateScheme(defaultCseScheme('A'), { ...ctx, chosenAggregate: { presentation: 'mean' } });
+check('average (default) of chosen presentation', presentationChosen(avg), 37 / 45);
+check('explicit average matches default', presentationChosen(explicitAvg), 37 / 45);
+check('best of chosen presentation', presentationChosen(best), 38 / 45);
+check('supervisor block unaffected by best', presentationSupervisor(best), presentationSupervisor(avg));
+check('best raises the final score', (best.score ?? 0) > (avg.score ?? 0), true);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

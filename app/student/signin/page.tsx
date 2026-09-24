@@ -1,7 +1,8 @@
 'use client';
+import { signInStudentWithGoogle } from '@/lib/studentGoogleSignIn';
 
 import { useState, Suspense, useEffect } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Chrome, Loader2, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,7 @@ function StudentSignInContent() {
 
   const handleSignIn = async () => {
     setSigningIn(true);
-    await signIn('google-student', { callbackUrl });
+    await signInStudentWithGoogle('google-student', callbackUrl);
   };
 
   return (

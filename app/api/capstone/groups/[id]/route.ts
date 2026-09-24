@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
-import CapstoneGroup, { CHOOSABLE_COMPONENTS, MAX_CHOSEN_EVALUATORS } from '@/models/CapstoneGroup';
+import CapstoneGroup, { CHOOSABLE_COMPONENTS, MIN_CHOSEN_EVALUATORS } from '@/models/CapstoneGroup';
 import { getCapstoneActor, canManageGroup, isGroupSupervisor, isGroupGrader } from '@/lib/capstoneAuth';
 import { assignableUserError } from '@/lib/webAdminAccount';
+import { getMarkingPlan } from '@/lib/capstoneMarkingPlan';
 
 const VALID_REMOVE_REASONS = ['dropped', 'transferred', 'withdrawn', 'admin-correction'];
 import { deleteGroupCascade } from '@/lib/capstoneCascadeDelete';
@@ -26,7 +27,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json(group);
+    // Which marks the supervisor and evaluators give, read from the track's active scheme,
+    // so the page shows exactly the marking tasks the scheme will grade from.
+    const markingPlan = await getMarkingPlan(group.sessionId, group.track);
+    return NextResponse.json({ ...group.toObject(), markingPlan });
   } catch (error) {
     console.error('GET /api/capstone/groups/[id] error:', error);
     return NextResponse.json({ error: 'Failed to fetch group' }, { status: 500 });
@@ -108,8 +112,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       group.reportUrl = url || null;
     }
 
-    // Chosen evaluators — coordinator/admin only. Per component (presentation/report),
-    // max 2 each, and each must be an ACTIVE evaluator of this group.
+    // Chosen evaluators — coordinator/admin only. Per component (presentation/report): two or
+    // more (up to every active evaluator), or none to clear the choice. With only one or two
+    // evaluators nothing needs choosing - all of them count (countedEvaluators).
     //
     // Accepts the per-component shape: { chosenEvaluators: { presentation: [...], report: [...] } }.
     // A component that is omitted is left untouched, so the UI can save one panel at a time
@@ -136,11 +141,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         // or trip the limit check spuriously.
         const chosen = [...new Set(incoming.map(String).filter(Boolean))];
 
-        if (chosen.length > MAX_CHOSEN_EVALUATORS) {
+        // An average of one evaluator is no panel at all, so a real choice is at least two -
+        // unless the group only has one evaluator to begin with.
+        const minimum = Math.min(MIN_CHOSEN_EVALUATORS, activeEvaluatorIds.size);
+        if (chosen.length > 0 && chosen.length < minimum) {
           return NextResponse.json(
-            {
-              error: `You may select at most ${MAX_CHOSEN_EVALUATORS} evaluators whose ${component} marks count`,
-            },
+            { error: `Choose at least ${minimum} evaluators whose ${component} marks count (or clear the choice)` },
             { status: 400 }
           );
         }
@@ -160,6 +166,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
 
       group.markModified('chosenEvaluators');
+    }
+
+    // Average (default) or best of the chosen evaluators, per component.
+    if (body?.chosenAggregate && typeof body.chosenAggregate === 'object') {
+      if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      const next = { presentation: group.chosenAggregate?.presentation || 'mean', report: group.chosenAggregate?.report || 'mean' };
+      for (const component of CHOOSABLE_COMPONENTS) {
+        const value = body.chosenAggregate[component];
+        if (value === undefined) continue;
+        if (value !== 'mean' && value !== 'max') {
+          return NextResponse.json({ error: `chosenAggregate.${component} must be "mean" or "max"` }, { status: 400 });
+        }
+        next[component] = value;
+      }
+      group.chosenAggregate = next;
+      group.markModified('chosenAggregate');
     }
 
     await group.save();

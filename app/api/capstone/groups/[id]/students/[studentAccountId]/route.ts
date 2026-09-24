@@ -7,6 +7,7 @@ import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
 import '@/models/Semester';
 import { getCapstoneActor, canManageGroup, isGroupGrader, isGroupSupervisor } from '@/lib/capstoneAuth';
 import { computeSessionGrades, redactMemberForGrader } from '@/lib/capstoneGrades';
+import { getMarkingPlan, componentsFor } from '@/lib/capstoneMarkingPlan';
 import { isPlausibleEmail } from '@/lib/mail';
 
 type Params = { params: Promise<{ id: string; studentAccountId: string }> };
@@ -54,7 +55,10 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
     const groupGrades = computed.groups[0];
     let grade = groupGrades?.members.find((m) => m.studentAccountId === studentAccountId) || null;
-    if (grade && !canManage) grade = redactMemberForGrader(grade, actor.userId, role);
+    if (grade && !canManage) {
+      const plan = await getMarkingPlan(group.sessionId, group.track);
+      grade = redactMemberForGrader(grade, actor.userId, componentsFor(plan, role));
+    }
     const trackReport = computed.tracks.find((t) => t.track === group.track) || null;
 
     return NextResponse.json({

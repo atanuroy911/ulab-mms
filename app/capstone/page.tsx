@@ -46,6 +46,7 @@ const COMPONENT_LABEL: Record<string, string> = {
   presentation: 'Presentation',
   peer: 'Peer',
   weeklyJournal: 'Journal',
+  poster: 'Poster',
 };
 
 const STAGE_HINT: Record<string, string> = {

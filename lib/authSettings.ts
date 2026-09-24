@@ -6,6 +6,7 @@ type CachedSettings = {
   credentialsLoginEnabled: boolean;
   courseCodeEditableByTeacher: boolean;
   devAllowAnyEmailDomain: boolean;
+  devStudentTestEmails: string[];
 };
 
 // These two settings are read on every /auth/signin mount and every teacher
@@ -20,13 +21,14 @@ let pending: Promise<CachedSettings> | null = null;
 async function loadSettings(): Promise<CachedSettings> {
   await dbConnect();
   const settings = await AdminSettings.findOne()
-    .select('credentialsLoginEnabled courseCodeEditableByTeacher devAllowAnyEmailDomain')
+    .select('credentialsLoginEnabled courseCodeEditableByTeacher devAllowAnyEmailDomain devStudentTestEmails')
     .lean();
   return {
     credentialsLoginEnabled: settings?.credentialsLoginEnabled !== false,
     courseCodeEditableByTeacher: settings?.courseCodeEditableByTeacher !== false,
     // Opt-in only: a missing document or field means restrictions stay on.
     devAllowAnyEmailDomain: settings?.devAllowAnyEmailDomain === true,
+    devStudentTestEmails: (settings?.devStudentTestEmails || []).map((e: string) => e.toLowerCase()),
   };
 }
 
@@ -76,4 +78,23 @@ export async function isDevAnyEmailDomainAllowed(): Promise<boolean> {
 export async function isAllowedTeacherEmail(email: string | null | undefined): Promise<boolean> {
   if (isUlabEmail(email)) return true;
   return !!email && (await isDevAnyEmailDomainAllowed());
+}
+
+/** Whether any non-ULAB test addresses are allowed on the student sign-ins (safe to expose). */
+export async function isDevStudentTestSignInEnabled(): Promise<boolean> {
+  const settings = await getCachedSettings();
+  return settings.devStudentTestEmails.length > 0;
+}
+
+/**
+ * The domain check for STUDENT sessions (portal, marks, attendance check-in, project):
+ * @ulab.edu.bd, or one of the specific test addresses an admin listed in Developer Settings.
+ * Deliberately not relaxed by "allow any email domain": a student is identified by the ID in
+ * their Google display name, which any outside account could set to a real student's ID.
+ */
+export async function isAllowedStudentEmail(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false;
+  if (isUlabEmail(email)) return true;
+  const settings = await getCachedSettings();
+  return settings.devStudentTestEmails.includes(email.trim().toLowerCase());
 }

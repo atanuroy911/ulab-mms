@@ -1,8 +1,9 @@
 'use client';
+import { signInStudentWithGoogle } from '@/lib/studentGoogleSignIn';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { signIn, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import {
   Users, Plus, LogOut, Pencil, Check, X, RefreshCw, Lock,
@@ -115,7 +116,7 @@ export default function ProjectCheckinPage() {
 
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
-    await signIn('google-project', { callbackUrl: window.location.href });
+    await signInStudentWithGoogle('google-project', window.location.href);
   };
 
   const doAction = async (action: string, extra?: object) => {

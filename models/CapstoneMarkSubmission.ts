@@ -11,6 +11,8 @@ export interface ICapstoneMarkSubmission extends Document {
   component: CapstoneMarkComponent;
   submitterId: mongoose.Types.ObjectId;
   submitterRole: CapstoneSubmitterRole;
+  /** Who typed it: the grader, or a coordinator entering the grader's paper sheet for them. */
+  enteredBy?: mongoose.Types.ObjectId | null;
   rawScore: number;
   rubricScores?: Record<string, number> | null;
   rubricMax?: number | null;
@@ -64,6 +66,13 @@ const CapstoneMarkSubmissionSchema: Schema = new Schema(
       type: String,
       enum: ['supervisor', 'evaluator'],
       required: true,
+    },
+    // Differs from submitterId when a coordinator entered this grader's marks from a paper
+    // sheet (POST /api/capstone/groups/[id]/marks with onBehalfOf). Null on older records.
+    enteredBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     // No blanket max:100 - report is out of 33/42, presentation 45, peer 5, journal 10.
     // Ceilings are enforced per-component server-side in the submit route, not here.

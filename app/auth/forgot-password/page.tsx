@@ -1,4 +1,5 @@
 'use client';
+import { EmailField, useAnyEmailDomain } from '@/app/components/EmailField';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -7,7 +8,6 @@ import Image from 'next/image';
 import { Loader2, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -34,8 +34,9 @@ export default function ForgotPassword() {
   const [validationError, setValidationError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+  const anyDomain = useAnyEmailDomain();
+
+  const handleEmailValue = (value: string) => {
     setEmail(value);
     
     // Clear validation error if user corrects the email
@@ -150,15 +151,14 @@ export default function ForgotPassword() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
-                  <Input
+                  <EmailField
                     id="email"
-                    type="email"
-                    placeholder="your.email@example.com"
                     value={email}
-                    onChange={handleEmailChange}
+                    onChange={handleEmailValue}
+                    anyDomain={anyDomain}
                     required
                     disabled={loading}
-                    className={validationError ? 'border-destructive' : ''}
+                    invalid={!!validationError}
                   />
                   {validationError && (
                     <p className="text-sm text-destructive flex gap-1 items-center mt-1">

@@ -1,4 +1,5 @@
 'use client';
+import { signInWithGoogle } from '@/lib/teacherGoogleSignIn';
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -163,7 +164,7 @@ function AcceptInviteContent() {
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={() => signIn('google', { callbackUrl: '/capstone' })}
+                onClick={() => signInWithGoogle('/capstone')}
                 disabled={saving}
               >
                 Continue with Google ({invite.email})

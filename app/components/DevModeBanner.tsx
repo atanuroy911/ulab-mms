@@ -19,7 +19,8 @@ export function DevModeBanner({
   canManage?: boolean;
 } = {}) {
   const { data: session } = useSession();
-  const [active, setActive] = useState(false);
+  const [anyDomain, setAnyDomain] = useState(false);
+  const [studentTests, setStudentTests] = useState(false);
   const isAdminUser =
     canManage ?? ((session?.user as { roles?: string[] } | undefined)?.roles || []).includes('admin');
 
@@ -27,19 +28,29 @@ export function DevModeBanner({
     let cancelled = false;
     fetch('/api/auth/settings')
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => !cancelled && setActive(data?.devAllowAnyEmailDomain === true))
+      .then((data) => {
+        if (cancelled) return;
+        setAnyDomain(data?.devAllowAnyEmailDomain === true);
+        setStudentTests(data?.devStudentTestSignIn === true);
+      })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (!active) return null;
+  if (!anyDomain && !studentTests) return null;
+  const message = [
+    anyDomain && 'the @ulab.edu.bd restriction is lifted for teachers',
+    studentTests && 'outside test accounts can use the student sign-ins',
+  ]
+    .filter(Boolean)
+    .join('; ');
   return (
     <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-1.5 text-center text-xs font-medium text-black">
       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       <span>
-        Developer mode: the @ulab.edu.bd email restriction is lifted.
+        Developer mode: {message}.
         {isAdminUser && (
           <>
             {' '}

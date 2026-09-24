@@ -48,3 +48,33 @@ export const REPORT_RUBRICS: Record<'A' | 'B' | 'C', ReportCriterion[]> = {
   B: REPORT_4098B,
   C: REPORT_4098B,
 };
+
+/**
+ * Presentation rubric: 5 criteria, each scored 0/3/6/9, per student - matching the department's
+ * printed "Assessment Rubrics for Term Final Presentation" sheet. rubricScores keys are c0..c4
+ * (index order), which older saved marks also use.
+ */
+export const PRESENTATION_CRITERIA = [
+  'Presentation Skills (Eye contact, Language, Visual aid)',
+  'Organization of the Presentation Material [CO5: A1]',
+  'Contents',
+  'Question Answer',
+  'Time Management',
+];
+
+export const PRESENTATION_LEVELS = [
+  { value: 0, label: 'No or Wrong Answer' },
+  { value: 3, label: 'Poor' },
+  { value: 6, label: 'Satisfactory' },
+  { value: 9, label: 'Excellent' },
+];
+
+export const PRESENTATION_MAX = PRESENTATION_CRITERIA.length * 9;
+
+export function sumRubricScores(scores: Record<string, number> | undefined): number {
+  return Object.values(scores || {}).reduce((a, b) => a + (b || 0), 0);
+}
+
+export function isPresentationComplete(scores: Record<string, number> | undefined): boolean {
+  return !!scores && PRESENTATION_CRITERIA.every((_, idx) => typeof scores[`c${idx}`] === 'number');
+}

@@ -1,7 +1,8 @@
 "use client";
+import { signInStudentWithGoogle } from '@/lib/studentGoogleSignIn';
 
 import { useEffect, useState, use } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -149,7 +150,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
     const callbackUrl = buildCallbackUrl();
-    await signIn('google-checkin', { callbackUrl });
+    await signInStudentWithGoogle('google-checkin', callbackUrl);
   };
 
   const confirmAttendance = async () => {

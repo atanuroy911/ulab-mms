@@ -8,6 +8,11 @@ export interface IAdminSettings extends Document {
   /** Developer setting: accept any email domain for teacher accounts (sign-up, sign-in,
    *  invites) instead of only @ulab.edu.bd. For testing only - see lib/authSettings.ts. */
   devAllowAnyEmailDomain: boolean;
+  /** Developer setting: specific non-ULAB addresses allowed to use the STUDENT Google sign-ins
+   *  (portal, marks, attendance check-in, project) for testing. An allowlist, not "any
+   *  domain", because students are identified by the ID in their Google display name - which
+   *  any outside account can set. See lib/authSettings.ts isAllowedStudentEmail. */
+  devStudentTestEmails: string[];
   devSettingsUpdatedBy?: mongoose.Types.ObjectId | null;
   devSettingsUpdatedAt?: Date | null;
   createdAt: Date;
@@ -36,6 +41,10 @@ const AdminSettingsSchema: Schema = new Schema(
     devAllowAnyEmailDomain: {
       type: Boolean,
       default: false,
+    },
+    devStudentTestEmails: {
+      type: [String],
+      default: [],
     },
     devSettingsUpdatedBy: {
       type: Schema.Types.ObjectId,

@@ -24,8 +24,26 @@ export type CapstoneChoosableComponent = 'presentation' | 'report';
 
 export const CHOOSABLE_COMPONENTS: CapstoneChoosableComponent[] = ['presentation', 'report'];
 
-/** Max evaluators whose marks may be counted per component. */
-export const MAX_CHOSEN_EVALUATORS = 2;
+/**
+ * Minimum evaluators counted per component once a choice is made (there is no maximum - any
+ * number of the group's active evaluators may count). A group with this many evaluators or
+ * fewer needs no choice at all: all of them count (see countedEvaluators).
+ */
+export const MIN_CHOSEN_EVALUATORS = 2;
+
+/**
+ * The evaluators whose marks count for a component: the coordinator's choice, or - when
+ * nothing is chosen and there are too few evaluators to narrow down - every active evaluator.
+ * Nothing chosen with more evaluators than that means "not decided yet": none count.
+ */
+export function countedEvaluators(
+  chosen: Array<unknown> | undefined,
+  activeEvaluatorIds: string[]
+): string[] {
+  const picked = (chosen || []).map(String);
+  if (picked.length > 0) return picked;
+  return activeEvaluatorIds.length <= MIN_CHOSEN_EVALUATORS ? activeEvaluatorIds : [];
+}
 
 export interface ICapstoneChosenEvaluators {
   presentation: mongoose.Types.ObjectId[];
@@ -44,7 +62,7 @@ export interface ICapstoneGroup extends Document {
   evaluators: ICapstoneGroupEvaluator[];
   /**
    * Coordinator-selected evaluators whose marks count toward the final grade, held
-   * SEPARATELY PER COMPONENT (max 2 each).
+   * SEPARATELY PER COMPONENT (two or more each, or all of them when there are only 1-2).
    *
    * Presentation and report are graded in different sittings by different people: a group
    * may be presented to by evaluators X and Y, while its report is read by Y and Z. The
@@ -52,6 +70,11 @@ export interface ICapstoneGroup extends Document {
    * the right pair for the presentation silently mis-scored the report (and vice versa).
    */
   chosenEvaluators: ICapstoneChosenEvaluators;
+  /**
+   * Per component: combine the chosen evaluators' marks by average ('mean', the default) or
+   * best ('max'). Overrides the grading scheme block's aggregate for chosen-evaluator blocks.
+   */
+  chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max' };
   /** Google Drive / external link for the group's submitted report. */
   reportUrl?: string | null;
   /** When the supervisor/coordinator last emailed this group a journal reminder. */
@@ -142,6 +165,16 @@ const CapstoneGroupSchema: Schema = new Schema(
         { _id: false }
       ),
       default: () => ({ presentation: [], report: [] }),
+    },
+    chosenAggregate: {
+      type: new Schema(
+        {
+          presentation: { type: String, enum: ['mean', 'max'], default: 'mean' },
+          report: { type: String, enum: ['mean', 'max'], default: 'mean' },
+        },
+        { _id: false }
+      ),
+      default: () => ({ presentation: 'mean', report: 'mean' }),
     },
     reportUrl: {
       type: String,

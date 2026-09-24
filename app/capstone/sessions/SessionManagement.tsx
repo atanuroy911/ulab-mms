@@ -629,11 +629,15 @@ export default function CapstoneSessionManagement() {
         else handleRequestMarks();
         break;
       case 'chosen': {
-        const target = groups.find(
-          (g) => g.evaluators.filter((e) => !e.unassignedAt).length > 2
-        );
-        if (target) window.location.href = `/capstone/groups/${target._id}`;
-        else toast.info('No group has more than two evaluators');
+        // First group that still needs a choice: more than two evaluators and a component with
+        // none chosen (groups with one or two count them all automatically).
+        const target = groups.find((g) => {
+          if (g.evaluators.filter((e) => !e.unassignedAt).length <= 2) return false;
+          const chosen = (g as GroupRow & { chosenEvaluators?: { presentation?: string[]; report?: string[] } }).chosenEvaluators;
+          return !chosen?.presentation?.length || !chosen?.report?.length;
+        });
+        if (target) window.location.href = `/capstone/groups/${target._id}?tab=manage`;
+        else toast.info('Every group with more than two evaluators already has a choice');
         break;
       }
       case 'pin':

@@ -1,4 +1,6 @@
 'use client';
+import { EmailField } from '@/app/components/EmailField';
+import { signInWithGoogle } from '@/lib/teacherGoogleSignIn';
 
 import { useState, useEffect, Suspense } from 'react';
 import { signIn, useSession } from 'next-auth/react';
@@ -6,7 +8,7 @@ import { notify } from '@/app/utils/notifications';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Loader2, Lock, Mail, LogIn } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, LogIn } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +41,8 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [credentialsLoginEnabled, setCredentialsLoginEnabled] = useState(true);
+  // Admin developer setting: accept any email domain (shows a full email box, not username@ulab).
+  const [anyDomain, setAnyDomain] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const isScopedOnly = !!(
@@ -58,7 +62,10 @@ function SignInForm() {
       try {
         const res = await fetch('/api/auth/settings');
         const data = await res.json();
-        if (res.ok) setCredentialsLoginEnabled(data.credentialsLoginEnabled);
+        if (res.ok) {
+          setCredentialsLoginEnabled(data.credentialsLoginEnabled);
+          setAnyDomain(data.devAllowAnyEmailDomain === true);
+        }
       } catch {
         // keep the default (enabled) on error
       } finally {
@@ -70,7 +77,7 @@ function SignInForm() {
 
   const handleGoogleSignIn = () => {
     setGoogleLoading(true);
-    signIn('google', { callbackUrl: '/dashboard' });
+    signInWithGoogle('/dashboard');
   };
 
   if (status === 'loading' || (status === 'authenticated' && !isScopedOnly)) {
@@ -179,22 +186,20 @@ function SignInForm() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75 fill-mode-backwards">
                     <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="yourname@ulab.edu.bd"
-                        value={formData.email}
-                        onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
-                        }
-                        required
-                        disabled={loading}
-                        className="pl-9"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">Use your @ulab.edu.bd email</p>
+                    <EmailField
+                      id="email"
+                      value={formData.email}
+                      onChange={(email) => setFormData({ ...formData, email })}
+                      anyDomain={anyDomain}
+                      required
+                      disabled={loading}
+                      withIcon
+                    />
+                    {anyDomain ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Developer mode: any email address is accepted.</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Just your ULAB username - @ulab.edu.bd is added for you.</p>
+                    )}
                   </div>
 
                   <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-backwards">
@@ -291,7 +296,7 @@ function SignInForm() {
                   Redirecting to Google...
                 </>
               ) : (
-                'Continue with Google (@ulab.edu.bd)'
+                anyDomain ? 'Continue with Google' : 'Continue with Google (@ulab.edu.bd)'
               )}
             </Button>
           </CardContent>

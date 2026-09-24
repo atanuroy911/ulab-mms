@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MIN_CHOSEN_EVALUATORS } from '@/models/CapstoneGroup';
 import dbConnect from '@/lib/mongodb';
 import CapstoneSession from '@/models/CapstoneSession';
 import CapstoneGroup from '@/models/CapstoneGroup';
@@ -62,12 +63,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       (g) => g.evaluators.filter((e) => !e.unassignedAt).length === 0
     );
 
-    // "Needs a choice" only counts groups that actually have more evaluators than will be
-    // counted - with one or two evaluators there is nothing to narrow down.
-    const MAX_COUNTED = 2;
+    // "Needs a choice" only counts groups with more than two evaluators - with one or two,
+    // all of them count automatically (countedEvaluators in models/CapstoneGroup.ts).
     const groupsNeedingChoice = groups.filter((g) => {
       const active = g.evaluators.filter((e) => !e.unassignedAt).length;
-      if (active <= MAX_COUNTED) return false;
+      if (active <= MIN_CHOSEN_EVALUATORS) return false;
       const report = g.chosenEvaluators?.report?.length || 0;
       const presentation = g.chosenEvaluators?.presentation?.length || 0;
       return report === 0 || presentation === 0;
@@ -186,7 +186,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       key: 'chosen',
       title: 'Choose which evaluators count',
       description:
-        'Where a group had more than two evaluators, pick the two whose marks count — separately for presentation and report.',
+        'Where a group had more than two evaluators, pick two or more whose marks count — separately for presentation and report.',
       state:
         groups.length === 0
           ? 'blocked'

@@ -243,22 +243,16 @@ export function GlobalSearch() {
 
   if (!enabled) return null;
 
-  const renderFeature = (f: SearchFeature) => {
-    const Icon = FEATURE_ICON[f.group];
-    return (
-      <CommandItem
-        key={f.id}
-        value={`feature-${f.id}`}
-        onSelect={() => go({ title: f.title, subtitle: f.description, href: f.href, event: f.event })}
-      >
-        <Icon className="text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm">{f.title}</div>
-          <div className="truncate text-xs text-muted-foreground">{f.description}</div>
-        </div>
-      </CommandItem>
-    );
-  };
+  const renderFeature = (f: SearchFeature) => (
+    <ResultRow
+      key={f.id}
+      value={`feature-${f.id}`}
+      icon={FEATURE_ICON[f.group]}
+      title={f.title}
+      subtitle={f.description}
+      onSelect={() => go({ title: f.title, subtitle: f.description, href: f.href, event: f.event })}
+    />
+  );
 
   const hasQuery = query.trim().length > 0;
   const showSpinner = searching && recordQuery.length >= 2;
@@ -266,78 +260,126 @@ export function GlobalSearch() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="top-[12vh] max-w-xl translate-y-0 overflow-hidden p-0 shadow-lg" showCloseButton={false}>
+      <DialogContent
+        className="top-[12vh] max-w-xl translate-y-0 gap-0 overflow-hidden rounded-xl border p-0 shadow-2xl"
+        showCloseButton={false}
+      >
         <VisuallyHidden>
           <DialogTitle>Search</DialogTitle>
         </VisuallyHidden>
         <Command
           shouldFilter={false}
-          className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4"
+          className="[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]]:px-4 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-14 [&_[cmdk-input]]:text-base"
         >
-          <CommandInput
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search courses, students, capstone groups, settings…"
-          />
-          <CommandList className="max-h-[60vh]">
-            {nothing && <CommandEmpty>No matches. Try a course code, a student ID or a page name.</CommandEmpty>}
+          <CommandInput value={query} onValueChange={setQuery} placeholder="Search pages, courses, students, groups…" />
+          <CommandList className="max-h-[min(60vh,28rem)] pb-2">
+            {nothing && (
+              <CommandEmpty className="px-6 py-10 text-center">
+                <p className="text-sm font-medium">No results for &ldquo;{query.trim()}&rdquo;</p>
+                <p className="mt-1 text-xs text-muted-foreground">Try a course code, a student ID or a page name.</p>
+              </CommandEmpty>
+            )}
 
             {!hasQuery && recent.length > 0 && (
               <CommandGroup heading="Recent">
                 {recent.map((r, i) => (
-                  <CommandItem key={`recent-${i}`} value={`recent-${i}`} onSelect={() => go(r)}>
-                    <History className="text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{r.title}</div>
-                      {r.subtitle && <div className="truncate text-xs text-muted-foreground">{r.subtitle}</div>}
-                    </div>
-                  </CommandItem>
+                  <ResultRow
+                    key={`recent-${i}`}
+                    value={`recent-${i}`}
+                    icon={History}
+                    title={r.title}
+                    subtitle={r.subtitle}
+                    onSelect={() => go(r)}
+                  />
                 ))}
               </CommandGroup>
             )}
-            {!hasQuery && (
-              <CommandGroup heading="Go to">{suggestions.map(renderFeature)}</CommandGroup>
-            )}
+            {!hasQuery && <CommandGroup heading="Quick links">{suggestions.map(renderFeature)}</CommandGroup>}
 
             {features.length > 0 && <CommandGroup heading="Pages & actions">{features.map(renderFeature)}</CommandGroup>}
 
             {recordGroups.map(([heading, items]) => (
               <CommandGroup key={heading} heading={heading}>
-                {items.map((r) => {
-                  const Icon = KIND_META[r.kind].icon;
-                  return (
-                    <CommandItem
-                      key={`${r.kind}-${r.id}`}
-                      value={`${r.kind}-${r.id}`}
-                      onSelect={() => go({ title: r.title, subtitle: r.subtitle, href: r.href })}
-                    >
-                      <Icon className="text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">{r.title}</div>
-                        <div className="truncate text-xs text-muted-foreground">{r.subtitle}</div>
-                      </div>
-                    </CommandItem>
-                  );
-                })}
+                {items.map((r) => (
+                  <ResultRow
+                    key={`${r.kind}-${r.id}`}
+                    value={`${r.kind}-${r.id}`}
+                    icon={KIND_META[r.kind].icon}
+                    title={r.title}
+                    subtitle={r.subtitle}
+                    onSelect={() => go({ title: r.title, subtitle: r.subtitle, href: r.href })}
+                  />
+                ))}
               </CommandGroup>
             ))}
 
             {showSpinner && (
-              <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching…
               </div>
             )}
           </CommandList>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[11px] text-muted-foreground">
-            <span>
-              Tip: add a section after a course, e.g. <span className="font-mono">cse101 marks</span>
+
+          <div className="flex items-center justify-between gap-3 border-t bg-muted/30 px-4 py-2.5 text-[11px] text-muted-foreground">
+            <span className="hidden truncate sm:inline">
+              Tip: <Kbd>cse101 marks</Kbd> jumps straight to a course section
             </span>
-            <span className="flex items-center gap-1">
-              <CornerDownLeft className="h-3 w-3" /> open · Esc close
+            <span className="flex shrink-0 items-center gap-3">
+              <span className="flex items-center gap-1">
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd> move
+              </span>
+              <span className="flex items-center gap-1">
+                <Kbd>↵</Kbd> open
+              </span>
+              <span className="flex items-center gap-1">
+                <Kbd>Esc</Kbd> close
+              </span>
             </span>
           </div>
         </Command>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** One result: an icon tile, a title over a muted subtitle, and an Enter hint when highlighted. */
+function ResultRow({
+  value,
+  icon: Icon,
+  title,
+  subtitle,
+  onSelect,
+}: {
+  value: string;
+  icon: typeof BookOpen;
+  title: string;
+  subtitle?: string;
+  onSelect: () => void;
+}) {
+  return (
+    <CommandItem
+      value={value}
+      onSelect={onSelect}
+      className="group gap-3 rounded-lg px-2.5 py-2 aria-selected:bg-primary/10 aria-selected:text-foreground"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground transition-colors group-aria-selected:border-primary/30 group-aria-selected:bg-primary/15 group-aria-selected:text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium leading-5">{title}</span>
+        {subtitle && <span className="block truncate text-xs leading-4 text-muted-foreground">{subtitle}</span>}
+      </span>
+      <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-aria-selected:opacity-100" />
+    </CommandItem>
+  );
+}
+
+/** A small keyboard-key chip for the footer hints. */
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border bg-background px-1 font-mono text-[10px] font-medium text-foreground shadow-sm">
+      {children}
+    </kbd>
   );
 }

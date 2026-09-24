@@ -4,6 +4,7 @@ import CapstoneSession from '@/models/CapstoneSession';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import { getCapstoneActor, isAdmin, isCoordinatorFor, isGroupGrader, isGroupSupervisor } from '@/lib/capstoneAuth';
 import { computeSessionGrades, redactMemberForGrader } from '@/lib/capstoneGrades';
+import { getMarkingPlan, componentsFor } from '@/lib/capstoneMarkingPlan';
 
 /**
  * GET /api/capstone/sessions/[id]/grades
@@ -56,12 +57,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const computed = await computeSessionGrades(session, filter);
     const tracks = computed.tracks;
     // Graders see another grader's marks only after submitting their own (anchoring).
+    // What each grader owes comes from the track's active scheme (one plan per track).
+    const planByTrack = new Map<string, Awaited<ReturnType<typeof getMarkingPlan>>>();
+    if (!canSeeWholeSession) {
+      for (const track of new Set(computed.groups.map((g) => g.track))) {
+        planByTrack.set(track, await getMarkingPlan(id, track));
+      }
+    }
     const groups = canSeeWholeSession
       ? computed.groups
-      : computed.groups.map((g) => ({
-          ...g,
-          members: g.members.map((m) => redactMemberForGrader(m, actor.userId, roleByGroup.get(g.groupId) || 'evaluator')),
-        }));
+      : computed.groups.map((g) => {
+          const role = roleByGroup.get(g.groupId) || 'evaluator';
+          const plan = planByTrack.get(g.track);
+          return {
+            ...g,
+            members: g.members.map((m) => redactMemberForGrader(m, actor.userId, plan ? componentsFor(plan, role) : role)),
+          };
+        });
 
     return NextResponse.json({
       sessionId: id,

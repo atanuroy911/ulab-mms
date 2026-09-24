@@ -31,6 +31,8 @@ interface Submission {
   component: string;
   submitterId: string;
   submitterName: string;
+  /** Set when a coordinator entered this grader's paper sheet for them. */
+  enteredByName?: string | null;
   submitterRole: 'supervisor' | 'evaluator';
   counted: boolean;
   rawScore: number;
@@ -264,6 +266,9 @@ export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpda
                             <span>
                               {s.submitterName}{' '}
                               <span className="text-muted-foreground">({s.submitterRole})</span>
+                              {s.enteredByName && (
+                                <span className="text-muted-foreground"> · entered by {s.enteredByName}</span>
+                              )}
                             </span>
                             <span className="flex items-center gap-2">
                               <span className="font-mono tabular-nums">

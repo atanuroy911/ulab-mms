@@ -1,4 +1,4 @@
-import CapstoneGroup from '@/models/CapstoneGroup';
+import CapstoneGroup, { countedEvaluators } from '@/models/CapstoneGroup';
 import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
 import StudentAccount from '@/models/StudentAccount';
 import GradingScheme from '@/models/GradingScheme';
@@ -42,6 +42,8 @@ export interface MemberGrade {
     component: CapstoneMarkComponent;
     submitterId: string;
     submitterName: string;
+    /** Who typed it, when that wasn't the grader (a coordinator copying a paper sheet). */
+    enteredByName?: string | null;
     submitterRole: 'supervisor' | 'evaluator';
     counted: boolean;
     rawScore: number;
@@ -206,7 +208,10 @@ export async function computeSessionGrades(
     if (group.supervisorId) userIds.add(String(group.supervisorId));
     for (const ev of group.evaluators) userIds.add(String(ev.evaluatorId));
   }
-  for (const sub of submissions) userIds.add(String(sub.submitterId));
+  for (const sub of submissions) {
+    userIds.add(String(sub.submitterId));
+    if (sub.enteredBy) userIds.add(String(sub.enteredBy));
+  }
 
   const [students, users] = await Promise.all([
     StudentAccount.find({ _id: { $in: [...studentIds] } }).select('studentId name email').lean(),
@@ -219,8 +224,11 @@ export async function computeSessionGrades(
     const resolved = graphByTrack.get(group.track);
     const supervisor = userById.get(String(group.supervisorId));
 
-    const chosenReport = (group.chosenEvaluators?.report || []).map(String);
-    const chosenPresentation = (group.chosenEvaluators?.presentation || []).map(String);
+    // The coordinator's choice, or every evaluator when there are too few to choose between -
+    // previously a group with one or two evaluators and no explicit choice counted none of them.
+    const activeEvaluatorIds = group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId));
+    const chosenReport = countedEvaluators(group.chosenEvaluators?.report, activeEvaluatorIds);
+    const chosenPresentation = countedEvaluators(group.chosenEvaluators?.presentation, activeEvaluatorIds);
 
     const members: MemberGrade[] = group.members
       .filter((member) => !member.removedAt)
@@ -242,6 +250,11 @@ export async function computeSessionGrades(
             component: sub.component,
             submitterId,
             submitterName: userById.get(submitterId)?.name || submitterId,
+            // Set when a coordinator entered this grader's paper sheet for them.
+            enteredByName:
+              sub.enteredBy && String(sub.enteredBy) !== submitterId
+                ? userById.get(String(sub.enteredBy))?.name || 'a coordinator'
+                : null,
             submitterRole: sub.submitterRole,
             counted,
             rawScore: sub.rawScore,
@@ -266,6 +279,10 @@ export async function computeSessionGrades(
           marks: marksByStudent.get(studentAccountId) || [],
           supervisorId: String(group.supervisorId),
           chosenEvaluators: { report: chosenReport, presentation: chosenPresentation },
+          chosenAggregate: {
+            report: group.chosenAggregate?.report,
+            presentation: group.chosenAggregate?.presentation,
+          },
         };
 
         try {
@@ -299,7 +316,7 @@ export async function computeSessionGrades(
   return { tracks, groups: groupGrades };
 }
 
-/** Components each grading role submits (see the marks route's SUPERVISOR_ONLY_COMPONENTS). */
+/** Default components per grading role - used when no scheme-derived list is supplied (lib/capstoneMarkingPlan.ts). */
 export const COMPONENTS_BY_ROLE: Record<'supervisor' | 'evaluator', CapstoneMarkComponent[]> = {
   supervisor: ['report', 'presentation', 'peer', 'weeklyJournal'],
   evaluator: ['report', 'presentation'],
@@ -316,11 +333,13 @@ export const COMPONENTS_BY_ROLE: Record<'supervisor' | 'evaluator', CapstoneMark
 export function redactMemberForGrader(
   member: MemberGrade,
   viewerId: string,
-  role: 'supervisor' | 'evaluator'
+  /** The components this grader marks: their role's default, or the list the active scheme gives them. */
+  graded: 'supervisor' | 'evaluator' | CapstoneMarkComponent[]
 ): MemberGrade {
   const mine = new Set(member.submissions.filter((s) => s.submitterId === viewerId).map((s) => s.component));
   const submissions = member.submissions.filter((s) => s.submitterId === viewerId || mine.has(s.component));
-  const owed = COMPONENTS_BY_ROLE[role].filter((c) => !mine.has(c));
+  const components = Array.isArray(graded) ? graded : COMPONENTS_BY_ROLE[graded];
+  const owed = components.filter((c) => !mine.has(c));
   if (owed.length === 0) return { ...member, submissions };
   return { ...member, submissions, score: null, letter: null, trace: [], gradeHiddenUntil: owed };
 }

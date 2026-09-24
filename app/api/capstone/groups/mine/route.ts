@@ -7,7 +7,7 @@ import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
 import User from '@/models/User';
 import '@/models/Semester';
 import { getCapstoneActor } from '@/lib/capstoneAuth';
-import { COMPONENTS_BY_ROLE } from '@/lib/capstoneGrades';
+import { getMarkingPlan } from '@/lib/capstoneMarkingPlan';
 
 // Groups the signed-in teacher supervises or actively evaluates, across all sessions, with
 // what the My Groups cards need at a glance: their role, each student's journal progress,
@@ -58,6 +58,14 @@ export async function GET() {
       User.find({ _id: { $in: groups.map((g) => g.supervisorId) } }).select('name').lean(),
     ]);
 
+    // Marking tasks per (session, track) from the active scheme - one lookup per pair, not per group.
+    const planFor = new Map<string, Awaited<ReturnType<typeof getMarkingPlan>>>();
+    for (const g of groups) {
+      const sessionId = (g.sessionId as unknown as { _id?: unknown } | null)?._id;
+      const key = `${String(sessionId)}:${g.track}`;
+      if (sessionId && !planFor.has(key)) planFor.set(key, await getMarkingPlan(sessionId, g.track));
+    }
+
     const journalKey = (g: unknown, s: unknown) => `${String(g)}:${String(s)}`;
     const journalBy = new Map(journal.map((j) => [journalKey(j._id.groupId, j._id.studentAccountId), j]));
     const supervisorName = new Map(supervisors.map((u) => [String(u._id), u.name]));
@@ -89,7 +97,7 @@ export async function GET() {
       // For each component this grader's role submits: how many active members have their mark.
       const mine = myMarks.filter((s) => String(s.groupId) === String(g._id));
       const activeIds = new Set(members.map((m) => m.studentAccountId));
-      const marks = COMPONENTS_BY_ROLE[role].map((component) => ({
+      const marks = (planFor.get(`${String(session?._id)}:${g.track}`)?.[role] || []).map(({ component }) => ({
         component,
         done: new Set(
           mine.filter((s) => s.component === component && activeIds.has(String(s.studentAccountId))).map((s) => String(s.studentAccountId))

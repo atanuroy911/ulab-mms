@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
 import Student from '@/models/Student';
+import { isAllowedStudentEmail } from '@/lib/authSettings';
 
 // Shared gate for student-facing "check my X" endpoints (marks, attendance): the caller
 // must either hold a verified @ulab.edu.bd NextAuth session (any provider - dashboard,
@@ -12,7 +13,8 @@ import Student from '@/models/Student';
 // enumerated anonymously by guessing IDs.
 export async function isUlabSessionOrAdminAuthorized(adminPassword?: string): Promise<boolean> {
   const session = (await getServerSession(authOptions as any)) as any;
-  if (session?.user?.email && session.user.email.toLowerCase().endsWith('@ulab.edu.bd')) {
+  // @ulab.edu.bd, or a developer-listed student test address (lib/authSettings.ts).
+  if (session?.user?.email && (await isAllowedStudentEmail(session.user.email))) {
     return true;
   }
 
@@ -36,7 +38,7 @@ export async function isUlabSessionOrAdminAuthorized(adminPassword?: string): Pr
 export async function resolveSessionStudent(courseId: string) {
   const session = (await getServerSession(authOptions as any)) as any;
   const email = session?.user?.email?.toLowerCase();
-  if (!email || !email.endsWith('@ulab.edu.bd')) {
+  if (!email || !(await isAllowedStudentEmail(email))) {
     return null;
   }
 

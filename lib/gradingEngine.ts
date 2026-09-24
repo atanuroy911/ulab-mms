@@ -45,6 +45,12 @@ export interface StudentContext {
   supervisorId: string;
   /** Coordinator-chosen evaluators, per component. */
   chosenEvaluators: Partial<Record<CapstoneMarkComponent, string[]>>;
+  /**
+   * How the coordinator combined the chosen evaluators for a component on this group -
+   * 'mean' (average, the default) or 'max' (best). Overrides the block's own aggregate for
+   * chosen-evaluator blocks only; absent means "use the block's setting".
+   */
+  chosenAggregate?: Partial<Record<CapstoneMarkComponent, 'mean' | 'max'>>;
 }
 
 export interface ValidationIssue {
@@ -373,7 +379,8 @@ function aggregate(values: number[], how: GradingAggregate): number {
 function resolveSource(node: IGradingNode, ctx: StudentContext): { value: number; count: number } {
   const component = node.data.component as CapstoneMarkComponent;
   const scope = node.data.scope as GradingSubmitterScope;
-  const how = node.data.aggregate as GradingAggregate;
+  const groupChoice = scope === 'chosenEvaluator' ? ctx.chosenAggregate?.[component] : undefined;
+  const how = (groupChoice || node.data.aggregate) as GradingAggregate;
   // `normalize` turns a raw rubric score into a 0-1 fraction, which is what a downstream
   // Scale node then turns into points. Off means "use the raw score as-is" (peer marks and
   // weekly journal are already on their final scale).

@@ -1,6 +1,7 @@
 'use client';
+import { EmailField, useAnyEmailDomain } from '@/app/components/EmailField';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,13 +35,7 @@ export function InvitePersonForm({ sessionId, role, projectTitle, onInvited }: P
   const [sending, setSending] = useState(false);
 
   // Follows the admin "allow any email domain" developer setting, like the server does.
-  const [anyDomain, setAnyDomain] = useState(false);
-  useEffect(() => {
-    fetch('/api/auth/settings')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setAnyDomain(data?.devAllowAnyEmailDomain === true))
-      .catch(() => {});
-  }, []);
+  const anyDomain = useAnyEmailDomain();
 
   const emailLooksUlab = anyDomain
     ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
@@ -99,17 +94,17 @@ export function InvitePersonForm({ sessionId, role, projectTitle, onInvited }: P
       </div>
       <div className="space-y-1.5">
         <Label htmlFor={`invite-email-${role}`}>{anyDomain ? 'Email' : 'ULAB email'}</Label>
-        <Input
+        <EmailField
           id={`invite-email-${role}`}
-          type="email"
-          placeholder="name@ulab.edu.bd"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={setEmail}
+          anyDomain={anyDomain}
           disabled={sending}
+          invalid={!!email.trim() && !emailLooksUlab}
         />
         {email.trim() && !emailLooksUlab && (
           <p className="text-xs text-destructive">
-            {anyDomain ? 'Enter a valid email address.' : 'Only @ulab.edu.bd addresses can sign in, so only those can be invited.'}
+            {anyDomain ? 'Enter a valid email address.' : 'Enter just the ULAB username, e.g. jane.doe'}
           </p>
         )}
       </div>

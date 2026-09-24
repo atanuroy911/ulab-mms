@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAllowedStudentEmail } from '@/lib/authSettings';
 import dbConnect from '@/lib/mongodb';
 import AttendanceSession from '@/models/AttendanceSession';
 import Student from '@/models/Student';
@@ -15,7 +16,8 @@ export async function POST(req: NextRequest) {
   }
 
   const email = session.user.email.toLowerCase();
-  if (!email.endsWith('@ulab.edu.bd')) {
+  // @ulab.edu.bd, or a developer-listed student test address (lib/authSettings.ts).
+  if (!(await isAllowedStudentEmail(email))) {
     return NextResponse.json({ error: 'Email must be @ulab.edu.bd' }, { status: 403 });
   }
 

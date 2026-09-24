@@ -3,6 +3,7 @@
  * after submitting their own for it, and the computed grade only once they owe nothing.
  */
 import { redactMemberForGrader, type MemberGrade } from '../lib/capstoneGrades';
+import { countedEvaluators } from '../models/CapstoneGroup';
 
 let pass = 0;
 let fail = 0;
@@ -71,6 +72,15 @@ check('no submissions -> grade hidden', fresh.score, null);
 
 // The input is never mutated (the coordinator view reuses the same object).
 check('input untouched', member.submissions.length, 6);
+
+// countedEvaluators: whose evaluator marks count toward the grade for a component.
+check('explicit choice wins', countedEvaluators(['a', 'c'], ['a', 'b', 'c']), ['a', 'c']);
+check('choice of more than two is kept', countedEvaluators(['a', 'b', 'c', 'd'], ['a', 'b', 'c', 'd', 'e', 'f']), ['a', 'b', 'c', 'd']);
+// Previously a group with one or two evaluators and no explicit choice counted NONE of them.
+check('two evaluators, no choice -> both count', countedEvaluators([], ['a', 'b']), ['a', 'b']);
+check('one evaluator, no choice -> it counts', countedEvaluators(undefined, ['a']), ['a']);
+check('six evaluators, no choice -> undecided, none count', countedEvaluators([], ['a', 'b', 'c', 'd', 'e', 'f']), []);
+check('no evaluators -> none', countedEvaluators([], []), []);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -4,9 +4,9 @@ import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
-import { isUlabEmail, looksLikeStudentName, extractStudentId } from '@/lib/googleAccount';
+import { looksLikeStudentName, extractStudentId } from '@/lib/googleAccount';
 import { clearInvite } from '@/lib/userInvites';
-import { isCredentialsLoginEnabled, isAllowedTeacherEmail } from '@/lib/authSettings';
+import { isCredentialsLoginEnabled, isAllowedTeacherEmail, isAllowedStudentEmail } from '@/lib/authSettings';
 import { sendMail, mailShell } from '@/lib/mail';
 import Student from '@/models/Student';
 import StudentAccount from '@/models/StudentAccount';
@@ -113,9 +113,10 @@ export const authOptions: NextAuthOptions = {
             authorization: {
               params: {
                 prompt: 'select_account consent',
-                // Hints Google's account chooser toward the ULAB workspace; the real
-                // enforcement happens in the signIn callback below.
-                hd: 'ulab.edu.bd',
+                // No fixed `hd` here: the teacher sign-in buttons send hd=ulab.edu.bd per
+                // request, except while the admin "allow any email domain" developer setting
+                // is on (lib/teacherGoogleSignIn.ts). The real enforcement is the signIn
+                // callback below, which applies that same setting.
               },
             },
           }),
@@ -129,7 +130,8 @@ export const authOptions: NextAuthOptions = {
             authorization: {
               params: {
                 prompt: 'select_account consent',
-                hd: 'ulab.edu.bd',
+                // hd=ulab.edu.bd is sent per sign-in (lib/studentGoogleSignIn.ts) so the
+                // developer student test-address allowlist can reach Google's picker.
               },
             },
           }),
@@ -143,7 +145,8 @@ export const authOptions: NextAuthOptions = {
             authorization: {
               params: {
                 prompt: 'select_account consent',
-                hd: 'ulab.edu.bd',
+                // hd=ulab.edu.bd is sent per sign-in (lib/studentGoogleSignIn.ts) so the
+                // developer student test-address allowlist can reach Google's picker.
               },
             },
           }),
@@ -158,7 +161,8 @@ export const authOptions: NextAuthOptions = {
             authorization: {
               params: {
                 prompt: 'select_account consent',
-                hd: 'ulab.edu.bd',
+                // hd=ulab.edu.bd is sent per sign-in (lib/studentGoogleSignIn.ts) so the
+                // developer student test-address allowlist can reach Google's picker.
               },
             },
           }),
@@ -172,7 +176,8 @@ export const authOptions: NextAuthOptions = {
             authorization: {
               params: {
                 prompt: 'select_account consent',
-                hd: 'ulab.edu.bd',
+                // hd=ulab.edu.bd is sent per sign-in (lib/studentGoogleSignIn.ts) so the
+                // developer student test-address allowlist can reach Google's picker.
               },
             },
           }),
@@ -189,9 +194,9 @@ export const authOptions: NextAuthOptions = {
 
       const email = (user.email || '').toLowerCase();
 
-      // Student-only providers are always ULAB-only; the developer "any email domain"
-      // setting only relaxes teacher sign-in.
-      const domainOk = isStudentOnlyProvider ? isUlabEmail(email) : await isAllowedTeacherEmail(email);
+      // Student-only providers accept @ulab.edu.bd plus the developer's specific student test
+      // addresses; the teacher "any email domain" setting never applies to them.
+      const domainOk = isStudentOnlyProvider ? await isAllowedStudentEmail(email) : await isAllowedTeacherEmail(email);
       if (!domainOk) {
         return '/auth/error?reason=domain';
       }
