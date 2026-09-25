@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/atanuroy911/ulab-mms/compare/v1.15.0...v1.16.0) (2026-09-24)
+
+
+### Features
+
+* scheme-driven capstone marking, coordinator sheet entry, dev testing access ([8f340b3](https://github.com/atanuroy911/ulab-mms/commit/8f340b3d539c2c4cad8ef48b79ad9f5d18673da9))
+
 # [1.15.0](https://github.com/atanuroy911/ulab-mms/compare/v1.14.1...v1.15.0) (2026-09-23)
 
 
