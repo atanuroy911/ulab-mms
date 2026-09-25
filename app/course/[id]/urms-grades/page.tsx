@@ -75,7 +75,7 @@ export default function UrmsGradesPage() {
           </p>
         </div>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-muted text-muted-foreground">
               <tr>

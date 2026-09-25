@@ -24,6 +24,7 @@ import { MemberEntry, type MemberRow } from './MemberEntry';
 import { SetupChecklist } from './SetupChecklist';
 import { DeleteSessionDialog } from './DeleteSessionDialog';
 import { InvitePersonForm, PendingInviteNote, type InvitedUser } from './InvitePersonForm';
+import { EvaluatorPickerDialog } from './EvaluatorPickerDialog';
 import { Tip } from '@/app/components/Tip';
 import { StudentDetailDialog } from '../components/StudentDetailDialog';
 import { JournalReminderButton } from '../components/JournalReminderButton';
@@ -202,7 +203,6 @@ export default function CapstoneSessionManagement() {
   const [addingMembers, setAddingMembers] = useState(false);
 
   const [evaluatorPickerFor, setEvaluatorPickerFor] = useState<GroupRow | null>(null);
-  const [evaluatorToAdd, setEvaluatorToAdd] = useState('');
 
   // Student detail dialog (marks, grade, journal; coordinators can edit name/email).
   const [openStudent, setOpenStudent] = useState<{ groupId: string; studentAccountId: string } | null>(null);
@@ -708,25 +708,6 @@ export default function CapstoneSessionManagement() {
     refreshGroups();
   };
 
-  const handleAddEvaluator = async () => {
-    if (!evaluatorPickerFor || !evaluatorToAdd) return;
-    try {
-      const res = await fetch(`/api/capstone/groups/${evaluatorPickerFor._id}/evaluators`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ evaluatorId: evaluatorToAdd }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to assign evaluator');
-      toast.success('Evaluator assigned');
-      setEvaluatorToAdd('');
-      setEvaluatorPickerFor(null);
-      refreshGroups();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to assign evaluator');
-    }
-  };
-
   const handleRemoveEvaluator = async (group: GroupRow, evaluatorId: string) => {
     try {
       const res = await fetch(`/api/capstone/groups/${group._id}/evaluators/${evaluatorId}`, { method: 'DELETE' });
@@ -798,7 +779,7 @@ export default function CapstoneSessionManagement() {
                     print-ready page in a new tab. */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" title="Print blank marking sheets for manual scoring">
+                    <Button variant="outline" size="sm" title="Blank marking sheets, and the course file with CO-PO attainment">
                       <Printer className="h-4 w-4 mr-1.5" />
                       Print Sheets
                       <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
@@ -808,6 +789,7 @@ export default function CapstoneSessionManagement() {
                     {([
                       { kind: 'presentation-sheet', label: 'Presentation marking sheet', hint: 'one sheet per track' },
                       { kind: 'report-sheet', label: 'Report rubric', hint: 'one page per group' },
+                      { kind: 'course-file', label: 'Course file (CO-PO)', hint: 'beta · per student' },
                     ] as const).map((sheet, i) => (
                       <DropdownMenuGroup key={sheet.kind}>
                         {i > 0 && <DropdownMenuSeparator />}
@@ -1208,45 +1190,18 @@ export default function CapstoneSessionManagement() {
         </Dialog>
 
         {/* Add evaluator */}
-        <Dialog open={evaluatorPickerFor !== null} onOpenChange={(open) => !open && setEvaluatorPickerFor(null)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Assign Evaluator</DialogTitle>
-              <DialogDescription>{evaluatorPickerFor?.projectTitle}</DialogDescription>
-            </DialogHeader>
-            <Select value={evaluatorToAdd} onValueChange={setEvaluatorToAdd}>
-              <SelectTrigger><SelectValue placeholder="Select evaluator" /></SelectTrigger>
-              <SelectContent>
-                {users.map((u) => (
-                  <SelectItem key={u._id} value={u._id}>{userLabel(u)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {evaluatorPickerFor && (
-              <PendingInviteNote
-                sessionId={selectedSession._id}
-                role="evaluator"
-                projectTitle={evaluatorPickerFor.projectTitle}
-                user={users.find((u) => u._id === evaluatorToAdd)}
-              />
-            )}
-            {evaluatorPickerFor && (
-              <InvitePersonForm
-                sessionId={selectedSession._id}
-                role="evaluator"
-                projectTitle={evaluatorPickerFor.projectTitle}
-                onInvited={(user) => {
-                  upsertUser(user);
-                  setEvaluatorToAdd(user._id);
-                }}
-              />
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEvaluatorPickerFor(null)}>Cancel</Button>
-              <Button onClick={handleAddEvaluator} disabled={!evaluatorToAdd}>Assign</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <EvaluatorPickerDialog
+          group={evaluatorPickerFor}
+          sessionId={selectedSession._id}
+          users={users}
+          allGroups={groups}
+          onClose={() => setEvaluatorPickerFor(null)}
+          onInvited={upsertUser}
+          onAssigned={() => {
+            setEvaluatorPickerFor(null);
+            refreshGroups();
+          }}
+        />
 
         {/* Add members to an existing group */}
         <Dialog

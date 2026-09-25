@@ -150,5 +150,21 @@ check('best of chosen presentation', presentationChosen(best), 38 / 45);
 check('supervisor block unaffected by best', presentationSupervisor(best), presentationSupervisor(avg));
 check('best raises the final score', (best.score ?? 0) > (avg.score ?? 0), true);
 
+// One scheme pinned to several tracks: a 4098B report (marked out of 42) run through the
+// 4098A scheme (report blocks overridden to /33) is scaled by its own rubric, not by 33.
+const bReport: MarkInput[] = [
+  { component: 'report', submitterId: SUP, submitterRole: 'supervisor', rawScore: 42, rubricMax: 42 },
+  { component: 'report', submitterId: EV_CHOSEN_A, submitterRole: 'evaluator', rawScore: 42, rubricMax: 42 },
+];
+const bResult = evaluateScheme(defaultCseScheme('A'), { ...ctx, marks: bReport, chosenEvaluators: { report: [EV_CHOSEN_A] } });
+check('4098B full report through the 4098A scheme is 40, not 50.91', bResult.trace.find((t) => t.nodeId === 'report_blend')?.value, 40);
+// A mark with no recorded rubric max still falls back to the block's override.
+const noMax = evaluateScheme(defaultCseScheme('A'), {
+  ...ctx,
+  marks: [{ component: 'report', submitterId: SUP, submitterRole: 'supervisor', rawScore: 33, rubricMax: null }],
+  chosenEvaluators: {},
+});
+check('missing rubric max falls back to the override', noMax.trace.find((t) => t.nodeId === 'report_sup')?.value, 1);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

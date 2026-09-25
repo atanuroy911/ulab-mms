@@ -84,7 +84,8 @@ export function AppHeader({
         <div className="max-w-7xl mx-auto px-3 sm:px-4">
           <div className="flex h-16 items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <Link href={logoHref} className="shrink-0 group">
+              {/* Hidden on phones: up to six icon buttons share this bar with the title. */}
+              <Link href={logoHref} className="hidden shrink-0 group sm:block">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15 transition-colors group-hover:bg-primary/15">
                   <Image
                     src="/ulab.svg"

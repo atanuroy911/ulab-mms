@@ -685,8 +685,8 @@ export default function Dashboard() {
     return (
       <div className="h-dvh bg-background flex overflow-hidden">
         <AdminSidebar items={sidebarItems} title="Teacher Portal" />
-        <div className="flex-1 flex flex-col">
-          <div className="h-16 border-b px-4 sm:px-6 pl-16 md:pl-6 flex items-center">
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="h-16 border-b pl-16 pr-4 sm:pr-6 md:pl-6 flex items-center">
             <div className="flex items-center gap-3">
               <Skeleton className="h-9 w-9 rounded-md shrink-0" />
               <div className="space-y-2">
@@ -731,20 +731,21 @@ export default function Dashboard() {
       <DepartmentOnboardingDialog />
       <AdminSidebar items={sidebarItems} title="Teacher Portal" />
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <ChromeExtensionPromo />
 
         {/* Top Navigation Bar */}
         <DevModeBanner />
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
+          <div className="h-16 flex items-center justify-between gap-3 pl-16 pr-4 sm:pr-6 md:pl-6">
             <div className="flex items-center gap-3 min-w-0">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
                 width={36}
                 height={36}
-                className="drop-shadow-lg shrink-0"
+                // Hidden on phones so the title keeps room beside the header buttons.
+                className="drop-shadow-lg shrink-0 hidden sm:block"
               />
               <div className="min-w-0">
                 <h1 className="text-base sm:text-lg font-bold truncate bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
@@ -767,7 +768,7 @@ export default function Dashboard() {
                 </Button>
               )}
               <Button variant="default" size="sm" asChild>
-                <Link href="/capstone">
+                <Link href="/capstone" title="Capstone groups you supervise or evaluate" aria-label="Capstone">
                   <FlaskConical className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Capstone</span>
                 </Link>
@@ -775,6 +776,8 @@ export default function Dashboard() {
               <Button
                 variant="destructive"
                 size="sm"
+                title="Sign out"
+                aria-label="Sign out"
                 onClick={() => {
                   notify.auth.signOutSuccess();
                   signOut({ callbackUrl: '/auth/signin' });

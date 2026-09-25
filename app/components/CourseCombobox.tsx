@@ -78,7 +78,7 @@ export function CourseCombobox({ selectedCourse, onSelect, disabled = false }: C
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[630px] p-0" align="center">
+      <PopoverContent className="w-[min(630px,calc(100vw-2rem))] p-0" align="center">
         <div className="flex flex-col">
           <div className="border-b p-3">
             <Input

@@ -70,7 +70,7 @@ export function TeacherShell({
           <DevModeBanner />
         )}
         <nav className="sticky top-0 z-30 border-b bg-background">
-          <div className="flex h-16 items-center justify-between gap-3 px-4 pl-16 sm:px-6 md:pl-6">
+          <div className="flex h-16 items-center justify-between gap-3 pl-16 pr-4 sm:pr-6 md:pl-6">
             <div className="flex min-w-0 items-center gap-3">
               <Link href={webAdmin ? '/admin/dashboard' : '/dashboard'} className="hidden shrink-0 sm:block">
                 <Image src="/ulab.svg" alt="ULAB Logo" width={32} height={32} />

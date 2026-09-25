@@ -38,6 +38,7 @@ import {
   PenLine,
   SlidersHorizontal,
   Maximize2,
+  Target,
 } from 'lucide-react';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { toast } from 'sonner';
@@ -45,6 +46,8 @@ import { toast } from 'sonner';
 import { nodeTypes, NODE_PALETTE, inputName } from './nodes';
 import { NodeInspector } from './NodeInspector';
 import { CanvasContextMenu } from './CanvasContextMenu';
+import { OutcomesDialog } from './OutcomesDialog';
+import { defaultOutcomes, validateOutcomes, type CapstoneOutcomesConfig } from '@/lib/capstoneOutcomes';
 import { useMediaQuery, BREAKPOINTS } from '@/lib/useMediaQuery';
 
 interface ValidationIssue {
@@ -61,6 +64,7 @@ interface SchemeDoc {
   nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
   edges: Array<{ id: string; source: string; target: string; targetHandle?: string | null }>;
   currentVersion: number;
+  outcomes?: CapstoneOutcomesConfig | null;
   validation: ValidationIssue[];
   canEdit: boolean;
 }
@@ -138,6 +142,10 @@ function EditorInner({ id }: { id: string }) {
   // Tracks whether there are unsaved changes, so we can warn on navigate-away rather than
   // silently discarding a graph someone spent time arranging.
   const [dirty, setDirty] = useState(false);
+  // Course outcomes for the course file. A scheme saved before COs existed starts from the
+  // department defaults, which the next save stores.
+  const [outcomes, setOutcomes] = useState<CapstoneOutcomesConfig | null>(null);
+  const [outcomesOpen, setOutcomesOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +158,9 @@ function EditorInner({ id }: { id: string }) {
 
         setScheme(data);
         setName(data.name);
+        setOutcomes(
+          data.outcomes?.outcomes ? { ...data.outcomes, track: data.outcomes.track || data.track || 'A' } : defaultOutcomes(data.track || 'A')
+        );
         setIssues(data.validation || []);
         setNodes(
           (data.nodes || []).map((n: SchemeDoc['nodes'][number]) => ({
@@ -393,10 +404,11 @@ function EditorInner({ id }: { id: string }) {
         const res = await fetch(`/api/capstone/grading-schemes/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, ...serialize(), ...(publish ? { publish: true } : {}) }),
+          body: JSON.stringify({ name, ...serialize(), ...(outcomes ? { outcomes } : {}), ...(publish ? { publish: true } : {}) }),
         });
         const data = await res.json();
         if (!res.ok) {
+          if (data.outcomeIssues) setOutcomesOpen(true);
           setIssues(data.issues || []);
           throw new Error(data.error || 'Failed to save');
         }
@@ -410,7 +422,7 @@ function EditorInner({ id }: { id: string }) {
         publish ? setPublishing(false) : setSaving(false);
       }
     },
-    [id, name, serialize, readOnly]
+    [id, name, serialize, readOnly, outcomes]
   );
 
   // Keyboard shortcuts, mirroring the right-click menu so both routes do the same thing.
@@ -604,6 +616,18 @@ function EditorInner({ id }: { id: string }) {
           )}
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {outcomes && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setOutcomesOpen(true)}
+                title="Course outcomes and CO-PO mapping, used by the course file"
+                className={validateOutcomes(outcomes, outcomes.track).length ? 'border-destructive text-destructive' : undefined}
+              >
+                <Target className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">COs</span>
+              </Button>
+            )}
             {!readOnly && (
               <>
                 <Button size="sm" variant="outline" onClick={() => save(false)} disabled={saving}>
@@ -886,6 +910,19 @@ function EditorInner({ id }: { id: string }) {
           {inspector}
         </aside>
       </div>
+
+      {outcomes && (
+        <OutcomesDialog
+          open={outcomesOpen}
+          onOpenChange={setOutcomesOpen}
+          value={outcomes}
+          readOnly={readOnly}
+          onChange={(next) => {
+            setOutcomes(next);
+            markDirty();
+          }}
+        />
+      )}
     </TeacherShell>
   );
 }

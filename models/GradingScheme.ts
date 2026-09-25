@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import type { CapstoneMarkComponent } from './CapstoneMarkSubmission';
+import type { CapstoneOutcomesConfig } from '@/lib/capstoneOutcomes';
 
 /**
  * A grading scheme is a small directed acyclic graph the coordinator/admin builds visually
@@ -64,6 +65,8 @@ export interface IGradingSchemeVersion {
   createdAt: Date;
   createdBy: mongoose.Types.ObjectId | null;
   note?: string;
+  /** The COs as published with this version (absent on versions published before COs existed). */
+  outcomes?: CapstoneOutcomesConfig | null;
 }
 
 export interface IGradingScheme extends Document {
@@ -76,6 +79,8 @@ export interface IGradingScheme extends Document {
   /** The live, editable graph. Publishing snapshots it into `versions`. */
   nodes: IGradingNode[];
   edges: IGradingEdge[];
+  /** Course outcomes and their CO->PO mapping (lib/capstoneOutcomes.ts); published with the graph. */
+  outcomes?: CapstoneOutcomesConfig | null;
   /** Immutable published snapshots. Sessions pin one of these, never the draft. */
   versions: IGradingSchemeVersion[];
   currentVersion: number;
@@ -127,6 +132,8 @@ const GradingSchemeVersionSchema = new Schema(
     // null when done through the /admin panel's web-admin login (lib/capstoneAuth.ts).
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     note: { type: String, default: '' },
+    // Shape checked by lib/capstoneOutcomes.ts's validateOutcomes() on save, like the graph.
+    outcomes: { type: Schema.Types.Mixed },
   },
   { _id: false }
 );
@@ -139,6 +146,7 @@ const GradingSchemeSchema: Schema = new Schema(
     track: { type: String, enum: ['A', 'B', 'C', null], default: null },
     nodes: { type: [GradingNodeSchema], default: [] },
     edges: { type: [GradingEdgeSchema], default: [] },
+    outcomes: { type: Schema.Types.Mixed },
     versions: { type: [GradingSchemeVersionSchema], default: [] },
     currentVersion: { type: Number, default: 0 },
     isArchived: { type: Boolean, default: false },

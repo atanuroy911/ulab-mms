@@ -5,6 +5,7 @@ import GradingScheme from '@/models/GradingScheme';
 import CapstoneSession from '@/models/CapstoneSession';
 import { getCapstoneActor, canManageDepartment } from '@/lib/capstoneAuth';
 import { validateScheme } from '@/lib/gradingEngine';
+import { validateOutcomes, cleanOutcomes, type CapstoneOutcomesConfig } from '@/lib/capstoneOutcomes';
 
 function isValidId(id: string) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -76,6 +77,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       scheme.isArchived = body.isArchived;
     }
 
+    // Course outcomes: unlike the graph, a malformed CO list is refused outright - it is a
+    // small form, not a half-built canvas, so there is no "come back later" state to keep.
+    if (body?.outcomes !== undefined) {
+      const outcomeIssues = validateOutcomes(body.outcomes, String(body.outcomes?.track || scheme.track || 'A'));
+      if (outcomeIssues.length > 0) {
+        return NextResponse.json({ error: 'The course outcomes have problems', outcomeIssues }, { status: 400 });
+      }
+      scheme.outcomes = cleanOutcomes(body.outcomes as CapstoneOutcomesConfig);
+      scheme.markModified('outcomes');
+    }
+
     const graphChanged = Array.isArray(body?.nodes) || Array.isArray(body?.edges);
     if (Array.isArray(body?.nodes)) scheme.nodes = body.nodes;
     if (Array.isArray(body?.edges)) scheme.edges = body.edges;
@@ -96,6 +108,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         // snapshot through a shared subdocument reference.
         nodes: JSON.parse(JSON.stringify(scheme.nodes)),
         edges: JSON.parse(JSON.stringify(scheme.edges)),
+        outcomes: scheme.outcomes ? JSON.parse(JSON.stringify(scheme.outcomes)) : null,
         createdAt: new Date(),
         createdBy: actor.userId as unknown as mongoose.Types.ObjectId,
         note: typeof body?.note === 'string' ? body.note.trim() : '',

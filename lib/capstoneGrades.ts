@@ -48,6 +48,8 @@ export interface MemberGrade {
     counted: boolean;
     rawScore: number;
     rubricMax: number | null;
+    /** Per-criterion scores (c0..cN) when the mark was entered on the rubric; the course file's CO sheets read these. */
+    rubricScores?: Record<string, number> | null;
   }>;
   error?: string;
   /**
@@ -70,6 +72,8 @@ export interface GroupGrades {
    * The export uses these to build gradebook columns without guessing at node labels.
    */
   componentNodeIds: string[];
+  /** How the coordinator combined this group's counted evaluators ('mean' when unset). */
+  chosenAggregate: { report?: 'mean' | 'max'; presentation?: 'mean' | 'max' };
   members: MemberGrade[];
 }
 
@@ -259,6 +263,7 @@ export async function computeSessionGrades(
             counted,
             rawScore: sub.rawScore,
             rubricMax: sub.rubricMax ?? null,
+            rubricScores: sub.rubricScores ?? null,
           };
         });
 
@@ -309,6 +314,10 @@ export async function computeSessionGrades(
       schemeName: resolved?.name ?? null,
       schemeVersion: resolved?.version ?? null,
       componentNodeIds: resolved?.componentNodeIds ?? [],
+      chosenAggregate: {
+        report: group.chosenAggregate?.report,
+        presentation: group.chosenAggregate?.presentation,
+      },
       members,
     };
   });

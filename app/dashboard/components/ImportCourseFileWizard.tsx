@@ -442,7 +442,7 @@ export default function ImportCourseFileWizard({ isOpen, onClose, onImported }: 
                 <div className="font-medium">{includedStudentCount} students</div>
               </div>
             </div>
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted text-xs text-muted-foreground">
                   <tr>

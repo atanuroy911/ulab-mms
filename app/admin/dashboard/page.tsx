@@ -87,18 +87,18 @@ function AdminDashboardContent() {
       <AdminSidebar items={sidebarItems} title="Admin Portal" />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <DevModeBanner manageHref="/admin/dashboard?tab=developer" canManage />
         {/* Top Navigation Bar */}
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
+          <div className="h-16 flex items-center justify-between gap-3 pl-16 pr-4 sm:pr-6 md:pl-6">
             <div className="flex items-center gap-3 min-w-0">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
                 width={36}
                 height={36}
-                className="drop-shadow-lg shrink-0"
+                className="drop-shadow-lg shrink-0 hidden sm:block"
               />
               <div className="min-w-0">
                 <h1 className="text-base sm:text-lg font-bold truncate">Admin Dashboard</h1>

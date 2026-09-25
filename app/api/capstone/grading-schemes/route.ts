@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import GradingScheme from '@/models/GradingScheme';
 import { getCapstoneActor, canManageDepartment } from '@/lib/capstoneAuth';
+import { defaultOutcomes } from '@/lib/capstoneOutcomes';
 import { defaultCseScheme } from '@/lib/gradingEngine';
 
 /**
@@ -75,6 +76,8 @@ export async function POST(request: NextRequest) {
       track,
       nodes: seed.nodes,
       edges: seed.edges,
+      // The department's COs for the track, from the 4098A/B workbooks; editable in the editor.
+      outcomes: defaultOutcomes(track || 'A'),
       versions: [],
       currentVersion: 0,
       createdBy: actor.userId,

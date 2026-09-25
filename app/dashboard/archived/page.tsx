@@ -109,8 +109,8 @@ export default function ArchivedCoursesPage() {
     return (
       <div className="h-dvh bg-background flex overflow-hidden">
         <AdminSidebar items={teacherNav} title="Teacher Portal" />
-        <div className="flex-1 flex flex-col">
-          <div className="h-16 border-b px-4 sm:px-6 pl-16 md:pl-6 flex items-center">
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="h-16 border-b pl-16 pr-4 sm:pr-6 md:pl-6 flex items-center">
             <Skeleton className="h-5 w-40" />
           </div>
           <div className="flex-1 overflow-auto p-4 pt-8">
@@ -136,11 +136,11 @@ export default function ArchivedCoursesPage() {
     <div className="h-dvh bg-background flex overflow-hidden">
       <AdminSidebar items={teacherNav} title="Teacher Portal" />
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="h-16 flex items-center justify-between gap-3 px-4 sm:px-6 pl-16 md:pl-6">
-            <h1 className="text-base sm:text-lg font-bold">Archived Courses</h1>
-            <div className="flex items-center gap-2">
+          <div className="h-16 flex items-center justify-between gap-3 pl-16 pr-4 sm:pr-6 md:pl-6">
+            <h1 className="min-w-0 truncate text-base sm:text-lg font-bold">Archived Courses</h1>
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <ThemeToggle />
               <Button variant="default" size="sm" asChild title="Capstone groups you supervise or evaluate">
                 <Link href="/capstone">

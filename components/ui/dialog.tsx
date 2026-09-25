@@ -54,6 +54,9 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Dialogs that are deliberately full-screen (e.g. the account manager's course view) set
+  // max-w-none and size themselves; the phone caps below would fight that.
+  const fullScreen = !!className?.includes('max-w-none')
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -61,7 +64,14 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200",
-          className
+          // Keep a tall dialog on screen (scrolling inside) - before `className`, so dialogs
+          // that manage their own height/scrolling still win.
+          !fullScreen && 'max-h-[calc(100dvh-2rem)] overflow-y-auto',
+          className,
+          // Most dialogs pass their own width (max-w-md/lg/xl/2xl), which tailwind-merge lets
+          // replace the phone cap above - leaving a 576-672px dialog on a 375px screen. This
+          // phone-only cap can't be merged away.
+          !fullScreen && 'max-sm:max-w-[calc(100%-2rem)]'
         )}
         {...props}
       >

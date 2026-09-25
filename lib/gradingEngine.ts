@@ -398,7 +398,12 @@ function resolveSource(node: IGradingNode, ctx: StudentContext): { value: number
 
   const values = relevant.map((mark) => {
     if (!normalize) return mark.rawScore;
-    const max = node.data.rubricMaxOverride ?? mark.rubricMax;
+    // A rubric component is scaled by the rubric it was marked on (the mark carries it), as
+    // the marking plan already does: one scheme pinned to 4098A (report /33) and 4098B
+    // (report /42) must not divide a 42-point report by 33. The override is the fallback
+    // for marks without a recorded max and for non-rubric components.
+    const rubricComponent = component === 'report' || component === 'presentation';
+    const max = rubricComponent && mark.rubricMax ? mark.rubricMax : node.data.rubricMaxOverride ?? mark.rubricMax;
     // A missing or zero rubric max would make the fraction meaningless; treat as 0 rather
     // than dividing and producing Infinity.
     if (!max || max <= 0) return 0;
