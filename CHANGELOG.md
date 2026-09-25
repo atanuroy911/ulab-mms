@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/atanuroy911/ulab-mms/compare/v1.16.0...v1.17.0) (2026-09-25)
+
+
+### Features
+
+* magical changes ([9c8e873](https://github.com/atanuroy911/ulab-mms/commit/9c8e873b7017caad1f97a2f3298e316fb6377963))
+
 # [1.16.0](https://github.com/atanuroy911/ulab-mms/compare/v1.15.0...v1.16.0) (2026-09-24)
 
 
