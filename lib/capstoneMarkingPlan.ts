@@ -46,6 +46,9 @@ export function defaultMax(component: CapstoneMarkComponent, track: string): num
       return 5;
     case 'weeklyJournal':
       return 10;
+    case 'poster':
+      // 4098C's poster sheet is out of 12; no other track marks a poster by default.
+      return 12;
     default:
       return 100;
   }
@@ -56,8 +59,9 @@ export function defaultMarkingPlan(track: string): MarkingPlan {
   const req = (c: CapstoneMarkComponent) => ({ component: c, max: defaultMax(c, track) });
   return {
     source: 'default',
-    supervisor: ['report', 'presentation', 'peer', 'weeklyJournal'].map((c) => req(c as CapstoneMarkComponent)),
-    evaluator: ['report', 'presentation'].map((c) => req(c as CapstoneMarkComponent)),
+    // 4098C adds a poster, marked by the supervisor and the evaluators.
+    supervisor: ['report', 'presentation', 'peer', 'weeklyJournal', ...(track === 'C' ? ['poster'] : [])].map((c) => req(c as CapstoneMarkComponent)),
+    evaluator: ['report', 'presentation', ...(track === 'C' ? ['poster'] : [])].map((c) => req(c as CapstoneMarkComponent)),
   };
 }
 

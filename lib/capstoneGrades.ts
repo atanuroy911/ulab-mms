@@ -1,4 +1,4 @@
-import CapstoneGroup, { evaluatorRule, type EvaluatorRuleMode } from '@/models/CapstoneGroup';
+import CapstoneGroup, { CHOOSABLE_COMPONENTS, evaluatorRule, type CapstoneChoosableComponent, type EvaluatorRuleMode } from '@/models/CapstoneGroup';
 import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
 import StudentAccount from '@/models/StudentAccount';
 import GradingScheme from '@/models/GradingScheme';
@@ -73,13 +73,13 @@ export interface GroupGrades {
    */
   componentNodeIds: string[];
   /** How the coordinator combined this group's counted evaluators ('mean' when unset). */
-  chosenAggregate: { report?: 'mean' | 'max'; presentation?: 'mean' | 'max' };
+  chosenAggregate: { report?: 'mean' | 'max'; presentation?: 'mean' | 'max'; poster?: 'mean' | 'max' };
   /** Which evaluators count, per component (see evaluatorRule in models/CapstoneGroup.ts). */
-  evaluatorRules: Record<'report' | 'presentation', { mode: EvaluatorRuleMode; k: number | null; how: 'mean' | 'max' }>;
+  evaluatorRules: Record<Choosable, { mode: EvaluatorRuleMode; k: number | null; how: 'mean' | 'max' }>;
   members: MemberGrade[];
 }
 
-type Choosable = 'report' | 'presentation';
+type Choosable = CapstoneChoosableComponent;
 /**
  * An unsaved evaluator choice for one group, to preview its grades before saving. Only the
  * components given are replaced; the rest stay as saved.
@@ -250,9 +250,8 @@ export async function computeSessionGrades(
       how: own[c]?.how ?? group.chosenAggregate?.[c],
       topK: own[c] && 'topK' in own[c]! ? own[c]!.topK : group.evaluatorTopK?.[c],
     });
-    const rules = { report: evaluatorRule(saved('report'), activeEvaluatorIds), presentation: evaluatorRule(saved('presentation'), activeEvaluatorIds) };
-    const chosenReport = rules.report.counted;
-    const chosenPresentation = rules.presentation.counted;
+    const rules = Object.fromEntries(CHOOSABLE_COMPONENTS.map((c) => [c, evaluatorRule(saved(c), activeEvaluatorIds)])) as Record<Choosable, ReturnType<typeof evaluatorRule>>;
+    const isChoosable = (c: string): c is Choosable => (CHOOSABLE_COMPONENTS as string[]).includes(c);
     // As saved (undefined = the scheme block's own setting), unless previewing a change.
     const aggregateFor = (c: Choosable) => (own[c]?.how ?? group.chosenAggregate?.[c]) as 'mean' | 'max' | undefined;
 
@@ -274,7 +273,7 @@ export async function computeSessionGrades(
               { marks: marksByStudent.get(studentAccountId) || [], supervisorId: String(group.supervisorId) }
             );
           if (sub.submitterRole === 'evaluator') {
-            if (sub.component === 'report' || sub.component === 'presentation') {
+            if (isChoosable(sub.component)) {
               const rule = rules[sub.component];
               counted = rule.counted.includes(submitterId);
               // Top K: only this student's K highest (the same pick the grade uses).
@@ -325,9 +324,9 @@ export async function computeSessionGrades(
             (m) => m.submitterRole !== 'evaluator' || activeEvaluatorIds.includes(String(m.submitterId))
           ),
           supervisorId: String(group.supervisorId),
-          chosenEvaluators: { report: chosenReport, presentation: chosenPresentation },
-          chosenAggregate: { report: aggregateFor('report'), presentation: aggregateFor('presentation') },
-          evaluatorTopK: { report: rules.report.k, presentation: rules.presentation.k },
+          chosenEvaluators: Object.fromEntries(CHOOSABLE_COMPONENTS.map((c) => [c, rules[c].counted])),
+          chosenAggregate: Object.fromEntries(CHOOSABLE_COMPONENTS.map((c) => [c, aggregateFor(c)])),
+          evaluatorTopK: Object.fromEntries(CHOOSABLE_COMPONENTS.map((c) => [c, rules[c].k])),
         };
 
         try {
@@ -355,14 +354,8 @@ export async function computeSessionGrades(
       schemeVersion: resolved?.version ?? null,
       componentNodeIds: resolved?.componentNodeIds ?? [],
       // Top K always averages its K marks.
-      chosenAggregate: {
-        report: rules.report.mode === 'topK' ? 'mean' : aggregateFor('report'),
-        presentation: rules.presentation.mode === 'topK' ? 'mean' : aggregateFor('presentation'),
-      },
-      evaluatorRules: {
-        report: { mode: rules.report.mode, k: rules.report.k, how: rules.report.how },
-        presentation: { mode: rules.presentation.mode, k: rules.presentation.k, how: rules.presentation.how },
-      },
+      chosenAggregate: Object.fromEntries(CHOOSABLE_COMPONENTS.map((c) => [c, rules[c].mode === 'topK' ? 'mean' : aggregateFor(c)])),
+      evaluatorRules: Object.fromEntries(CHOOSABLE_COMPONENTS.map((c) => [c, { mode: rules[c].mode, k: rules[c].k, how: rules[c].how }])) as GroupGrades['evaluatorRules'],
       members,
     };
   });

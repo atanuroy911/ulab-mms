@@ -78,8 +78,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return how === 'max' ? Math.max(...vals) : vals.reduce((a, b) => a + b, 0) / vals.length;
     };
 
+    // Only the parts this track's scheme takes evaluator marks for (poster: Track C).
+    const choosable = CHOOSABLE_COMPONENTS.filter((c) => plan.evaluator.some((r) => r.component === c));
+
     return NextResponse.json({
       canChoose: !isGroupGrader(actor, group),
+      choosable,
       scheme: scheme ? { name: scheme.name, version: version?.version ?? null } : null,
       evaluators: activeIds.map((eid) => ({ id: eid, name: nameOf.get(eid) || null })),
       components: Object.fromEntries(

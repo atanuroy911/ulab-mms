@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type Component = 'presentation' | 'report';
+type Component = 'presentation' | 'poster' | 'report';
 type Mode = 'all' | 'topK' | 'pick';
 interface Rule {
   mode: Mode;
@@ -21,6 +21,8 @@ interface Draft {
 }
 interface Payload {
   canChoose: boolean;
+  /** The parts this group's scheme takes evaluator marks for, in order. */
+  choosable: Component[];
   scheme: { name: string; version: number | null } | null;
   evaluators: { id: string; name: string | null }[];
   components: Record<Component, { max: number | null; blocks: { label: string; scope: string; aggregate: string }[]; saved: Rule; rule: Rule; picked: string[] }>;
@@ -35,10 +37,7 @@ interface Payload {
   }[];
 }
 
-const COMPONENTS: { key: Component; label: string }[] = [
-  { key: 'presentation', label: 'Presentation' },
-  { key: 'report', label: 'Report' },
-];
+const LABELS: Record<Component, string> = { presentation: 'Presentation', poster: 'Poster', report: 'Report' };
 const MIN_PICKED = 2;
 const fmt = (n: number | null | undefined, digits = 1) => (n === null || n === undefined ? '—' : Number.isInteger(n) ? String(n) : n.toFixed(digits));
 
@@ -96,7 +95,7 @@ export function EvaluatorChoicePanel({ groupId, onSaved }: { groupId: string; on
       const body = await fetchChoice();
       if (!body) return;
       const initial = Object.fromEntries(
-        COMPONENTS.map(({ key }) => [key, toDraft(body.components[key].saved, body.components[key].picked, body.evaluators.length)])
+        body.choosable.map((key) => [key, toDraft(body.components[key].saved, body.components[key].picked, body.evaluators.length)])
       ) as Record<Component, Draft>;
       skipPreview.current = true;
       setData(body);
@@ -112,7 +111,8 @@ export function EvaluatorChoicePanel({ groupId, onSaved }: { groupId: string; on
     reload();
   }, [reload]);
 
-  const dirty = useMemo(() => !!drafts && !!saved && COMPONENTS.some(({ key }) => !same(drafts[key], saved[key])), [drafts, saved]);
+  const shown = useMemo(() => (drafts ? (Object.keys(drafts) as Component[]) : []), [drafts]);
+  const dirty = useMemo(() => !!drafts && !!saved && shown.some((key) => !same(drafts[key], saved[key])), [drafts, saved, shown]);
 
   // Preview the draft a moment after the last change.
   useEffect(() => {
@@ -124,7 +124,7 @@ export function EvaluatorChoicePanel({ groupId, onSaved }: { groupId: string; on
     const t = window.setTimeout(async () => {
       setPreviewing(true);
       try {
-        const body = await fetchChoice(Object.fromEntries(COMPONENTS.map(({ key }) => [key, toRule(drafts[key])])) as Record<Component, ReturnType<typeof toRule>>);
+        const body = await fetchChoice(Object.fromEntries(shown.map((key) => [key, toRule(drafts[key])])) as Record<Component, ReturnType<typeof toRule>>);
         if (body) setData(body);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Preview failed');
@@ -142,13 +142,14 @@ export function EvaluatorChoicePanel({ groupId, onSaved }: { groupId: string; on
   const problems = useMemo(() => {
     if (!drafts || !data) return [] as string[];
     const n = data.evaluators.length;
-    return COMPONENTS.flatMap(({ key, label }) => {
+    return shown.flatMap((key) => {
+      const label = LABELS[key];
       const d = drafts[key];
       if (d.mode === 'pick' && d.picked.length < Math.min(MIN_PICKED, n)) return [`${label}: pick at least ${Math.min(MIN_PICKED, n)} evaluators`];
       if (d.mode === 'topK' && (d.k < 1 || d.k > n)) return [`${label}: K must be 1 to ${n}`];
       return [];
     });
-  }, [drafts, data]);
+  }, [drafts, data, shown]);
 
   const save = async () => {
     if (!drafts || problems.length) return;
@@ -157,7 +158,7 @@ export function EvaluatorChoicePanel({ groupId, onSaved }: { groupId: string; on
       const chosenEvaluators: Record<string, string[]> = {};
       const chosenAggregate: Record<string, 'mean' | 'max'> = {};
       const evaluatorTopK: Record<string, number | null> = {};
-      for (const { key } of COMPONENTS) {
+      for (const key of shown) {
         const d = drafts[key];
         chosenEvaluators[key] = d.mode === 'pick' ? d.picked : [];
         if (d.mode !== 'topK') chosenAggregate[key] = d.how;
@@ -194,7 +195,8 @@ export function EvaluatorChoicePanel({ groupId, onSaved }: { groupId: string; on
 
   return (
     <div className="space-y-8">
-      {COMPONENTS.map(({ key, label }) => {
+      {shown.map((key) => {
+        const label = LABELS[key];
         const comp = data.components[key];
         const d = drafts[key];
         const n = data.evaluators.length;

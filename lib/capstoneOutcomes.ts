@@ -21,11 +21,18 @@ export type OutcomeSource =
   | { kind: 'rubric'; component: 'report' | 'presentation' }
   | { kind: 'component'; component: CapstoneMarkComponent; max: number };
 
+export type ComponentOutcomeSource = Extract<OutcomeSource, { kind: 'component' }>;
+
 export interface CapstoneOutcome {
   /** "CO1", "CO2", ... - also the tag matched in rubric criterion labels. */
   key: string;
   description?: string;
   source: OutcomeSource;
+  /**
+   * A second measure added on top, e.g. 4098C's CO5 = the report criteria tagged [CO5] plus
+   * the poster mark scaled to 20. Its marks add to the CO's total.
+   */
+  also?: ComponentOutcomeSource | null;
   /** Programme outcomes this CO maps to ("PO2", ...). */
   pos: string[];
 }
@@ -69,17 +76,22 @@ export function taggedCriteria(component: 'report' | 'presentation', track: stri
     .filter((idx) => idx >= 0);
 }
 
-/** The marks a CO is out of. */
-export function outcomeMax(outcome: CapstoneOutcome, track: string): number {
+/** The marks a CO's main measure is out of (without any `also`). */
+export function sourceMax(outcome: CapstoneOutcome, track: string): number {
   const src = outcome.source;
   if (src.kind === 'component') return src.max;
   return taggedCriteria(src.component, track, outcome.key).length * RUBRIC_CRITERION_MAX[src.component];
 }
 
+/** The marks a CO is out of: its main measure plus any `also`. */
+export function outcomeMax(outcome: CapstoneOutcome, track: string): number {
+  return sourceMax(outcome, track) + (outcome.also ? Number(outcome.also.max) || 0 : 0);
+}
+
 /**
  * The department's current COs, transcribed from public/templates/capstone/CSE 4098A/B
- * Spring 2026.xlsx ("CO-PO Attainment Analysis": assessment items and CO->PO mapping).
- * 4098C has no workbook of its own and uses 4098B's rubric, so it uses 4098B's COs.
+ * Spring 2026.xlsx and CSE4098C_Summer2026.xlsx ("CO-PO Attainment Analysis": assessment
+ * items and CO->PO mapping).
  */
 export function defaultOutcomes(track: 'A' | 'B' | 'C' | string | null | undefined): CapstoneOutcomesConfig {
   const report = (key: string, po: string): CapstoneOutcome => ({ key, source: { kind: 'rubric', component: 'report' }, pos: [po] });
@@ -89,8 +101,22 @@ export function defaultOutcomes(track: 'A' | 'B' | 'C' | string | null | undefin
     pos: [po],
   });
 
-  const outcomes =
-    track === 'A'
+  const outcomes: CapstoneOutcome[] =
+    track === 'C'
+      ? [
+          report('CO1', 'PO12'),
+          report('CO2', 'PO11'),
+          report('CO3', 'PO5'),
+          report('CO4', 'PO3'),
+          // The report's [CO5] criteria plus the poster, out of 20 (the workbook's "Poster" item).
+          { ...report('CO5', 'PO4'), also: { kind: 'component', component: 'poster', max: 20 } },
+          report('CO6', 'PO6'),
+          report('CO7', 'PO7'),
+          report('CO8', 'PO8'),
+          scaled('CO9', 'peer', 5, 'PO9'),
+          scaled('CO10', 'presentation', 10, 'PO10'),
+        ]
+      : track === 'A'
       ? [
           report('CO1', 'PO2'),
           report('CO2', 'PO12'),
@@ -148,6 +174,12 @@ export function validateOutcomes(config: unknown, track: string): string[] {
     } else if (!(Number(src.max) > 0)) {
       issues.push(`${key}: the marks it is out of must be above 0`);
     }
+    const also = o.also as ComponentOutcomeSource | null | undefined;
+    if (also) {
+      if (also.kind !== 'component') issues.push(`${key}: the added measure must be a component mark`);
+      else if (!(Number(also.max) > 0)) issues.push(`${key}: the added measure must be out of more than 0`);
+      else if (src?.kind === 'component' && src.component === also.component) issues.push(`${key}: the added measure repeats the main one`);
+    }
 
     if (!Array.isArray(o.pos) || o.pos.some((p) => !PO_KEYS.includes(p))) {
       issues.push(`${key}: unknown programme outcome`);
@@ -173,6 +205,7 @@ export function cleanOutcomes(config: CapstoneOutcomesConfig): CapstoneOutcomesC
         o.source.kind === 'rubric'
           ? { kind: 'rubric', component: o.source.component }
           : { kind: 'component', component: o.source.component, max: Number(o.source.max) },
+      ...(o.also ? { also: { kind: 'component' as const, component: o.also.component, max: Number(o.also.max) } } : {}),
       pos: [...new Set(o.pos)].sort((a, b) => PO_KEYS.indexOf(a) - PO_KEYS.indexOf(b)),
     })),
     thresholds: {

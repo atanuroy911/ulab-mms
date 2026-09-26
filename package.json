@@ -10,7 +10,7 @@
     "migrate": "node scripts/migrate.js",
     "cleanup:legacy": "node scripts/cleanup-legacy-collections.js",
     "fix:sparse-nulls": "node scripts/fix-sparse-unique-nulls.js",
-    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts && npx tsx scripts/test-grade-redaction.ts && npx tsx scripts/test-semester-name.ts && npx tsx scripts/test-search-features.ts && npx tsx scripts/test-marking-plan.ts && npx tsx scripts/test-course-file.ts && npx tsx scripts/test-journal-status.ts && npx tsx scripts/test-journal-sections.ts && npx tsx scripts/test-formula-blocks.ts && npx tsx scripts/test-scheme-layout.ts && npx tsx scripts/test-progression-rules.ts && npx tsx scripts/test-evaluator-rules.ts"
+    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts && npx tsx scripts/test-grade-redaction.ts && npx tsx scripts/test-semester-name.ts && npx tsx scripts/test-search-features.ts && npx tsx scripts/test-marking-plan.ts && npx tsx scripts/test-course-file.ts && npx tsx scripts/test-journal-status.ts && npx tsx scripts/test-journal-sections.ts && npx tsx scripts/test-formula-blocks.ts && npx tsx scripts/test-scheme-layout.ts && npx tsx scripts/test-progression-rules.ts && npx tsx scripts/test-evaluator-rules.ts && npx tsx scripts/test-track-c.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

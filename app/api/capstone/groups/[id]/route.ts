@@ -213,7 +213,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (isGroupGrader(actor, group)) {
         return NextResponse.json({ error: "You grade this group, so you can't choose which evaluators count - another coordinator has to" }, { status: 403 });
       }
-      const next = { presentation: group.chosenAggregate?.presentation || 'mean', report: group.chosenAggregate?.report || 'mean' };
+      const next = { presentation: group.chosenAggregate?.presentation || 'mean', report: group.chosenAggregate?.report || 'mean', poster: group.chosenAggregate?.poster || 'mean' };
       for (const component of CHOOSABLE_COMPONENTS) {
         const value = body.chosenAggregate[component];
         if (value === undefined) continue;
@@ -233,7 +233,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: "You grade this group, so you can't choose which evaluators count - another coordinator has to" }, { status: 403 });
       }
       const activeCount = group.evaluators.filter((e) => !e.unassignedAt).length;
-      const next = { presentation: group.evaluatorTopK?.presentation ?? null, report: group.evaluatorTopK?.report ?? null };
+      const next = { presentation: group.evaluatorTopK?.presentation ?? null, report: group.evaluatorTopK?.report ?? null, poster: group.evaluatorTopK?.poster ?? null };
       for (const component of CHOOSABLE_COMPONENTS) {
         const value = body.evaluatorTopK[component];
         if (value === undefined) continue;

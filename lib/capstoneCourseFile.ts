@@ -19,6 +19,7 @@ import { planFromGraph } from '@/lib/capstoneMarkingPlan';
 import {
   PO_KEYS,
   outcomeMax,
+  sourceMax,
   taggedCriteria,
   type CapstoneOutcome,
   type CapstoneOutcomesConfig,
@@ -123,7 +124,8 @@ export interface CourseFileData {
   columns: ComponentColumn[];
   totalMax: number;
   bands: Array<{ min: number; letter: string }>;
-  outcomes: Array<CapstoneOutcome & { max: number }>;
+  /** `max` is the CO's total; `sourceMax` its main measure alone (without `also`). */
+  outcomes: Array<CapstoneOutcome & { max: number; sourceMax: number }>;
   thresholds: CapstoneOutcomesConfig['thresholds'];
   /** POs at least one CO maps to, in PO order. */
   pos: string[];
@@ -229,11 +231,13 @@ export function buildCourseFileData(params: {
   const bands = [...((bandsNode?.data?.bands as Array<{ min: number; letter: string }>) || [])].sort((a, b) => b.min - a.min);
 
   // ── Outcomes ─────────────────────────────────────────────────────────────────────────
-  const outcomes = params.outcomes.outcomes.map((o) => ({ ...o, max: outcomeMax(o, track) }));
+  const outcomes = params.outcomes.outcomes.map((o) => ({ ...o, max: outcomeMax(o, track), sourceMax: sourceMax(o, track) }));
   const thresholds = params.outcomes.thresholds;
   for (const o of outcomes) {
-    if (o.source.kind === 'component' && !columnFor(o.source.component)) {
-      warnings.push(`${o.key} is measured from ${COMPONENT_LABELS[o.source.component] || o.source.component}, which this scheme has no column for - it is left blank.`);
+    for (const src of [o.source, o.also]) {
+      if (src?.kind === 'component' && !columnFor(src.component)) {
+        warnings.push(`${o.key} is measured from ${COMPONENT_LABELS[src.component] || src.component}, which this scheme has no column for - that part is left blank.`);
+      }
     }
   }
   const pos = PO_KEYS.filter((po) => outcomes.some((o) => o.pos.includes(po)));
@@ -308,22 +312,29 @@ export function buildCourseFileData(params: {
             ? idx.reduce((sum, i) => sum + (Number(scores[`c${i}`]) || 0), 0)
             : // Only a total was typed in (a paper sheet copied as one number): split it
               // across the COs in proportion to their share of the rubric.
-              round2(((s.rubricMax ? s.rawScore / s.rubricMax : 0) || 0) * o.max);
+              round2(((s.rubricMax ? s.rawScore / s.rubricMax : 0) || 0) * o.sourceMax);
         }
         return { graderId: s.submitterId, role: s.submitterRole, name: s.submitterName, values, estimated: !scores };
       });
     }
 
+    // A component's final mark scaled to `max`, e.g. poster 16.2/20 -> 16.2 of 20.
+    const scaledComponent = (src: { component: CapstoneMarkComponent; max: number }) => {
+      const col = columnFor(src.component);
+      const value = col ? components[col.nodeId] : null;
+      return col && value !== null && col.max > 0 ? (value / col.max) * src.max : null;
+    };
     const co: Record<string, number | null> = {};
     for (const o of outcomes) {
+      let main: number | null;
       if (o.source.kind === 'rubric') {
         const graders = coGraders[o.source.component] || [];
-        co[o.key] = graders.length ? round2(mean(graders.map((g) => g.values[o.key] ?? 0))) : null;
+        main = graders.length ? mean(graders.map((g) => g.values[o.key] ?? 0)) : null;
       } else {
-        const col = columnFor(o.source.component);
-        const value = col ? components[col.nodeId] : null;
-        co[o.key] = col && value !== null && col.max > 0 ? round2((value / col.max) * o.source.max) : null;
+        main = scaledComponent(o.source);
       }
+      const extra = o.also ? scaledComponent(o.also) : null;
+      co[o.key] = main === null && extra === null ? null : round2((main ?? 0) + (extra ?? 0));
     }
 
     const coPercent: Record<string, number> = {};

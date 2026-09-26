@@ -49,10 +49,10 @@ interface GroupDetail {
   members: Member[];
   supervisorId: { _id: string; name: string } | string;
   evaluators: EvaluatorRef[];
-  chosenEvaluators?: { presentation: string[]; report: string[] };
-  evaluatorTopK?: { presentation?: number | null; report?: number | null };
+  chosenEvaluators?: { presentation: string[]; report: string[]; poster?: string[] };
+  evaluatorTopK?: { presentation?: number | null; report?: number | null; poster?: number | null };
   /** Average ('mean', default) or best ('max') of the chosen evaluators, per component. */
-  chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max' };
+  chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max'; poster?: 'mean' | 'max' };
   reportUrl?: string | null;
   lastJournalReminderAt?: string | null;
   /** Who marks what, read from the track's active grading scheme (lib/capstoneMarkingPlan.ts). */
@@ -122,6 +122,11 @@ const CHOOSABLE_COMPONENTS = [
     key: 'presentation' as const,
     label: 'Presentation',
     hint: 'Evaluators who sat in on the group’s presentation.',
+  },
+  {
+    key: 'poster' as const,
+    label: 'Poster',
+    hint: 'Evaluators who marked the group’s poster (4098C).',
   },
   {
     key: 'report' as const,
@@ -231,14 +236,16 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
   // Chosen evaluator picker
   // Presentation and report panels are chosen independently - a group can be presented to
   // by one pair of evaluators and have its report read by another.
-  const [chosenEvaluators, setChosenEvaluators] = useState<{ presentation: string[]; report: string[] }>({
+  const [chosenEvaluators, setChosenEvaluators] = useState<{ presentation: string[]; report: string[]; poster: string[] }>({
     presentation: [],
     report: [],
+    poster: [],
   });
   const [savingChosen, setSavingChosen] = useState(false);
-  const [chosenAggregate, setChosenAggregate] = useState<{ presentation: 'mean' | 'max'; report: 'mean' | 'max' }>({
+  const [chosenAggregate, setChosenAggregate] = useState<{ presentation: 'mean' | 'max'; report: 'mean' | 'max'; poster: 'mean' | 'max' }>({
     presentation: 'mean',
     report: 'mean',
+    poster: 'mean',
   });
   // Adding an evaluator from the paper-sheet card (someone who sat in but wasn't assigned).
   const [staff, setStaff] = useState<Array<{ _id: string; name: string; email: string }>>([]);
@@ -310,10 +317,12 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
     setChosenEvaluators({
       presentation: groupData.chosenEvaluators?.presentation?.map(String) || [],
       report: groupData.chosenEvaluators?.report?.map(String) || [],
+      poster: groupData.chosenEvaluators?.poster?.map(String) || [],
     });
     setChosenAggregate({
       presentation: groupData.chosenAggregate?.presentation === 'max' ? 'max' : 'mean',
       report: groupData.chosenAggregate?.report === 'max' ? 'max' : 'mean',
+      poster: groupData.chosenAggregate?.poster === 'max' ? 'max' : 'mean',
     });
   };
 
@@ -1222,7 +1231,7 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
                         <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                         You {isSupervisor ? 'supervise' : 'evaluate'} this group, so another coordinator chooses whose marks count.
                       </p>
-                      {CHOOSABLE_COMPONENTS.map(({ key, label }) => {
+                      {CHOOSABLE_COMPONENTS.filter(({ key }) => plan.evaluator.some((t) => t.component === key)).map(({ key, label }) => {
                         const selected = chosenEvaluators[key];
                         const counted = activeEvaluators.filter((ev) => {
                           const evId = typeof ev.evaluatorId === 'object' ? ev.evaluatorId._id : String(ev.evaluatorId);

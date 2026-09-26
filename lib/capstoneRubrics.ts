@@ -9,8 +9,8 @@ export interface ReportCriterion {
 
 /**
  * Report rubrics, verbatim from public/templates/capstone/Assessment Rubric for Report
- * CSE4098A/B.docx. Order matches the c0..cN rubricScores keys the group page submits.
- * 4098C has no published rubric; it uses 4098B's, as the group page does.
+ * CSE4098A/B.docx and Assessment Rubric for CSE4098C & CSE499 Report.docx. Order matches the
+ * c0..cN rubricScores keys the group page submits.
  */
 const REPORT_4098A: ReportCriterion[] = [
   { label: 'Abstract', levels: ['In abstract the project goal, purpose, & accomplishments are unclear', 'In abstract the project goal, purpose, & accomplishments are moderately defined', 'In abstract the project goal & accomplishments are clear, appropriate and effective to the purpose'] },
@@ -43,10 +43,26 @@ const REPORT_4098B: ReportCriterion[] = [
   { label: 'References & Citations, Spelling, Grammar, Punctuation and Plagiarism', levels: ['Provides no supporting evidence and citations. Major lapses in grammar, spelling and punctuation and most of the contents are copied without any referencing', 'Provides little supporting evidence with citations. Some minor lapses in grammar, spelling and punctuations and some of the contents are copied without referencing', 'Provides all supporting evidence with proper citations. Minimal or no lapses in grammar, spelling and punctuations and all information are written in their own words or reference when required'] },
 ];
 
+const REPORT_4098C: ReportCriterion[] = [
+  { label: 'Abstract, Problem statement, Aims, Objective & Significance, Scope & Limitation', levels: ['The abstract, problem statement, Aims, Objective & Significance, Scope & Limitation are not clearly defined', 'The abstract, problem statement, Aims, Objective & Significance, Scope & Limitation are moderately defined', 'The abstract, problem statement, Aims, Objective & Significance, Scope & Limitation are clear and appropriate to the purpose'] },
+  { label: 'Literature Review & Analysis [CO1]', levels: ['Insufficient content to show that required topics are met', 'Covers most required topics', 'Covers all required topics'] },
+  { label: 'Performance Evaluation Criterion [CO1]', levels: ['Poorly identify the performance evaluation criterion associated with the problem domain and justify the relevance', 'Moderately identify the performance evaluation criterion associated with the problem domain and justify the relevance', 'Properly identify the performance evaluation criterion associated with the problem domain and justify the relevance'] },
+  { label: 'Project Management and Financial Activity [CO2]', levels: ['The student has poorly communicated the final functional and non-functional requirements, task distribution, and budgets without proper justification', 'The student has moderately communicated the final functional and non-functional requirements, task distribution, and budgets with a few proper justification', 'The student has clearly communicated the final functional and non-functional requirements, task distribution, and budgets with proper justification'] },
+  { label: 'Usage of Modern Tools [CO3]', levels: ['Unclear justification of the selection criterion for the adopted tools/techniques', 'Moderate justification of the selection criterion for the adopted tools/techniques', 'Proper justification of the selection criterion for the adopted tools/techniques'] },
+  { label: 'Implementation [CO4]', levels: ['Poorly implement the solution using appropriate technologies for the real-life complex engineering problem considering one/more issues associated with public health and safety, cultural, societal, and environmental concerns.', 'Moderately implement the solution using appropriate technologies for the real-life complex engineering problem considering one/more issues associated with public health and safety, cultural, societal, and environmental concerns.', 'Properly implement the solution using appropriate technologies for the real-life complex engineering problem considering one/more issues associated with public health and safety, cultural, societal, and environmental concerns.'] },
+  { label: 'Evaluate the solution [CO5]', levels: ['The experimental result or the performance of the developed system is barely shown', 'The experimental result or the performance of the developed system is shown but the organization is not effective in revealing important patterns, differences, or similarities', 'The experimental result or the performance of the developed system is shown and the organization is effective in revealing important patterns, differences, or similarities'] },
+  { label: 'Investigate the final result [CO5]', levels: ['Analysis and interpretation of the experimental results is not clearly defined', 'Analysis and interpretation of the experimental results is partially described by following a comparative study with the existing solutions', 'Analysis and interpretation of the experimental results is fully described by following a comparative study with the existing solutions'] },
+  { label: 'Societal, health, safety, legal and cultural aspects [CO6]', levels: ['Poorly identify one/more societal, health, safety, legal, and cultural issues related to the project and formulate the course of action to mitigate these concerns.', 'Moderately identify one/more societal, health, safety, legal, and cultural issues related to the project and formulate the course of action to mitigate these concerns.', 'Properly identify one/more societal, health, safety, legal, and cultural issues related to the project and formulate the course of action to mitigate these concerns.'] },
+  { label: 'Environment and sustainability [CO7]', levels: ['The impact of the project on the environment and sustainability is not clear', 'The impact of the project on the environment and sustainability has moderately demonstrated', 'The demonstration of the impact of the project on the environment and sustainability is good enough'] },
+  { label: 'Ethical and professional principles [CO8]', levels: ['The ethical and professional principle related to the project are unclear', 'The ethical and professional principle related to the project are moderately considered', 'The ethical and professional principle related to the project are explained excellently'] },
+  { label: 'Conclusion & Future Works', levels: ['Minimum acknowledgment of conclusions and topical outcomes.', 'Satisfactory acknowledgment of conclusions and topical outcomes.', 'Synthesizes arguments, perspectives, ideas, and information in proper ways.'] },
+  { label: 'References & Citations, Spelling, Grammar, Punctuation, and Plagiarism', levels: ['Provides no supporting evidence and citations. Major lapses in grammar, spelling, and punctuation, and most of the contents are copied without any referencing', 'Provides some supporting evidence with citations. Some minor lapses in grammar, spelling, and punctuation, and some of the contents are copied without referencing', 'Provides all supporting evidence with citations. Few lapses in grammar, spelling, and punctuation, and some contents are copied with referencing'] },
+];
+
 export const REPORT_RUBRICS: Record<'A' | 'B' | 'C', ReportCriterion[]> = {
   A: REPORT_4098A,
   B: REPORT_4098B,
-  C: REPORT_4098B,
+  C: REPORT_4098C,
 };
 
 /**

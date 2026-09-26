@@ -88,9 +88,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           projectTitle: g.projectTitle,
           chosenEvaluators: {
             presentation: (g.chosenEvaluators?.presentation || []).map(String),
+            poster: (g.chosenEvaluators?.poster || []).map(String),
             report: (g.chosenEvaluators?.report || []).map(String),
           },
-          evaluatorTopK: { presentation: g.evaluatorTopK?.presentation ?? null, report: g.evaluatorTopK?.report ?? null },
+          evaluatorTopK: { presentation: g.evaluatorTopK?.presentation ?? null, report: g.evaluatorTopK?.report ?? null, poster: g.evaluatorTopK?.poster ?? null },
           students: g.members
             .filter((m) => !m.removedAt)
             .map((m) => {

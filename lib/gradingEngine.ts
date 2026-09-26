@@ -571,13 +571,12 @@ export function evaluateScheme(graph: SchemeGraph, ctx: StudentContext): Evaluat
 
 /**
  * Report rubric maximum per track, = criteria count x 3 in the department's rubric docs.
- * 4098A has 11 criteria (33), 4098B has 14 (42).
- *
- * 4098C has no published rubric yet ("4098c grading is pending" in the source docs), so it
- * provisionally follows B, the other continuation course. This is a placeholder, not a
- * department decision - confirm before grading a real C cohort.
+ * 4098A has 11 criteria (33), 4098B has 14 (42), 4098C has 13 (39).
  */
-const REPORT_MAX: Record<'A' | 'B' | 'C', number> = { A: 33, B: 42, C: 42 };
+const REPORT_MAX: Record<'A' | 'B' | 'C', number> = { A: 33, B: 42, C: 39 };
+
+/** 4098C's poster is marked on a 12-mark sheet (CSE4098C_Summer2026.xlsx, "Poster"). */
+const POSTER_MAX = 12;
 
 /**
  * Top grade-band cutoff per track. A and B genuinely differ in the source gradebooks (98 vs
@@ -595,6 +594,7 @@ const A_PLUS_CUTOFF: Record<'A' | 'B' | 'C', number> = { A: 98, B: 95, C: 95 };
  * their final scale and go in raw.
  */
 export function defaultCseScheme(track: 'A' | 'B' | 'C' = 'A'): SchemeGraph {
+  if (track === 'C') return defaultCseSchemeC();
   const reportMax = REPORT_MAX[track];
   const aPlusCutoff = A_PLUS_CUTOFF[track];
 
@@ -694,6 +694,88 @@ export function defaultCseScheme(track: 'A' | 'B' | 'C' = 'A'): SchemeGraph {
     { id: 'e8', source: 'journal', target: 'total', targetHandle: 'journal' },
     { id: 'e9', source: 'total', target: 'bands', targetHandle: 'in' },
     { id: 'e10', source: 'bands', target: 'final', targetHandle: 'in' },
+  ];
+
+  return { nodes, edges };
+}
+
+/**
+ * CSE 4098C, as public/templates/capstone/CSE4098C_Summer2026.xlsx grades it:
+ *   Report 40%       - rubric /39, supervisor 60% + evaluator average 40%, each part rounded
+ *   Presentation 25% - rubric /45, each part put on 50 and rounded, blended 60/40, then x25/50
+ *   Poster 20%       - sheet /12, each part put on 50 and rounded, blended 60/40, then x20/50
+ *   Peer 5%, Weekly Journal 10%, as entered
+ * with the A+ band at 95. Poster evaluators are chosen per group like presentation's (all /
+ * top K / picked). The workbook averages poster evaluators over only part of its columns
+ * (AVERAGE(F:V) for evaluators in F:Y); here "all evaluators" means all of them.
+ */
+function defaultCseSchemeC(): SchemeGraph {
+  const reportMax = REPORT_MAX.C;
+  const src = (id: string, y: number, label: string, component: CapstoneMarkComponent, scope: GradingSubmitterScope, max?: number): IGradingNode => ({
+    id,
+    type: 'source',
+    position: { x: 0, y },
+    data: { label, component, scope, aggregate: 'mean', normalize: max !== undefined, ...(max !== undefined ? { rubricMaxOverride: max } : {}) },
+  });
+  // Supervisor and evaluators each put on a 50-mark scale and rounded, blended 60/40, then
+  // scaled to the component's weight - the workbook's Presentation and Poster sheets.
+  const onFifty = (weight: number) => `round(round(0.6 * round(50 * sup, 2) + 0.4 * round(50 * ev, 2), 2) * ${weight} / 50, 2)`;
+
+  const nodes: IGradingNode[] = [
+    src('report_sup', 0, 'Report — Supervisor', 'report', 'supervisor', reportMax),
+    src('report_eval', 130, 'Report — Chosen Evaluators', 'report', 'chosenEvaluator', reportMax),
+    {
+      id: 'report_blend',
+      type: 'formula',
+      position: { x: 300, y: 65 },
+      data: { label: 'Report (out of 40)', expression: 'round(0.6 * round(40 * sup, 2) + 0.4 * round(40 * ev, 2), 2)' },
+    },
+    src('pres_sup', 280, 'Presentation — Supervisor', 'presentation', 'supervisor', 45),
+    src('pres_eval', 410, 'Presentation — Chosen Evaluators', 'presentation', 'chosenEvaluator', 45),
+    { id: 'pres_blend', type: 'formula', position: { x: 300, y: 345 }, data: { label: 'Presentation (out of 25)', expression: onFifty(25) } },
+    src('poster_sup', 560, 'Poster — Supervisor', 'poster', 'supervisor', POSTER_MAX),
+    src('poster_eval', 690, 'Poster — Chosen Evaluators', 'poster', 'chosenEvaluator', POSTER_MAX),
+    { id: 'poster_blend', type: 'formula', position: { x: 300, y: 625 }, data: { label: 'Poster (out of 20)', expression: onFifty(20) } },
+    { ...src('peer', 800, 'Peer Mark (0-5)', 'peer', 'supervisor'), position: { x: 300, y: 800 } },
+    { ...src('journal', 920, 'Weekly Journal (0-10)', 'weeklyJournal', 'supervisor'), position: { x: 300, y: 920 } },
+    { id: 'total', type: 'sum', position: { x: 620, y: 460 }, data: { label: 'Total (out of 100)', weights: {} } },
+    {
+      id: 'bands',
+      type: 'gradeBands',
+      position: { x: 900, y: 460 },
+      data: {
+        label: 'Letter Grade',
+        bands: [
+          { min: A_PLUS_CUTOFF.C, letter: 'A+' },
+          { min: 85, letter: 'A' },
+          { min: 80, letter: 'A-' },
+          { min: 75, letter: 'B+' },
+          { min: 70, letter: 'B' },
+          { min: 65, letter: 'B-' },
+          { min: 60, letter: 'C+' },
+          { min: 55, letter: 'C' },
+          { min: 50, letter: 'D' },
+          { min: 0, letter: 'F' },
+        ],
+      },
+    },
+    { id: 'final', type: 'output', position: { x: 1180, y: 460 }, data: { label: 'Final Grade' } },
+  ];
+
+  const edges: IGradingEdge[] = [
+    { id: 'e1', source: 'report_sup', target: 'report_blend', targetHandle: 'sup' },
+    { id: 'e2', source: 'report_eval', target: 'report_blend', targetHandle: 'ev' },
+    { id: 'e3', source: 'pres_sup', target: 'pres_blend', targetHandle: 'sup' },
+    { id: 'e4', source: 'pres_eval', target: 'pres_blend', targetHandle: 'ev' },
+    { id: 'e5', source: 'poster_sup', target: 'poster_blend', targetHandle: 'sup' },
+    { id: 'e6', source: 'poster_eval', target: 'poster_blend', targetHandle: 'ev' },
+    { id: 'e7', source: 'report_blend', target: 'total', targetHandle: 'report' },
+    { id: 'e8', source: 'pres_blend', target: 'total', targetHandle: 'presentation' },
+    { id: 'e9', source: 'poster_blend', target: 'total', targetHandle: 'poster' },
+    { id: 'e10', source: 'peer', target: 'total', targetHandle: 'peer' },
+    { id: 'e11', source: 'journal', target: 'total', targetHandle: 'journal' },
+    { id: 'e12', source: 'total', target: 'bands', targetHandle: 'in' },
+    { id: 'e13', source: 'bands', target: 'final', targetHandle: 'in' },
   ];
 
   return { nodes, edges };

@@ -17,6 +17,7 @@ import {
   type CapstoneOutcome,
   type CapstoneOutcomesConfig,
   type OutcomeSource,
+  type ComponentOutcomeSource,
 } from '@/lib/capstoneOutcomes';
 
 /**
@@ -179,6 +180,58 @@ export function OutcomesDialog({
                   <p className="mt-1.5 text-xs text-muted-foreground">
                     {tagged.map((i) => labels[i].replace(/\s*\[CO[^\]]*\]/gi, '')).join(' · ')}
                   </p>
+                )}
+
+                {/* An optional second measure, added on top (e.g. 4098C CO5 = report criteria + poster). */}
+                {o.also ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">plus</span>
+                    <Select
+                      value={o.also.component}
+                      disabled={readOnly}
+                      onValueChange={(v) => update(idx, { also: { ...o.also!, component: v as ComponentOutcomeSource['component'] } })}
+                    >
+                      <SelectTrigger className="h-8 w-44">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MEASURES.filter((m) => m.source.kind === 'component').map((m) => (
+                          <SelectItem key={m.value} value={(m.source as ComponentOutcomeSource).component}>
+                            {m.label.replace(', scaled', '')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <label className="flex items-center gap-1.5 text-muted-foreground">
+                      scaled to
+                      <Input
+                        type="number"
+                        min={1}
+                        value={o.also.max}
+                        disabled={readOnly}
+                        onChange={(e) => update(idx, { also: { ...o.also!, max: Number(e.target.value) } })}
+                        className="h-8 w-20"
+                      />
+                    </label>
+                    <span className="text-muted-foreground">
+                      = <strong className="text-foreground">out of {outcomeMax(o, track)}</strong> in total
+                    </span>
+                    {!readOnly && (
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => update(idx, { also: null })}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  !readOnly && (
+                    <button
+                      type="button"
+                      className="mt-1.5 text-xs text-primary hover:underline"
+                      onClick={() => update(idx, { also: { kind: 'component', component: 'poster', max: 10 } })}
+                    >
+                      + Add another measure (e.g. the poster)
+                    </button>
+                  )
                 )}
 
                 <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label={`POs for ${o.key}`}>

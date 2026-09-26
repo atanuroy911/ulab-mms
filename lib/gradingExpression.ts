@@ -1,3 +1,5 @@
+import { excelRound } from './excelRound';
+
 /**
  * A tiny, sandboxed arithmetic expression evaluator for grading `formula` nodes.
  *
@@ -31,10 +33,8 @@ const FUNCTIONS: Record<string, { arity: number | 'variadic'; fn: (...args: numb
   // existing gradebooks use everywhere.
   round: {
     arity: 'variadic',
-    fn: (a, dp = 0) => {
-      const f = Math.pow(10, dp);
-      return Math.round(a * f) / f;
-    },
+    // Halves as Excel rounds them (see excelRound).
+    fn: (a, dp = 0) => excelRound(a, dp),
   },
   clamp: { arity: 3, fn: (x, lo, hi) => Math.min(Math.max(x, lo), hi) },
   // Non-zero is truthy, mirroring the spreadsheet IF() these schemes are transcribed from.

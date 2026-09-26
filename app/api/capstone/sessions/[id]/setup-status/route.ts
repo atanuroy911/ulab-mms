@@ -70,8 +70,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const active = g.evaluators.filter((e) => !e.unassignedAt).length;
       if (active <= MIN_CHOSEN_EVALUATORS) return false;
       // Top K is a decision too.
-      const decided = (c: 'report' | 'presentation') => (g.chosenEvaluators?.[c]?.length || 0) > 0 || !!g.evaluatorTopK?.[c];
-      return !decided('report') || !decided('presentation');
+      const decided = (c: 'report' | 'presentation' | 'poster') => (g.chosenEvaluators?.[c]?.length || 0) > 0 || !!g.evaluatorTopK?.[c];
+      // Track C (4098C) also has a poster panel.
+      return !decided('report') || !decided('presentation') || (g.track === 'C' && !decided('poster'));
     });
 
     const status = session.status;

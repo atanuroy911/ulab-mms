@@ -19,10 +19,14 @@ export interface ICapstoneGroupEvaluator {
   unassignedAt?: Date | null;
 }
 
-/** Components whose evaluator panel the coordinator narrows down before final grading. */
-export type CapstoneChoosableComponent = 'presentation' | 'report';
+/**
+ * Components whose evaluator panel the coordinator decides on before final grading. Poster is
+ * 4098C's (Track C); on tracks whose scheme has no evaluator poster marks it simply never
+ * comes up.
+ */
+export type CapstoneChoosableComponent = 'presentation' | 'report' | 'poster';
 
-export const CHOOSABLE_COMPONENTS: CapstoneChoosableComponent[] = ['presentation', 'report'];
+export const CHOOSABLE_COMPONENTS: CapstoneChoosableComponent[] = ['presentation', 'poster', 'report'];
 
 /**
  * Minimum evaluators counted per component once a choice is made (there is no maximum - any
@@ -84,6 +88,7 @@ export function evaluatorRule(
 export interface ICapstoneChosenEvaluators {
   presentation: mongoose.Types.ObjectId[];
   report: mongoose.Types.ObjectId[];
+  poster?: mongoose.Types.ObjectId[];
 }
 
 export interface ICapstoneGroup extends Document {
@@ -110,9 +115,9 @@ export interface ICapstoneGroup extends Document {
    * Per component: combine the chosen evaluators' marks by average ('mean', the default) or
    * best ('max'). Overrides the grading scheme block's aggregate for chosen-evaluator blocks.
    */
-  chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max' };
+  chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max'; poster?: 'mean' | 'max' };
   /** Per component: count each student's K highest evaluator marks (see evaluatorRule). */
-  evaluatorTopK?: { presentation?: number | null; report?: number | null };
+  evaluatorTopK?: { presentation?: number | null; report?: number | null; poster?: number | null };
   /** Google Drive / external link for the group's submitted report. */
   reportUrl?: string | null;
   /** When the supervisor/coordinator last emailed this group a journal reminder. */
@@ -212,6 +217,7 @@ const CapstoneGroupSchema: Schema = new Schema(
       type: new Schema(
         {
           presentation: { type: [Schema.Types.ObjectId], ref: 'User', default: [] },
+          poster: { type: [Schema.Types.ObjectId], ref: 'User', default: [] },
           report: { type: [Schema.Types.ObjectId], ref: 'User', default: [] },
         },
         { _id: false }
@@ -222,6 +228,7 @@ const CapstoneGroupSchema: Schema = new Schema(
       type: new Schema(
         {
           presentation: { type: String, enum: ['mean', 'max'], default: 'mean' },
+          poster: { type: String, enum: ['mean', 'max'], default: 'mean' },
           report: { type: String, enum: ['mean', 'max'], default: 'mean' },
         },
         { _id: false }
@@ -232,6 +239,7 @@ const CapstoneGroupSchema: Schema = new Schema(
       type: new Schema(
         {
           presentation: { type: Number, min: 1, default: null },
+          poster: { type: Number, min: 1, default: null },
           report: { type: Number, min: 1, default: null },
         },
         { _id: false }

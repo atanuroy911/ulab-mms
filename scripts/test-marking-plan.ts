@@ -57,7 +57,7 @@ const allEval = planFromGraph(
   'A'
 );
 check('allEvaluator scope -> evaluator task', components(allEval.evaluator), ['poster']);
-check('poster default scale is 100', allEval.evaluator[0]?.max, 100);
+check('poster default scale is 12 (the 4098C poster sheet)', allEval.evaluator[0]?.max, 12);
 
 // A rubric component ignores a stray override - its rubric defines the scale.
 const override = planFromGraph(

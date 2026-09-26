@@ -195,7 +195,7 @@ function coEvaluationSheet(data: CourseFileData, meta: CourseFileMeta, component
     .map((o) => {
       const labels = rubricLabels(component, data.track);
       const idx = taggedCriteria(component, data.track, o.key);
-      return `<div><strong>${esc(o.key)}</strong> (out of ${fmt(o.max)}): ${idx.map((i) => esc(labels[i].replace(/\s*\[CO[^\]]*\]/gi, ''))).join(', ')}</div>`;
+      return `<div><strong>${esc(o.key)}</strong> (out of ${fmt(o.sourceMax)}): ${idx.map((i) => esc(labels[i].replace(/\s*\[CO[^\]]*\]/gi, ''))).join(', ')}</div>`;
     })
     .join('');
 
@@ -206,7 +206,7 @@ function coEvaluationSheet(data: CourseFileData, meta: CourseFileMeta, component
         <tr><th rowspan="2">Sl</th><th rowspan="2">Student ID</th><th rowspan="2">Name</th>
           ${slotLabels.map((l) => `<th colspan="${cos.length}" class="group-start">${esc(l)}</th>`).join('')}
           <th colspan="${cos.length}" class="group-start final">Final (average)</th><th rowspan="2">Graders</th></tr>
-        <tr>${[...slotLabels, 'Final'].map(() => cos.map((o, ci) => `<th class="${ci === 0 ? 'group-start' : ''}">${esc(o.key)}<div class="sub">/${fmt(o.max)}</div></th>`).join('')).join('')}</tr>
+        <tr>${[...slotLabels, 'Final'].map(() => cos.map((o, ci) => `<th class="${ci === 0 ? 'group-start' : ''}">${esc(o.key)}<div class="sub">/${fmt(o.sourceMax)}</div></th>`).join('')).join('')}</tr>
       </thead>
       <tbody>${body}</tbody>
     </table>
@@ -220,15 +220,18 @@ function coEvaluationSheet(data: CourseFileData, meta: CourseFileMeta, component
 
 // ── CO-PO attainment ──────────────────────────────────────────────────────────────────────
 
-function measuredBy(o: CourseFileData['outcomes'][number]) {
-  return o.source.kind === 'rubric'
-    ? `${COMPONENT_LABELS[o.source.component]} rubric`
-    : `${COMPONENT_LABELS[o.source.component] || o.source.component} mark`;
+function itemOf(src: CourseFileData['outcomes'][number]['source']) {
+  return src.kind === 'rubric' ? `${COMPONENT_LABELS[src.component]} rubric` : `${COMPONENT_LABELS[src.component] || src.component} mark`;
+}
+
+/** The assessment items a CO is measured by, with the marks each contributes. */
+function itemsOf(o: CourseFileData['outcomes'][number]): Array<[string, number]> {
+  return [[itemOf(o.source), o.sourceMax] as [string, number], ...(o.also ? [[itemOf(o.also), o.also.max] as [string, number]] : [])];
 }
 
 function attainmentSheet(data: CourseFileData, meta: CourseFileMeta) {
   const { outcomes, pos, thresholds } = data;
-  const items = [...new Set(outcomes.map(measuredBy))];
+  const items = [...new Set(outcomes.flatMap((o) => itemsOf(o).map(([item]) => item)))];
 
   const coRows = data.rows
     .map(
@@ -252,7 +255,7 @@ function attainmentSheet(data: CourseFileData, meta: CourseFileMeta) {
         <table class="grid narrow">
           <thead><tr><th>Assessment item</th>${outcomes.map((o) => `<th>${esc(o.key)}</th>`).join('')}</tr></thead>
           <tbody>
-            ${items.map((item) => `<tr><td class="left">${esc(item)}</td>${outcomes.map((o) => `<td>${measuredBy(o) === item ? fmt(o.max) : ''}</td>`).join('')}</tr>`).join('')}
+            ${items.map((item) => `<tr><td class="left">${esc(item)}</td>${outcomes.map((o) => `<td>${fmt(itemsOf(o).find(([i]) => i === item)?.[1] ?? null)}</td>`).join('')}</tr>`).join('')}
             <tr class="strong"><td class="left">Total</td>${outcomes.map((o) => `<td>${fmt(o.max)}</td>`).join('')}</tr>
           </tbody>
         </table>
@@ -306,7 +309,7 @@ function cqiSheet(data: CourseFileData, meta: CourseFileMeta) {
         ${data.coSummary
           .map((s) => {
             const o = data.outcomes.find((x) => x.key === s.key)!;
-            return `<tr><td>${esc(s.key)}${o.description ? `<div class="sub left">${esc(o.description)}</div>` : ''}</td><td>${esc(measuredBy(o))} (/${fmt(o.max)})</td><td class="left">${esc(criteria)}</td><td>${s.attainedCount} / ${data.rows.length}</td><td class="strong">${pct(s.ratio, 1)}</td><td class="${s.meetsTarget ? 'ok-text' : 'no-text'}">${s.meetsTarget ? 'Achieved' : 'Not achieved'}</td></tr>`;
+            return `<tr><td>${esc(s.key)}${o.description ? `<div class="sub left">${esc(o.description)}</div>` : ''}</td><td>${esc(itemsOf(o).map(([i]) => i).join(' + '))} (/${fmt(o.max)})</td><td class="left">${esc(criteria)}</td><td>${s.attainedCount} / ${data.rows.length}</td><td class="strong">${pct(s.ratio, 1)}</td><td class="${s.meetsTarget ? 'ok-text' : 'no-text'}">${s.meetsTarget ? 'Achieved' : 'Not achieved'}</td></tr>`;
           })
           .join('')}
       </tbody>
@@ -345,9 +348,10 @@ function schemeSheet(data: CourseFileData, meta: CourseFileMeta) {
           <tbody>${data.outcomes
             .map((o) => {
               const how =
-                o.source.kind === 'rubric'
+                (o.source.kind === 'rubric'
                   ? `${COMPONENT_LABELS[o.source.component]} rubric criteria tagged [${o.key}], averaged over the supervisor and counted evaluators`
-                  : `${COMPONENT_LABELS[o.source.component] || o.source.component} mark scaled to ${fmt(o.source.max)}`;
+                  : `${COMPONENT_LABELS[o.source.component] || o.source.component} mark scaled to ${fmt(o.source.max)}`) +
+                (o.also ? `, plus the ${(COMPONENT_LABELS[o.also.component] || o.also.component).toLowerCase()} mark scaled to ${fmt(o.also.max)}` : '');
               return `<tr><td>${esc(o.key)}</td><td class="left">${esc(o.description || '')}</td><td class="left">${esc(how)}</td><td>${fmt(o.max)}</td><td>${esc(o.pos.join(', '))}</td></tr>`;
             })
             .join('')}</tbody>

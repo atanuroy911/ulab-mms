@@ -91,7 +91,7 @@ const member: MemberGrade = {
 };
 const group: GroupGrades = {
   groupId: 'g1', track: 'A', groupNumber: 1, projectTitle: 'Smart Farming', supervisorName: 'Dr. Mahmudul Hasan',
-  schemeName: 'CSE', schemeVersion: 1, componentNodeIds: [], chosenAggregate: {}, evaluatorRules: { report: { mode: 'pick', k: null, how: 'mean' }, presentation: { mode: 'pick', k: null, how: 'mean' } }, members: [member],
+  schemeName: 'CSE', schemeVersion: 1, componentNodeIds: [], chosenAggregate: {}, evaluatorRules: { report: { mode: 'pick', k: null, how: 'mean' }, presentation: { mode: 'pick', k: null, how: 'mean' }, poster: { mode: 'all', k: null, how: 'mean' } }, members: [member],
 };
 
 const file = buildCourseFileData({ track: 'A', graph, outcomes: outA, groups: [group] });

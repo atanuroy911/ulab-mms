@@ -1,3 +1,5 @@
+import { excelRound } from './excelRound';
+
 // Plain-language math blocks for grading schemes (node type `op`). Each block does one small
 // thing a coordinator can read as a sentence - "Take 60% of", "Round to 2 places", "Cap at
 // 45" - so a scheme can be built without writing a formula. Client-safe: the engine, the
@@ -47,10 +49,8 @@ export interface BlockDef {
   evaluate: (ports: Record<string, number>, all: number[], p: Record<string, number>) => number;
 }
 
-const roundTo = (x: number, places: number) => {
-  const f = Math.pow(10, places);
-  return Math.round(x * f) / f;
-};
+// The same rounding as round() in a formula: Excel's, halves included.
+const roundTo = (x: number, places: number) => excelRound(x, places);
 const fmt = (n: number) => String(Math.round(n * 10000) / 10000);
 const safeDiv = (a: number, b: number) => (b === 0 ? 0 : a / b);
 

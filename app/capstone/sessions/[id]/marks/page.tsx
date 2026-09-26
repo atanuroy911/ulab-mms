@@ -31,8 +31,8 @@ interface Group {
   track: string;
   groupNumber: number;
   projectTitle: string;
-  chosenEvaluators: { presentation: string[]; report: string[] };
-  evaluatorTopK?: { presentation: number | null; report: number | null };
+  chosenEvaluators: { presentation: string[]; report: string[]; poster: string[] };
+  evaluatorTopK?: { presentation: number | null; report: number | null; poster: number | null };
   students: { id: string; name: string; studentId: string }[];
   graders: Grader[];
 }
@@ -141,7 +141,7 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
   const counts = (g: Group, gr: Grader) => {
     if (!gr.current) return false;
     if (gr.role === 'supervisor') return true;
-    if (component !== 'presentation' && component !== 'report') return true;
+    if (component !== 'presentation' && component !== 'report' && component !== 'poster') return true;
     // Top K: every evaluator's marks are in the running (each student's K highest count).
     if (g.evaluatorTopK?.[component]) return true;
     const chosen = g.chosenEvaluators[component];
@@ -398,7 +398,7 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
                                     {grader.role === 'supervisor' ? 'Supervisor' : 'Evaluator'} · /{req.max}
                                     {!grader.current ? (
                                       <span className="rounded bg-muted px-1">left group</span>
-                                    ) : counted && grader.role === 'evaluator' && (component === 'presentation' || component === 'report') && g.evaluatorTopK?.[component] ? (
+                                    ) : counted && grader.role === 'evaluator' && (component === 'presentation' || component === 'report' || component === 'poster') && g.evaluatorTopK?.[component] ? (
                                       <span className="inline-flex items-center gap-0.5 text-sky-700 dark:text-sky-300" title={`Each student's ${g.evaluatorTopK[component]} highest evaluator marks count`}>
                                         <UserCheck className="h-3 w-3" /> top {g.evaluatorTopK[component]}
                                       </span>
