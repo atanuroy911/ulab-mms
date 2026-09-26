@@ -1,9 +1,9 @@
-import CapstoneGroup, { countedEvaluators } from '@/models/CapstoneGroup';
+import CapstoneGroup, { evaluatorRule, type EvaluatorRuleMode } from '@/models/CapstoneGroup';
 import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
 import StudentAccount from '@/models/StudentAccount';
 import GradingScheme from '@/models/GradingScheme';
 import User from '@/models/User';
-import { evaluateScheme, validateScheme, componentNodeIds } from '@/lib/gradingEngine';
+import { evaluateScheme, validateScheme, componentNodeIds, isCountedSupervisorMark, topKMarks } from '@/lib/gradingEngine';
 import type { StudentContext, MarkInput, SchemeGraph, ValidationIssue } from '@/lib/gradingEngine';
 import type { CapstoneMarkComponent } from '@/models/CapstoneMarkSubmission';
 
@@ -74,7 +74,19 @@ export interface GroupGrades {
   componentNodeIds: string[];
   /** How the coordinator combined this group's counted evaluators ('mean' when unset). */
   chosenAggregate: { report?: 'mean' | 'max'; presentation?: 'mean' | 'max' };
+  /** Which evaluators count, per component (see evaluatorRule in models/CapstoneGroup.ts). */
+  evaluatorRules: Record<'report' | 'presentation', { mode: EvaluatorRuleMode; k: number | null; how: 'mean' | 'max' }>;
   members: MemberGrade[];
+}
+
+type Choosable = 'report' | 'presentation';
+/**
+ * An unsaved evaluator choice for one group, to preview its grades before saving. Only the
+ * components given are replaced; the rest stay as saved.
+ */
+export interface EvaluatorChoiceOverride {
+  groupId: string;
+  rules: Partial<Record<Choosable, { chosen?: string[]; how?: 'mean' | 'max'; topK?: number | null }>>;
 }
 
 export interface SessionGrades {
@@ -99,7 +111,8 @@ interface SessionLike {
  */
 export async function computeSessionGrades(
   session: SessionLike,
-  groupFilter: Record<string, unknown> = {}
+  groupFilter: Record<string, unknown> = {},
+  override?: EvaluatorChoiceOverride
 ): Promise<SessionGrades> {
   const sessionId = String(session._id);
 
@@ -231,8 +244,17 @@ export async function computeSessionGrades(
     // The coordinator's choice, or every evaluator when there are too few to choose between -
     // previously a group with one or two evaluators and no explicit choice counted none of them.
     const activeEvaluatorIds = group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId));
-    const chosenReport = countedEvaluators(group.chosenEvaluators?.report, activeEvaluatorIds);
-    const chosenPresentation = countedEvaluators(group.chosenEvaluators?.presentation, activeEvaluatorIds);
+    const own = override && override.groupId === String(group._id) ? override.rules : {};
+    const saved = (c: Choosable) => ({
+      chosen: own[c]?.chosen ?? group.chosenEvaluators?.[c],
+      how: own[c]?.how ?? group.chosenAggregate?.[c],
+      topK: own[c] && 'topK' in own[c]! ? own[c]!.topK : group.evaluatorTopK?.[c],
+    });
+    const rules = { report: evaluatorRule(saved('report'), activeEvaluatorIds), presentation: evaluatorRule(saved('presentation'), activeEvaluatorIds) };
+    const chosenReport = rules.report.counted;
+    const chosenPresentation = rules.presentation.counted;
+    // As saved (undefined = the scheme block's own setting), unless previewing a change.
+    const aggregateFor = (c: Choosable) => (own[c]?.how ?? group.chosenAggregate?.[c]) as 'mean' | 'max' | undefined;
 
     const members: MemberGrade[] = group.members
       .filter((member) => !member.removedAt)
@@ -245,10 +267,26 @@ export async function computeSessionGrades(
         // present but excluded, not omit it.
         const submissionRows = (rawByStudent.get(studentAccountId) || []).map((sub) => {
           const submitterId = String(sub.submitterId);
-          let counted = sub.submitterRole === 'supervisor';
+          let counted =
+            sub.submitterRole === 'supervisor' &&
+            isCountedSupervisorMark(
+              { component: sub.component, submitterId, submitterRole: 'supervisor', rawScore: sub.rawScore, rubricMax: sub.rubricMax ?? null },
+              { marks: marksByStudent.get(studentAccountId) || [], supervisorId: String(group.supervisorId) }
+            );
           if (sub.submitterRole === 'evaluator') {
-            if (sub.component === 'report') counted = chosenReport.includes(submitterId);
-            else if (sub.component === 'presentation') counted = chosenPresentation.includes(submitterId);
+            if (sub.component === 'report' || sub.component === 'presentation') {
+              const rule = rules[sub.component];
+              counted = rule.counted.includes(submitterId);
+              // Top K: only this student's K highest (the same pick the grade uses).
+              if (counted && rule.mode === 'topK' && rule.k) {
+                const pool = (marksByStudent.get(studentAccountId) || []).filter(
+                  (m) => m.component === sub.component && m.submitterRole === 'evaluator' && rule.counted.includes(String(m.submitterId))
+                );
+                counted = topKMarks(pool, rule.k).some((m) => String(m.submitterId) === submitterId);
+              }
+            }
+            // Other components are read from every evaluator still on the group.
+            else counted = activeEvaluatorIds.includes(submitterId);
           }
           return {
             component: sub.component,
@@ -281,13 +319,15 @@ export async function computeSessionGrades(
 
         const ctx: StudentContext = {
           studentAccountId,
-          marks: marksByStudent.get(studentAccountId) || [],
+          // An unassigned evaluator's marks are kept on record but never graded - the same
+          // rule countedEvaluators applies to the chosen ones.
+          marks: (marksByStudent.get(studentAccountId) || []).filter(
+            (m) => m.submitterRole !== 'evaluator' || activeEvaluatorIds.includes(String(m.submitterId))
+          ),
           supervisorId: String(group.supervisorId),
           chosenEvaluators: { report: chosenReport, presentation: chosenPresentation },
-          chosenAggregate: {
-            report: group.chosenAggregate?.report,
-            presentation: group.chosenAggregate?.presentation,
-          },
+          chosenAggregate: { report: aggregateFor('report'), presentation: aggregateFor('presentation') },
+          evaluatorTopK: { report: rules.report.k, presentation: rules.presentation.k },
         };
 
         try {
@@ -314,9 +354,14 @@ export async function computeSessionGrades(
       schemeName: resolved?.name ?? null,
       schemeVersion: resolved?.version ?? null,
       componentNodeIds: resolved?.componentNodeIds ?? [],
+      // Top K always averages its K marks.
       chosenAggregate: {
-        report: group.chosenAggregate?.report,
-        presentation: group.chosenAggregate?.presentation,
+        report: rules.report.mode === 'topK' ? 'mean' : aggregateFor('report'),
+        presentation: rules.presentation.mode === 'topK' ? 'mean' : aggregateFor('presentation'),
+      },
+      evaluatorRules: {
+        report: { mode: rules.report.mode, k: rules.report.k, how: rules.report.how },
+        presentation: { mode: rules.presentation.mode, k: rules.presentation.k, how: rules.presentation.how },
       },
       members,
     };

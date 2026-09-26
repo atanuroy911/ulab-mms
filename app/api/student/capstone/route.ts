@@ -34,10 +34,14 @@ export async function GET(request: NextRequest) {
     const results = [];
     for (const group of groups) {
       const capstoneSession = group.sessionId as any;
+      // By session, not group: a student who moved groups keeps the weeks they already wrote
+      // (the journal is unique per session + student + week).
       const entries = await WeeklyJournalEntry.find({
-        groupId: group._id,
+        sessionId: capstoneSession?._id,
         studentAccountId,
-      }).sort({ weekNumber: 1 });
+      })
+        .select('weekNumber workDone submittedAt supervisorComment supervisorReviewedAt reopenedAt updatedAt')
+        .sort({ weekNumber: 1 });
 
       results.push({
         group,

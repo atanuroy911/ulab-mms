@@ -11,8 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Trash2, Plus, Info, Users, ExternalLink } from 'lucide-react';
-import { inputName } from './nodes';
+import { Trash2, Plus, Info, Users, ExternalLink, Blocks, FunctionSquare } from 'lucide-react';
+import { BLOCK_BY_OP, blockParams } from '@/lib/gradingBlocks';
+import { inputName, portLabel } from './nodes';
 
 /**
  * Side panel for editing the selected node. Kept out of the node renderers themselves so
@@ -63,6 +64,10 @@ interface Props {
   onInsertVariable?: (name: string) => void;
   /** Where to send the user to pick which evaluators actually count, per group. */
   groupsHref?: string;
+  /** Formula block: preview turning it into plain blocks. */
+  onConvertToBlocks?: (nodeId: string) => void;
+  /** Math block: preview collapsing it (and what feeds only it) into one formula. */
+  onConvertToFormula?: (nodeId: string) => void;
 }
 
 export function NodeInspector({
@@ -75,12 +80,14 @@ export function NodeInspector({
   onRenameInput,
   onInsertVariable,
   groupsHref,
+  onConvertToBlocks,
+  onConvertToFormula,
 }: Props) {
   if (!node) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center">
         <p className="text-sm text-muted-foreground">
-          Select a block on the canvas to edit it, or drag a new one in from the palette above.
+          Select a block on the canvas to edit it, or add one from the block library.
         </p>
       </div>
     );
@@ -138,9 +145,10 @@ export function NodeInspector({
                       {handle}
                     </button>
                     <span className="truncate text-[11px] text-muted-foreground">
-                      from {sourceLabels[edge.source] || edge.source}
+                      {portLabel(node.type, data, handle) ? `${portLabel(node.type, data, handle)}: ` : 'from '}
+                      {sourceLabels[edge.source] || edge.source}
                     </span>
-                    {!readOnly && onRenameInput && (
+                    {!readOnly && onRenameInput && node.type !== 'op' && (
                       <button
                         type="button"
                         onClick={() => onRenameInput(edge.id)}
@@ -310,6 +318,56 @@ export function NodeInspector({
           </>
         )}
 
+        {node.type === 'op' && BLOCK_BY_OP[data.op] && (() => {
+          const def = BLOCK_BY_OP[data.op];
+          const params = blockParams(def, data);
+          return (
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-primary/5 px-3 py-2">
+                <p className="text-sm font-semibold">{def.sentence(params)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{def.description}</p>
+              </div>
+              {def.params.map((p) => (
+                <div key={p.key} className="space-y-1.5">
+                  <Label htmlFor={`param-${p.key}`}>{p.label}</Label>
+                  <Input
+                    id={`param-${p.key}`}
+                    type="number"
+                    step={p.integer ? 1 : 'any'}
+                    min={p.min}
+                    value={data[p.key] ?? p.default}
+                    disabled={readOnly}
+                    onChange={(e) => set({ [p.key]: e.target.value === '' ? '' : Number(e.target.value) })}
+                  />
+                  {p.hint && <p className="text-[11px] text-muted-foreground">{p.hint}</p>}
+                </div>
+              ))}
+              {def.inputs === 'many' ? (
+                <p className="text-[11px] text-muted-foreground">Connect as many values as you like to its left edge.</p>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">Inputs</p>
+                  {def.inputs.map((port) => {
+                    const edge = incomingEdges.find((e) => inputName(e) === port.id);
+                    return (
+                      <p key={port.id} className="text-[11px] text-muted-foreground">
+                        <span className="font-medium text-foreground">{port.label}:</span>{' '}
+                        {edge ? sourceLabels[edge.source] || edge.source : <span className="text-amber-600">not connected yet</span>}
+                      </p>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {!readOnly && onConvertToFormula && ['op', 'constant', 'scale', 'sum'].includes(node.type || '') && (
+          <Button variant="outline" size="sm" className="w-full" onClick={() => onConvertToFormula(node.id)}>
+            <FunctionSquare className="mr-1.5 h-4 w-4" /> Turn into a formula…
+          </Button>
+        )}
+
         {node.type === 'constant' && (
           <div className="space-y-1.5">
             <Label htmlFor="const-value">Value</Label>
@@ -355,6 +413,11 @@ export function NodeInspector({
               Use the input names listed above as variables. Available functions: min, max,
               round, floor, ceil, abs, sqrt, clamp, if.
             </p>
+            {!readOnly && onConvertToBlocks && (
+              <Button variant="outline" size="sm" className="mt-1 w-full" onClick={() => onConvertToBlocks(node.id)}>
+                <Blocks className="mr-1.5 h-4 w-4" /> Turn into blocks…
+              </Button>
+            )}
           </div>
         )}
 

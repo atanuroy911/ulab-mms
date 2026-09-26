@@ -1,12 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
+import { isRunning } from '@/lib/capstoneStatus';
 import CapstoneMarkSubmission, { CapstoneMarkComponent } from '@/models/CapstoneMarkSubmission';
 import { getCapstoneActor, isGroupGrader, isGroupSupervisor, canManageGroup } from '@/lib/capstoneAuth';
 import { REPORT_RUBRICS } from '@/lib/capstoneRubrics';
 import { getMarkingPlan } from '@/lib/capstoneMarkingPlan';
 import { GRADING_COMPONENTS } from '@/lib/gradingEngine';
+import { syncJournalCompletion } from '@/lib/capstoneJournalWorkflow';
 
 // Scales and "who marks what" come from the track's grading scheme (lib/capstoneMarkingPlan.ts),
 // falling back to the department default (report 33/42, presentation 45, peer 5, journal 10).
@@ -25,12 +27,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     await dbConnect();
 
-    const group = await CapstoneGroup.findById(id);
+    const requestedSubmitter = request.nextUrl.searchParams.get('submitterId');
+    // The common case - a grader's own marks - is fetched alongside the group (one round trip
+    // instead of two) and only returned after the permission check below.
+    const [group, ownMarks] = await Promise.all([
+      CapstoneGroup.findById(id),
+      requestedSubmitter ? null : CapstoneMarkSubmission.find({ groupId: id, submitterId: actor.userId }),
+    ]);
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
     // ?submitterId=<grader>: a coordinator loading one grader's marks to enter or correct them
     // from the paper sheets. Coordinators don't grade, so there's no anchoring concern.
-    const requestedSubmitter = request.nextUrl.searchParams.get('submitterId');
     if (requestedSubmitter) {
       if (!(await canManageGroup(actor, group))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -43,8 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const submissions = await CapstoneMarkSubmission.find({ groupId: id, submitterId: actor.userId });
-    return NextResponse.json(submissions);
+    return NextResponse.json(ownMarks);
   } catch (error) {
     console.error('GET /api/capstone/groups/[id]/marks error:', error);
     return NextResponse.json({ error: 'Failed to fetch marks' }, { status: 500 });
@@ -102,22 +108,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       supervisor = isGroupSupervisor(actor, group);
     }
 
-    // Marks must not be writable once the session has moved past 'open' - unlike the
-    // journal/title/member-add routes, this route previously never checked session status at
-    // all, so grades stayed editable after a session was moved to grading/closed.
-    // A coordinator entering paper sheets may also do so during 'grading', since the sheets
-    // are usually collected after the presentations; never once the session is closed.
+    // Marks can be given (and paper sheets entered) while the session is Running; once it is
+    // Finished the results are published and marks are read-only.
     const capstoneSession = await CapstoneSession.findById(group.sessionId).select('status');
-    const writable = onBehalfOf ? ['open', 'grading'] : ['open'];
-    if (!capstoneSession || !writable.includes(capstoneSession.status)) {
-      return NextResponse.json(
-        {
-          error: onBehalfOf
-            ? 'Marks can only be entered while the session is open or in grading'
-            : 'Marks can only be submitted while the session is open',
-        },
-        { status: 409 }
-      );
+    if (!capstoneSession || !isRunning(capstoneSession.status)) {
+      return NextResponse.json({ error: 'Marks can only be given while the session is running' }, { status: 409 });
     }
 
     // Who marks what comes from the track's active grading scheme: a supervisor gives only
@@ -138,6 +133,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const max = requirement.max;
 
     const saved = [];
+    // Marks that can't be recorded are reported back rather than skipped silently, so the
+    // page never says "saved" about a mark it didn't keep.
+    const rejected: Array<{ studentAccountId: string; reason: string }> = [];
     for (const entry of marks) {
       const studentAccountId = String(entry.studentAccountId || '');
       // `Number(null)` and `Number('')` are both 0, which would silently turn "not graded yet"
@@ -146,8 +144,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (entry.rawScore === null || entry.rawScore === undefined || entry.rawScore === ('' as any)) continue;
       const rawScore = Number(entry.rawScore);
 
-      if (!activeMemberIds.has(studentAccountId)) continue;
-      if (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > max) continue;
+      if (!activeMemberIds.has(studentAccountId)) {
+        rejected.push({ studentAccountId, reason: 'no longer in this group' });
+        continue;
+      }
+      if (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > max) {
+        rejected.push({ studentAccountId, reason: `must be between 0 and ${max}` });
+        continue;
+      }
 
       // Presentation is scored per student on 5 criteria at 0/3/6/9. Reject a total that
       // doesn't match its own rubric, so a tampered or stale payload can't record a score
@@ -158,7 +162,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           values.length === PRESENTATION_CRITERIA_COUNT &&
           values.every((v) => PRESENTATION_LEVELS.includes(Number(v))) &&
           values.reduce((a, b) => a + Number(b), 0) === rawScore;
-        if (!valid) continue;
+        if (!valid) {
+          rejected.push({ studentAccountId, reason: "doesn't match its rubric scores" });
+          continue;
+        }
       }
       // Same check for the report rubric: one 0-3 score per criterion of this track's rubric.
       if (component === 'report' && entry.rubricScores) {
@@ -168,7 +175,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           values.length === criteriaCount &&
           values.every((v) => [0, 1, 2, 3].includes(Number(v))) &&
           values.reduce((a, b) => a + Number(b), 0) === rawScore;
-        if (!valid) continue;
+        if (!valid) {
+          rejected.push({ studentAccountId, reason: "doesn't match its rubric scores" });
+          continue;
+        }
       }
 
       const doc = await CapstoneMarkSubmission.findOneAndUpdate(
@@ -204,7 +214,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       saved.push(doc);
     }
 
-    return NextResponse.json({ saved: saved.length, submissions: saved });
+    // The supervisor's journal marks are the last step of the journal - this may finish it.
+    if (saved.some((d) => d.component === 'weeklyJournal')) await syncJournalCompletion(group._id, { schedule: after, group });
+
+    return NextResponse.json({ saved: saved.length, submissions: saved, rejected });
   } catch (error: any) {
     console.error('POST /api/capstone/groups/[id]/marks error:', error);
     return NextResponse.json({ error: error.message || 'Failed to submit marks' }, { status: 500 });

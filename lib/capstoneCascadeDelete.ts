@@ -56,7 +56,7 @@ export async function deleteGroupCascade(groupId: string) {
   if (!group) return { deleted: false, reason: 'not-found' as const };
 
   const session = await CapstoneSession.findById(group.sessionId).select('status');
-  if (session && session.status !== 'draft' && session.status !== 'open') {
+  if (session && session.status === 'closed') {
     return { deleted: false, reason: 'session-locked' as const };
   }
 

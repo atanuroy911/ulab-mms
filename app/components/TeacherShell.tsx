@@ -12,6 +12,8 @@ import { LogOut } from 'lucide-react';
 import { AdminSidebar } from '@/app/components/AdminSidebar';
 import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 import { DevModeBanner } from '@/app/components/DevModeBanner';
+import { usePathname } from 'next/navigation';
+import { CapstoneGuide } from '@/app/capstone/components/CapstoneGuide';
 
 /**
  * The standard teacher-side page frame: persistent sidebar plus a sticky top bar.
@@ -59,6 +61,9 @@ export function TeacherShell({
     signOut({ callbackUrl: '/auth/signin' });
   };
 
+  // The capstone guide sits next to the theme switch on every capstone page.
+  const onCapstone = usePathname()?.startsWith('/capstone') ?? false;
+
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       <AdminSidebar items={items} title={webAdmin ? 'Admin Portal' : 'Teacher Portal'} />
@@ -87,6 +92,7 @@ export function TeacherShell({
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               {actions}
+              {onCapstone && <CapstoneGuide audience="staff" />}
               <ThemeToggle />
               <Button
                 variant="outline"

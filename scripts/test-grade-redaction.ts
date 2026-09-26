@@ -79,7 +79,9 @@ check('choice of more than two is kept', countedEvaluators(['a', 'b', 'c', 'd'],
 // Previously a group with one or two evaluators and no explicit choice counted NONE of them.
 check('two evaluators, no choice -> both count', countedEvaluators([], ['a', 'b']), ['a', 'b']);
 check('one evaluator, no choice -> it counts', countedEvaluators(undefined, ['a']), ['a']);
-check('six evaluators, no choice -> undecided, none count', countedEvaluators([], ['a', 'b', 'c', 'd', 'e', 'f']), []);
+// As the department's workbooks: with no choice made, every evaluator's mark is averaged.
+check('six evaluators, no choice -> all count', countedEvaluators([], ['a', 'b', 'c', 'd', 'e', 'f']), ['a', 'b', 'c', 'd', 'e', 'f']);
+check('chosen evaluator later unassigned stops counting', countedEvaluators(['a', 'x'], ['a', 'b']), ['a']);
 check('no evaluators -> none', countedEvaluators([], []), []);
 
 console.log(`\n${pass} passed, ${fail} failed`);

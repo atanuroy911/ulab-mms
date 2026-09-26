@@ -8,6 +8,7 @@ import User from '@/models/User';
 import '@/models/Semester';
 import { getCapstoneActor } from '@/lib/capstoneAuth';
 import { getMarkingPlan } from '@/lib/capstoneMarkingPlan';
+import { groupJournalStatus } from '@/lib/capstoneJournalStatus';
 
 // Groups the signed-in teacher supervises or actively evaluates, across all sessions, with
 // what the My Groups cards need at a glance: their role, each student's journal progress,
@@ -37,17 +38,14 @@ export async function GET() {
     const groupIds = groups.map((g) => g._id);
 
     const [journal, myMarks, supervisors] = await Promise.all([
-      // Per student per group: submitted entries, and submitted-but-unreviewed entries.
-      WeeklyJournalEntry.aggregate([
-        { $match: { groupId: { $in: groupIds }, submittedAt: { $ne: null } } },
-        {
-          $group: {
-            _id: { groupId: '$groupId', studentAccountId: '$studentAccountId' },
-            submitted: { $sum: 1 },
-            unreviewed: { $sum: { $cond: [{ $eq: ['$supervisorReviewedAt', null] }, 1, 0] } },
-          },
-        },
-      ]),
+      // Every journal entry of these groups' students, by session (a student who moved groups
+      // keeps their weeks) - counted below exactly as the group's journal tab counts them.
+      WeeklyJournalEntry.find({
+        sessionId: { $in: [...new Set(groups.map((g) => String((g.sessionId as unknown as { _id?: unknown } | null)?._id ?? g.sessionId)))] },
+        studentAccountId: { $in: groups.flatMap((g) => g.members.filter((m) => !m.removedAt).map((m) => (m.studentAccountId as unknown as { _id?: unknown })?._id ?? m.studentAccountId)) },
+      })
+        .select('sessionId studentAccountId weekNumber submittedAt supervisorReviewedAt')
+        .lean(),
       CapstoneMarkSubmission.find({
         groupId: { $in: groupIds },
         submitterId: new mongoose.Types.ObjectId(actor.userId),
@@ -66,8 +64,12 @@ export async function GET() {
       if (sessionId && !planFor.has(key)) planFor.set(key, await getMarkingPlan(sessionId, g.track));
     }
 
-    const journalKey = (g: unknown, s: unknown) => `${String(g)}:${String(s)}`;
-    const journalBy = new Map(journal.map((j) => [journalKey(j._id.groupId, j._id.studentAccountId), j]));
+    const entriesBySession = new Map<string, typeof journal>();
+    for (const e of journal) {
+      const key = String(e.sessionId);
+      if (!entriesBySession.has(key)) entriesBySession.set(key, []);
+      entriesBySession.get(key)!.push(e);
+    }
     const supervisorName = new Map(supervisors.map((u) => [String(u._id), u.name]));
 
     const result = groups.map((g) => {
@@ -81,16 +83,27 @@ export async function GET() {
       } | null;
       const active = g.members.filter((m) => !m.removedAt);
 
-      const members = active.map((m) => {
+      const memberIds = active.map((m) => String((m.studentAccountId as unknown as { _id?: unknown })?._id ?? m.studentAccountId));
+      // The same numbers the group's journal tab shows (weeks beyond the session's count ignored).
+      const journalStatus = groupJournalStatus({
+        weekCount: session?.journalWeekCount || 0,
+        memberIds,
+        entries: (entriesBySession.get(String(session?._id)) || []).map((e) => ({ ...e, studentAccountId: String(e.studentAccountId) })),
+        journalMarks: new Map(),
+        marksRequired: false,
+      });
+      const statusOf = new Map(journalStatus.members.map((m) => [m.studentAccountId, m]));
+
+      const members = active.map((m, i) => {
         const account = m.studentAccountId as unknown as { _id: unknown; studentId: string; name: string; email?: string } | null;
-        const id = String(account?._id ?? m.studentAccountId);
-        const j = journalBy.get(journalKey(g._id, id));
+        const id = memberIds[i];
+        const st = statusOf.get(id);
         return {
           studentAccountId: id,
           studentId: account?.studentId || m.studentIdText,
           name: account?.name || '',
           email: account?.email || '',
-          journalSubmitted: j?.submitted || 0,
+          journalSubmitted: st ? st.reviewed + st.awaiting : 0,
         };
       });
 
@@ -112,6 +125,7 @@ export async function GET() {
         projectTitle: g.projectTitle,
         reportUrl: g.reportUrl || null,
         lastJournalReminderAt: g.lastJournalReminderAt || null,
+        journalCompletedAt: g.journalCompletedAt || null,
         role,
         supervisorName: supervisorName.get(String(g.supervisorId)) || null,
         session: session
@@ -124,7 +138,15 @@ export async function GET() {
             }
           : null,
         members,
-        journalUnreviewed: members.reduce((n, m) => n + (journalBy.get(journalKey(g._id, m.studentAccountId))?.unreviewed || 0), 0),
+        journalUnreviewed: journalStatus.awaitingReview,
+        // Group-wide journal counts, in student-weeks (weeks x students).
+        journal: {
+          toReview: journalStatus.awaitingReview,
+          reviewed: journalStatus.members.reduce((n, m) => n + m.reviewed, 0),
+          missed: journalStatus.members.reduce((n, m) => n + m.missed, 0),
+          notWritten: journalStatus.members.reduce((n, m) => n + m.notStarted, 0),
+          total: journalStatus.weeksTotal,
+        },
         marks,
       };
     });

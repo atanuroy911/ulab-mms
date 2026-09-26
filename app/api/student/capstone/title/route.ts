@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
+import { isRunning } from '@/lib/capstoneStatus';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
 
@@ -40,8 +41,8 @@ export async function POST(request: NextRequest) {
     }
 
     const capstoneSession = await CapstoneSession.findById(group.sessionId).select('status');
-    if (capstoneSession?.status !== 'open') {
-      return NextResponse.json({ error: 'The project title can only be changed while the session is open' }, { status: 409 });
+    if (!isRunning(capstoneSession?.status)) {
+      return NextResponse.json({ error: 'The project title can only be changed while the session is running' }, { status: 409 });
     }
 
     group.projectTitle = projectTitle;

@@ -12,6 +12,17 @@ export interface IWeeklyJournalEntry extends Document {
   supervisorComment: string;
   supervisorReviewedAt?: Date | null;
   supervisorId?: mongoose.Types.ObjectId | null;
+  /** When the supervisor was last emailed about this entry - throttles "updated" emails. */
+  supervisorNotifiedAt?: Date | null;
+  /**
+   * When the student was emailed this week's review. Explicitly null while an email is owed
+   * (set by the review itself); absent on weeks reviewed before digests existed, which are
+   * therefore never emailed again.
+   */
+  studentNotifiedAt?: Date | null;
+  /** Set when a coordinator unlocked a reviewed entry (lib/capstoneJournalWorkflow.ts). */
+  reopenedAt?: Date | null;
+  reopenedBy?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +74,23 @@ const WeeklyJournalEntrySchema: Schema = new Schema(
       default: null,
     },
     supervisorId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    supervisorNotifiedAt: {
+      type: Date,
+      default: null,
+    },
+    // No default on purpose - see studentNotifiedAt above.
+    studentNotifiedAt: {
+      type: Date,
+    },
+    reopenedAt: {
+      type: Date,
+      default: null,
+    },
+    reopenedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       default: null,

@@ -94,18 +94,35 @@ export function componentsFor(plan: MarkingPlan, role: GraderRole): CapstoneMark
  * The plan for one track of one session: its pinned scheme version (or, as grading does, the
  * scheme's current draft when nothing is published), else the default.
  */
+type SessionTracks = { tracks?: Array<{ track: string; gradingSchemeId?: unknown; gradingSchemeVersion?: number | null }> };
+
 export async function getMarkingPlan(sessionId: unknown, track: string): Promise<MarkingPlan> {
-  const session = await CapstoneSession.findById(sessionId).select('tracks').lean<{
-    tracks?: Array<{ track: string; gradingSchemeId?: unknown; gradingSchemeVersion?: number | null }>;
-  }>();
+  const session = await CapstoneSession.findById(sessionId).select('tracks').lean<SessionTracks>();
+  return markingPlanForSession(session, track);
+}
+
+/**
+ * The same, for a caller that already loaded the session (with its `tracks`) - saves a
+ * database round trip, which is most of the cost on a remote database.
+ */
+export async function markingPlanForSession(session: SessionTracks | null | undefined, track: string): Promise<MarkingPlan> {
   const pin = session?.tracks?.find((t) => t.track === track);
   if (!pin?.gradingSchemeId) return defaultMarkingPlan(track);
 
-  const scheme = await GradingScheme.findById(pin.gradingSchemeId).select('name nodes versions').lean<{
-    name: string;
-    nodes?: Array<{ type: string; data?: Record<string, unknown> }>;
-    versions?: Array<{ version: number; nodes: Array<{ type: string; data?: Record<string, unknown> }> }>;
-  }>();
+  // A published version is immutable, so its plan can be reused without a database trip.
+  // The expiry only bounds how long a renamed scheme keeps its old name here.
+  const cacheKey = `${String(pin.gradingSchemeId)}:${pin.gradingSchemeVersion ?? 'draft'}:${track}`;
+  const cached = PLAN_CACHE.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.plan;
+
+  // Only the pinned version's graph - a scheme's full version history can be large.
+  const scheme = await GradingScheme.findById(pin.gradingSchemeId)
+    .select({ name: 1, nodes: 1, versions: { $elemMatch: { version: pin.gradingSchemeVersion ?? -1 } } })
+    .lean<{
+      name: string;
+      nodes?: Array<{ type: string; data?: Record<string, unknown> }>;
+      versions?: Array<{ version: number; nodes: Array<{ type: string; data?: Record<string, unknown> }> }>;
+    }>();
   if (!scheme) return defaultMarkingPlan(track);
 
   const pinned = scheme.versions?.find((v) => v.version === pin.gradingSchemeVersion);
@@ -114,5 +131,11 @@ export async function getMarkingPlan(sessionId: unknown, track: string): Promise
   // A scheme with no source blocks at all can't be graded anyway; don't strand graders with
   // nothing to enter - fall back to the default so marking can still happen.
   if (derived.supervisor.length === 0 && derived.evaluator.length === 0) return defaultMarkingPlan(track);
-  return { source: 'scheme', schemeName: scheme.name, schemeVersion: pinned?.version ?? 0, ...derived };
+  const plan: MarkingPlan = { source: 'scheme', schemeName: scheme.name, schemeVersion: pinned?.version ?? 0, ...derived };
+  // Never cache a plan read from the editable draft (no published version matched).
+  if (pinned) PLAN_CACHE.set(cacheKey, { plan, expires: Date.now() + PLAN_CACHE_MS });
+  return plan;
 }
+
+const PLAN_CACHE_MS = 10 * 60 * 1000;
+const PLAN_CACHE = new Map<string, { plan: MarkingPlan; expires: number }>();

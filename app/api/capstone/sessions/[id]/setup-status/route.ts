@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MIN_CHOSEN_EVALUATORS } from '@/models/CapstoneGroup';
 import dbConnect from '@/lib/mongodb';
+import { statusLabel } from '@/lib/capstoneStatus';
 import CapstoneSession from '@/models/CapstoneSession';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
@@ -49,7 +50,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const [groups, schemes, submissionCount] = await Promise.all([
-      CapstoneGroup.find({ sessionId: id }).select('track groupNumber evaluators chosenEvaluators members'),
+      CapstoneGroup.find({ sessionId: id }).select('track groupNumber evaluators chosenEvaluators evaluatorTopK members'),
       GradingScheme.find({ department: session.department, isArchived: false }).select('name currentVersion'),
       CapstoneMarkSubmission.countDocuments({ sessionId: id, status: 'submitted' }),
     ]);
@@ -68,9 +69,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const groupsNeedingChoice = groups.filter((g) => {
       const active = g.evaluators.filter((e) => !e.unassignedAt).length;
       if (active <= MIN_CHOSEN_EVALUATORS) return false;
-      const report = g.chosenEvaluators?.report?.length || 0;
-      const presentation = g.chosenEvaluators?.presentation?.length || 0;
-      return report === 0 || presentation === 0;
+      // Top K is a decision too.
+      const decided = (c: 'report' | 'presentation') => (g.chosenEvaluators?.[c]?.length || 0) > 0 || !!g.evaluatorTopK?.[c];
+      return !decided('report') || !decided('presentation');
     });
 
     const status = session.status;
@@ -156,7 +157,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             ? 'current'
             : 'blocked'
           : 'done',
-      detail: status === 'draft' ? 'Still a draft' : `Status: ${status}`,
+      detail: status === 'draft' ? 'Still being set up' : `Status: ${statusLabel(status)}`,
       blockedBy: status === 'draft' && activeGroups.length === 0 ? 'Add groups first' : undefined,
     });
 
@@ -165,40 +166,26 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       key: 'marks',
       title: 'Collect marks',
       description:
-        'Move the session to grading, then email every supervisor and evaluator asking them to submit.',
-      state:
-        status === 'draft'
-          ? 'blocked'
-          : status === 'open'
-            ? 'current'
-            : submissionCount > 0
-              ? 'done'
-              : 'current',
-      detail:
-        status === 'open'
-          ? 'Move to grading when the semester ends'
-          : `${submissionCount} mark${submissionCount === 1 ? '' : 's'} submitted`,
+        "Graders submit online (email them a reminder), or enter their paper sheets - in the Enter marks table or each group's Manage tab.",
+      state: status === 'draft' ? 'blocked' : submissionCount > 0 ? 'done' : 'current',
+      detail: `${submissionCount} mark${submissionCount === 1 ? '' : 's'} submitted`,
       blockedBy: status === 'draft' ? 'Open the session first' : undefined,
     });
 
-    // ── 7. Narrow the evaluator panel ──────────────────────────────────────────────────
+    // ── 7. Choose which evaluators count ─────────────────────────────────────────────────
     steps.push({
       key: 'chosen',
       title: 'Choose which evaluators count',
       description:
-        'Where a group had more than two evaluators, pick two or more whose marks count — separately for presentation and report.',
-      state:
-        groups.length === 0
-          ? 'blocked'
-          : groupsNeedingChoice.length === 0
-            ? 'done'
-            : 'current',
+        "Once the marks are in, pick in each group's Manage tab whose marks count - separately for presentation and report. With none picked, every assigned evaluator counts (averaged, as in the department's workbook). A coordinator who grades a group can't choose for it.",
+      // Optional since every evaluator counts by default - never blocks progress.
+      state: groups.length === 0 ? 'blocked' : 'done',
       detail:
         groups.length === 0
           ? undefined
           : groupsNeedingChoice.length === 0
-            ? 'Nothing left to choose'
-            : `${groupsNeedingChoice.length} group${groupsNeedingChoice.length === 1 ? '' : 's'} need a choice`,
+            ? 'Nothing to narrow'
+            : `All evaluators count · ${groupsNeedingChoice.length} group${groupsNeedingChoice.length === 1 ? '' : 's'} could be narrowed`,
       blockedBy: groups.length === 0 ? 'Add groups first' : undefined,
     });
 

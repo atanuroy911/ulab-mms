@@ -29,7 +29,12 @@ import {
   ArrowLeft,
   Search,
   Workflow,
+  ArrowRightCircle,
+  ArrowUpDown,
+  ClipboardEdit,
 } from 'lucide-react';
+import { ProgressionWizard } from './ProgressionWizard';
+import { cn } from '@/lib/utils';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { toast } from 'sonner';
 
@@ -88,6 +93,7 @@ interface TrackReport {
 
 interface GradesResponse {
   department: string;
+  sessionStatus?: string;
   canSeeWholeSession: boolean;
   tracks: TrackReport[];
   groups: Group[];
@@ -120,6 +126,11 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
   const [exporting, setExporting] = useState(false);
   const [query, setQuery] = useState('');
   const [detailFor, setDetailFor] = useState<{ member: Member; group: Group } | null>(null);
+  const [view, setView] = useState<'groups' | 'students'>('groups');
+  const [trackFilter, setTrackFilter] = useState('all');
+  const [sort, setSort] = useState<{ key: 'name' | 'group' | 'total'; dir: 1 | -1 }>({ key: 'group', dir: 1 });
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -134,7 +145,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [id, reloadKey]);
 
   const exportXlsx = async () => {
     setExporting(true);
@@ -166,8 +177,9 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
   const filteredGroups = useMemo(() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return data.groups;
-    return data.groups
+    const inTrack = data.groups.filter((g) => trackFilter === 'all' || g.track === trackFilter);
+    if (!q) return inTrack;
+    return inTrack
       .map((group) => ({
         ...group,
         members: group.members.filter(
@@ -178,7 +190,31 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
         ),
       }))
       .filter((group) => group.members.length > 0);
-  }, [data, query]);
+  }, [data, query, trackFilter]);
+
+  // Students view: one row per student, component columns by name across all groups.
+  const studentColumns = useMemo(() => {
+    const labels: string[] = [];
+    for (const g of filteredGroups) {
+      for (const t of g.members[0]?.trace || []) {
+        if (g.componentNodeIds.includes(t.nodeId) && !labels.includes(t.label)) labels.push(t.label);
+      }
+    }
+    return labels;
+  }, [filteredGroups]);
+  const studentRows = useMemo(() => {
+    const rows = filteredGroups.flatMap((group) => group.members.map((member) => ({ group, member })));
+    const key = (r: (typeof rows)[number]) =>
+      sort.key === 'name'
+        ? (r.member.name || r.member.studentId).toLowerCase()
+        : sort.key === 'total'
+          ? r.member.score ?? -1
+          : `${r.group.track}${String(r.group.groupNumber).padStart(4, '0')}`;
+    return rows.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0) * sort.dir);
+  }, [filteredGroups, sort]);
+  const toggleSort = (k: 'name' | 'group' | 'total') => setSort((p) => ({ key: k, dir: p.key === k ? (-p.dir as 1 | -1) : k === 'total' ? -1 : 1 }));
+  const tracksPresent = [...new Set((data?.groups || []).map((g) => g.track))].sort();
+  const canMoveOn = !!data?.canSeeWholeSession && data?.sessionStatus === 'closed';
 
   if (loading) {
     return (
@@ -201,7 +237,26 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
             <span className="hidden sm:inline">Sessions</span>
           </Button>
           {data?.canSeeWholeSession && (
-            <Button size="sm" onClick={exportXlsx} disabled={exporting} title="Download every group's grades, components and raw marks as an Excel workbook">
+            <Button asChild size="sm" variant="outline" title="Every group's marks in one table - type any grader's marks in">
+              <Link href={`/capstone/sessions/${id}/marks`}>
+                <ClipboardEdit className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Enter marks</span>
+              </Link>
+            </Button>
+          )}
+          {data?.canSeeWholeSession && (
+            <Button
+              size="sm"
+              variant={canMoveOn ? 'default' : 'outline'}
+              onClick={() => setMoveOpen(true)}
+              title={canMoveOn ? 'Move passing students and their groups on to the next session' : 'Available once this session is Finished - finishing publishes the results'}
+            >
+              <ArrowRightCircle className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Move to next session</span>
+            </Button>
+          )}
+          {data?.canSeeWholeSession && (
+            <Button size="sm" variant="outline" onClick={exportXlsx} disabled={exporting} title="Download every group's grades, components and raw marks as an Excel workbook">
               {exporting ? (
                 <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
               ) : (
@@ -242,17 +297,93 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
           </Card>
         )}
 
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder="Search by student, ID or project…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-56 flex-1 sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search by student, ID or project…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          {tracksPresent.length > 1 && (
+            <div className="flex rounded-lg border p-0.5 text-sm" role="tablist" aria-label="Track">
+              {['all', ...tracksPresent].map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={trackFilter === t} onClick={() => setTrackFilter(t)} className={cn('rounded-md px-2.5 py-1', trackFilter === t ? 'bg-muted font-medium' : 'text-muted-foreground')}>
+                  {t === 'all' ? 'All tracks' : `Track ${t}`}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="ml-auto flex rounded-lg border p-0.5 text-sm" role="tablist" aria-label="View">
+            {(['groups', 'students'] as const).map((v) => (
+              <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)} className={cn('rounded-md px-3 py-1', view === v ? 'bg-muted font-medium' : 'text-muted-foreground')}>
+                {v === 'groups' ? 'By group' : 'By student'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {filteredGroups.length === 0 ? (
+        {view === 'students' && filteredGroups.length > 0 ? (
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-20 min-w-[200px] bg-background">
+                    <button type="button" onClick={() => toggleSort('name')} className="flex items-center gap-1">
+                      Student <ArrowUpDown className="h-3 w-3" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="min-w-[160px]">
+                    <button type="button" onClick={() => toggleSort('group')} className="flex items-center gap-1">
+                      Group <ArrowUpDown className="h-3 w-3" />
+                    </button>
+                  </TableHead>
+                  {studentColumns.map((label) => (
+                    <TableHead key={label} className="min-w-[110px] text-center">
+                      {label}
+                    </TableHead>
+                  ))}
+                  <TableHead className="min-w-20 text-center font-semibold">
+                    <button type="button" onClick={() => toggleSort('total')} className="mx-auto flex items-center gap-1">
+                      Total <ArrowUpDown className="h-3 w-3" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="min-w-16 text-center font-semibold">Grade</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {studentRows.map(({ group, member }) => {
+                  const byLabel = new Map(member.trace.filter((t) => group.componentNodeIds.includes(t.nodeId)).map((t) => [t.label, t.value]));
+                  return (
+                    <TableRow key={`${group.groupId}:${member.studentAccountId}`} className="cursor-pointer" onClick={() => setDetailFor({ member, group })}>
+                      <TableCell className="sticky left-0 z-10 bg-background">
+                        <p className="truncate text-sm font-medium">{member.name || member.studentId}</p>
+                        <p className="truncate font-mono text-xs text-muted-foreground">{member.studentId}</p>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <span className="font-mono">
+                          {group.track} #{group.groupNumber}
+                        </span>
+                        <span className="block max-w-[220px] truncate text-muted-foreground">{group.supervisorName}</span>
+                      </TableCell>
+                      {studentColumns.map((label) => (
+                        <TableCell key={label} className="text-center tabular-nums">
+                          {byLabel.has(label) ? byLabel.get(label)!.toFixed(2) : '—'}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-center font-semibold tabular-nums">
+                        {member.gradeHiddenUntil?.length ? '—' : member.score === null ? '—' : member.score.toFixed(2)}
+                      </TableCell>
+                      <TableCell className={`text-center font-bold ${gradeTone(member.letter)}`}>{member.letter || '—'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        ) : filteredGroups.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               {query ? 'No students match that search.' : 'No groups to grade in this session yet.'}
@@ -379,6 +510,10 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
           })
         )}
       </div>
+
+      {data?.canSeeWholeSession && (
+        <ProgressionWizard sessionId={id} open={moveOpen} onOpenChange={setMoveOpen} onDone={() => setReloadKey((k) => k + 1)} />
+      )}
 
       {/* Per-student breakdown: who submitted what, and whether it counted. */}
       <Dialog open={!!detailFor} onOpenChange={(open) => !open && setDetailFor(null)}>

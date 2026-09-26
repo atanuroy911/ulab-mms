@@ -170,7 +170,7 @@ export function EvaluatorPickerDialog({
                   value={`${u.name} ${u.email} ${u._id}`}
                   disabled={disabled}
                   onSelect={() => setSelected(u._id)}
-                  className={cn('gap-3 px-2 py-2', selected === u._id && 'bg-primary/10 data-[selected=true]:bg-primary/15')}
+                  className={cn('cursor-pointer gap-3 px-2 py-2', selected === u._id && 'bg-primary/10 data-[selected=true]:bg-primary/15')}
                 >
                   <span
                     className={cn(

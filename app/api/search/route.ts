@@ -10,6 +10,7 @@ import GradingScheme from '@/models/GradingScheme';
 import User from '@/models/User';
 import '@/models/Semester';
 import { getCapstoneActor, isAdmin } from '@/lib/capstoneAuth';
+import { isPastSession, statusLabel } from '@/lib/capstoneStatus';
 import { PEOPLE_ONLY } from '@/lib/webAdminAccount';
 
 // GET /api/search?q=...
@@ -128,12 +129,21 @@ export async function GET(request: NextRequest) {
           },
         ],
       })
-        .select('track groupNumber projectTitle members')
+        .select('track groupNumber projectTitle members sessionId')
         .limit(LIMIT * 2)
         .lean();
 
+      // Finished semesters' groups still match, but are labelled and listed after current ones.
+      const sessionStatus = new Map(
+        (await CapstoneSession.find({ _id: { $in: [...new Set(groups.map((g) => String(g.sessionId)))] } }).select('status').lean()).map(
+          (x) => [String(x._id), x.status]
+        )
+      );
+      const isPast = (g: (typeof groups)[number]) => isPastSession(sessionStatus.get(String(g.sessionId)));
+      groups.sort((a, b) => Number(isPast(a)) - Number(isPast(b)));
+
       for (const g of groups) {
-        const label = `Capstone ${g.track} #${g.groupNumber}`;
+        const label = `Capstone ${g.track} #${g.groupNumber}${isPast(g) ? ' · Past semester' : ''}`;
         if (re.test(g.projectTitle) && results.filter((r) => r.kind === 'group').length < LIMIT) {
           results.push({ id: String(g._id), kind: 'group', title: g.projectTitle, subtitle: label, href: `/capstone/groups/${g._id}` });
         }
@@ -166,7 +176,7 @@ export async function GET(request: NextRequest) {
           id: String(s._id),
           kind: 'session',
           title: `${s.department} Capstone${semester ? ` - ${semester}` : ''}`,
-          subtitle: `Capstone session · ${s.status}`,
+          subtitle: `Capstone session · ${statusLabel(s.status)}`,
           href: `${sessionsHref}${sessionsHref.includes('?') ? '&' : '?'}session=${s._id}`,
         });
       }

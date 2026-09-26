@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
+import { isRunning } from '@/lib/capstoneStatus';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
-import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
+import { notifySupervisorOfEntry, saveStudentEntry } from '@/lib/capstoneJournalWorkflow';
 
 // Student submits/updates their own weekly journal entry. Body: { groupId, weekNumber,
 // periodStart?, periodEnd?, workDone }
@@ -48,23 +49,22 @@ export async function POST(request: NextRequest) {
     if (weekNumber > capstoneSession.journalWeekCount) {
       return NextResponse.json({ error: `This session only has ${capstoneSession.journalWeekCount} weeks` }, { status: 400 });
     }
-    if (capstoneSession.status !== 'open') {
-      return NextResponse.json({ error: 'Journal entries can only be submitted while the session is open' }, { status: 409 });
+    if (!isRunning(capstoneSession.status)) {
+      return NextResponse.json({ error: 'Journal entries can only be submitted while the session is running' }, { status: 409 });
     }
 
-    const entry = await WeeklyJournalEntry.findOneAndUpdate(
-      { sessionId: group.sessionId, studentAccountId, weekNumber },
-      {
-        $set: {
-          groupId: group._id,
-          periodStart,
-          periodEnd,
-          workDone,
-          submittedAt: new Date(),
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+    if (workDone.length > 10000) {
+      return NextResponse.json({ error: 'Please keep an entry under 10,000 characters' }, { status: 400 });
+    }
+
+    // Locked once the supervisor has reviewed (or closed) the week - enforced atomically in
+    // saveStudentEntry, so a save racing the review can never overwrite it.
+    const saved = await saveStudentEntry(group, studentAccountId, weekNumber, { workDone, periodStart, periodEnd }, { mustBeNew: body?.isNew === true });
+    if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
+    const { entry, firstSubmission } = saved.value;
+
+    // Emailed after the response, so the student isn't kept waiting on the mail server.
+    after(() => notifySupervisorOfEntry(group, entry, firstSubmission));
 
     return NextResponse.json(entry);
   } catch (error: any) {

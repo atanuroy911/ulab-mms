@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, use as usePromise } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, use as usePromise } from 'react';
 import { useStaffViewer } from '@/app/components/useStaffViewer';
 import { useRouter } from 'next/navigation';
 import {
@@ -31,7 +31,6 @@ import {
   CheckCircle2,
   ArrowLeft,
   PanelRight,
-  Plus,
   Copy as CopyIcon,
   Trash2,
   Unlink,
@@ -39,11 +38,20 @@ import {
   SlidersHorizontal,
   Maximize2,
   Target,
+  Blocks,
+  FunctionSquare,
+  LibraryBig,
+  Wand2,
+  X as CloseIcon,
 } from 'lucide-react';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { toast } from 'sonner';
 
-import { nodeTypes, NODE_PALETTE, inputName } from './nodes';
+import { nodeTypes, inputName, BLOCK_LIBRARY, portIdsOf, portLabel, type LibraryItem } from './nodes';
+import { BlockLibrary, LIBRARY_DRAG_TYPE } from './BlockLibrary';
+import { tidyLayout } from '@/lib/schemeLayout';
+import { ConversionDialog, type ConversionPreview } from './ConversionDialog';
+import { formulaToBlocks, blocksToFormula, applyConversion, sameResult, type GNode, type GEdge, type Conversion } from '@/lib/formulaBlocks';
 import { NodeInspector } from './NodeInspector';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { OutcomesDialog } from './OutcomesDialog';
@@ -85,6 +93,75 @@ function useModKeyLabel(): string {
 }
 
 let idCounter = 0;
+/**
+ * Whether the app is in dark mode. The theme is a `dark` class on <html> set by the app's own
+ * toggle, so watch that class - React Flow's zoom buttons and mini-map otherwise stay light.
+ */
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+}
+function useIsDark() {
+  return useSyncExternalStore(
+    subscribeTheme,
+    () => document.documentElement.classList.contains('dark'),
+    () => false
+  );
+}
+
+/** A saved connection as a canvas edge: on its named plug when the target has one. */
+function toFlowEdge(
+  e: { id: string; source: string; target: string; input: string },
+  target: { type?: string; data?: Record<string, unknown> } | undefined
+): Edge {
+  const onPort = portIdsOf(target?.type, target?.data).includes(e.input);
+  const label = portLabel(target?.type, target?.data, e.input) || e.input;
+  return {
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    targetHandle: onPort ? e.input : null,
+    data: { input: e.input },
+    label,
+    animated: true,
+  };
+}
+
+const NOTE_KEY = 'grading-editor-small-screen-note';
+
+/** Building schemes is roomier on a big screen - say so once, and let it be dismissed. */
+function SmallScreenNote() {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return window.localStorage.getItem(NOTE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (hidden) return null;
+  return (
+    <div className="m-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs lg:hidden">
+      <span className="flex-1">Building a scheme is easier on a larger screen - you get the library and block settings side by side with the canvas.</span>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+        onClick={() => {
+          setHidden(true);
+          try {
+            window.localStorage.setItem(NOTE_KEY, '1');
+          } catch {
+            /* not remembered */
+          }
+        }}
+      >
+        <CloseIcon className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function newNodeId(type: string) {
   idCounter += 1;
   return `${type}_${Date.now().toString(36)}_${idCounter}`;
@@ -170,17 +247,8 @@ function EditorInner({ id }: { id: string }) {
             data: n.data,
           }))
         );
-        setEdges(
-          (data.edges || []).map((e: SchemeDoc['edges'][number]) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            targetHandle: null,
-            data: { input: e.targetHandle || 'in' },
-            label: e.targetHandle || 'in',
-            animated: true,
-          }))
-        );
+        const nodeById = new Map<string, SchemeDoc['nodes'][number]>((data.nodes || []).map((n: SchemeDoc['nodes'][number]) => [n.id, n]));
+        setEdges((data.edges || []).map((e: SchemeDoc['edges'][number]) => toFlowEdge({ ...e, input: e.targetHandle || 'in' }, nodeById.get(e.target))));
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to load grading scheme');
       } finally {
@@ -206,6 +274,36 @@ function EditorInner({ id }: { id: string }) {
 
   const markDirty = useCallback(() => setDirty(true), []);
 
+  // Library + conversions state.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [conversion, setConversion] = useState<{ preview: ConversionPreview; apply: () => void } | null>(null);
+
+
+  const isDark = useIsDark();
+
+  /** Re-lays out every block left to right; one toast offers to put things back. */
+  const tidyUp = useCallback(() => {
+    if (nodes.length === 0) return;
+    const before = Object.fromEntries(nodes.map((n) => [n.id, n.position]));
+    const measured = rf?.getNodes() ?? nodes;
+    const positions = tidyLayout(
+      measured.map((n) => ({ id: n.id, width: n.measured?.width, height: n.measured?.height, position: n.position })),
+      edges.map((e) => ({ source: e.source, target: e.target }))
+    );
+    setNodes((nds) => nds.map((n) => (positions[n.id] ? { ...n, position: positions[n.id] } : n)));
+    if (!readOnly) markDirty();
+    requestAnimationFrame(() => rf?.fitView({ duration: 300, padding: 0.15 }));
+    toast.success('Tidied up', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          setNodes((nds) => nds.map((n) => (before[n.id] ? { ...n, position: before[n.id] } : n)));
+          requestAnimationFrame(() => rf?.fitView({ duration: 300, padding: 0.15 }));
+        },
+      },
+    });
+  }, [nodes, edges, rf, readOnly, setNodes, markDirty]);
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (readOnly) return;
@@ -217,6 +315,29 @@ function EditorInner({ id }: { id: string }) {
         typeof base === 'string' && base.trim()
           ? base.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20) || 'in'
           : 'in';
+
+      // A math block's named plug ("take away", "by"): the connection takes that plug's
+      // name, and replaces whatever was plugged in there before.
+      const targetNode = nodes.find((n) => n.id === connection.target);
+      const ports = portIdsOf(targetNode?.type, targetNode?.data as Record<string, unknown>);
+      if (connection.targetHandle && ports.includes(connection.targetHandle)) {
+        const port = connection.targetHandle;
+        let replaced = false;
+        setEdges((eds) => {
+          replaced = eds.some((e) => e.target === connection.target && inputName(e) === port);
+          const kept = eds.filter((e) => !(e.target === connection.target && inputName(e) === port));
+          return [
+            ...kept,
+            toFlowEdge(
+              { id: `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, source: connection.source!, target: connection.target!, input: port },
+              targetNode
+            ),
+          ];
+        });
+        if (replaced) toast.info(`Replaced what was plugged into "${portLabel(targetNode?.type, targetNode?.data as Record<string, unknown>, port)}"`);
+        markDirty();
+        return;
+      }
 
       setEdges((eds) => {
         // A formula/sum node keyed by name must not receive two inputs under the same
@@ -277,6 +398,14 @@ function EditorInner({ id }: { id: string }) {
       return node.id;
     },
     [rf, readOnly, setNodes, markDirty]
+  );
+
+  const addFromLibrary = useCallback(
+    (item: LibraryItem, screenPoint?: { x: number; y: number }) => {
+      addNode(item.type, JSON.parse(JSON.stringify(item.defaults)), screenPoint);
+      setLibraryOpen(false);
+    },
+    [addNode]
   );
 
   const updateNodeData = useCallback(
@@ -376,6 +505,61 @@ function EditorInner({ id }: { id: string }) {
     },
     [edges, readOnly, setEdges, markDirty]
   );
+
+  // ── Formula <-> blocks ─────────────────────────────────────────────────────────────
+  const toGraph = (): { gnodes: GNode[]; gedges: GEdge[] } => ({
+    gnodes: nodes.map((n) => ({ id: n.id, type: n.type || '', position: n.position, data: n.data as Record<string, unknown> })),
+    gedges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, input: inputName(e) })),
+  });
+
+  const commitGraph = (gnodes: GNode[], gedges: GEdge[], select: string) => {
+    const byId = new Map(gnodes.map((n) => [n.id, n]));
+    setNodes(gnodes.map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data })));
+    setEdges(gedges.map((e) => toFlowEdge(e, byId.get(e.target))));
+    setSelectedId(select);
+    markDirty();
+  };
+
+  const convertToBlocks = (nodeId: string) => {
+    const { gnodes, gedges } = toGraph();
+    const formula = gnodes.find((n) => n.id === nodeId);
+    if (!formula) return;
+    const inputs = Object.fromEntries(gedges.filter((e) => e.target === nodeId).map((e) => [e.input, e.source]));
+    const result = formulaToBlocks(formula, inputs);
+    const expression = String(formula.data.expression || '');
+    if (!result.ok) {
+      setConversion({ preview: { direction: 'toBlocks', formula: expression, ok: false, steps: [], verified: false, reason: result.reason, guidance: result.guidance }, apply: () => {} });
+      return;
+    }
+    const after = applyConversion(gnodes, gedges, result as Conversion, nodeId);
+    const verified = sameResult({ nodes: gnodes, edges: gedges, rootId: nodeId }, { ...after, rootId: result.resultNodeId }, Object.values(inputs));
+    setConversion({
+      preview: { direction: 'toBlocks', formula: expression, ok: true, steps: result.steps, verified },
+      apply: () => {
+        commitGraph(after.nodes, after.edges, result.resultNodeId);
+        toast.success(`Formula turned into ${result.addNodes.length} block${result.addNodes.length === 1 ? '' : 's'}`);
+      },
+    });
+  };
+
+  const convertToFormula = (nodeId: string) => {
+    const { gnodes, gedges } = toGraph();
+    const result = blocksToFormula(gnodes, gedges, nodeId);
+    if (!result.ok) {
+      setConversion({ preview: { direction: 'toFormula', formula: '', ok: false, steps: [], verified: false, reason: result.reason, guidance: result.guidance }, apply: () => {} });
+      return;
+    }
+    const after = applyConversion(gnodes, gedges, result as Conversion);
+    const inputs = result.addEdges.filter((e) => e.target === result.resultNodeId).map((e) => e.source);
+    const verified = sameResult({ nodes: gnodes, edges: gedges, rootId: nodeId }, { ...after, rootId: result.resultNodeId }, inputs);
+    setConversion({
+      preview: { direction: 'toFormula', formula: String(result.addNodes[0].data.expression), ok: true, steps: result.steps, verified },
+      apply: () => {
+        commitGraph(after.nodes, after.edges, result.resultNodeId);
+        toast.success('Blocks turned into one formula');
+      },
+    });
+  };
 
   const serialize = useCallback(
     () => ({
@@ -551,6 +735,8 @@ function EditorInner({ id }: { id: string }) {
       readOnly={readOnly}
       onChange={updateNodeData}
       onDelete={deleteNode}
+      onConvertToBlocks={convertToBlocks}
+      onConvertToFormula={convertToFormula}
       onRenameInput={(edgeId) => {
         const edge = edges.find((e) => e.id === edgeId);
         if (edge) renameEdge(edge);
@@ -616,6 +802,16 @@ function EditorInner({ id }: { id: string }) {
           )}
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Button size="sm" variant="outline" onClick={tidyUp} title="Line every block up neatly from marks (left) to the final grade (right)">
+              <Wand2 className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Tidy up</span>
+            </Button>
+            {!readOnly && (
+              <Button size="sm" variant="outline" className="lg:hidden" onClick={() => setLibraryOpen(true)}>
+                <LibraryBig className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Add block</span>
+              </Button>
+            )}
             {outcomes && (
               <Button
                 size="sm"
@@ -670,27 +866,6 @@ function EditorInner({ id }: { id: string }) {
           </div>
         </div>
 
-        {/* Palette */}
-        {!readOnly && (
-          <div className="flex gap-1.5 overflow-x-auto border-t px-3 py-2 sm:px-4">
-            {NODE_PALETTE.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.type}
-                  type="button"
-                  title={item.description}
-                  onClick={() => addNode(item.type, { ...item.defaults })}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-                >
-                  <Plus className="h-3 w-3 opacity-60" />
-                  <Icon className="h-3.5 w-3.5" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Issues */}
@@ -720,9 +895,31 @@ function EditorInner({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Canvas + inspector */}
+      {/* Library + canvas + inspector */}
       <div className="flex min-h-0 flex-1">
-        <div ref={wrapperRef} className="relative min-h-[60vh] flex-1">
+        {!readOnly && (
+          <aside className="hidden w-72 shrink-0 border-r bg-card/30 lg:flex lg:flex-col">
+            <div className="border-b px-4 py-3 text-sm font-medium">Block library</div>
+            <BlockLibrary onAdd={(item) => addFromLibrary(item)} className="flex-1" />
+          </aside>
+        )}
+        <div
+          ref={wrapperRef}
+          className="relative min-h-[60vh] flex-1"
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes(LIBRARY_DRAG_TYPE)) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+            }
+          }}
+          onDrop={(e) => {
+            const key = e.dataTransfer.getData(LIBRARY_DRAG_TYPE);
+            const item = BLOCK_LIBRARY.find((i) => i.key === key);
+            if (!item) return;
+            e.preventDefault();
+            addFromLibrary(item, { x: e.clientX, y: e.clientY });
+          }}
+        >
           <ReactFlow
             nodes={decoratedNodes}
             edges={decoratedEdges}
@@ -764,6 +961,7 @@ function EditorInner({ id }: { id: string }) {
             }}
             onMoveStart={() => setMenu(null)}
             nodeTypes={nodeTypes}
+            colorMode={isDark ? 'dark' : 'light'}
             // React Flow binds Backspace to delete by default. Left on, it would race the
             // handler above (both removing the same node, with different selection and
             // dirty-flag bookkeeping) and would still fire for read-only viewers, who have
@@ -814,6 +1012,13 @@ function EditorInner({ id }: { id: string }) {
                             hint: modKeyLabel + 'D',
                             onSelect: () => duplicateNode(menu.nodeId),
                           },
+                          ...(() => {
+                            const t = nodes.find((n) => n.id === menu.nodeId)?.type;
+                            if (t === 'formula') return [{ key: 'toBlocks', label: 'Turn into blocks…', icon: Blocks, onSelect: () => convertToBlocks(menu.nodeId) }];
+                            if (['op', 'constant', 'scale', 'sum'].includes(t || ''))
+                              return [{ key: 'toFormula', label: 'Turn into a formula…', icon: FunctionSquare, onSelect: () => convertToFormula(menu.nodeId) }];
+                            return [];
+                          })(),
                           {
                             key: 'disconnect',
                             label: 'Disconnect all',
@@ -872,19 +1077,35 @@ function EditorInner({ id }: { id: string }) {
                     : [
                         {
                           key: 'add',
-                          items: NODE_PALETTE.map((item) => ({
-                            key: item.type,
-                            label: item.label,
-                            icon: item.icon,
-                            // Placed at the click point, so right-click-to-add puts the
-                            // block exactly where it was aimed.
-                            onSelect: () =>
-                              addNode(item.type, { ...item.defaults }, { x: menu.x, y: menu.y }),
-                          })),
+                          items: [
+                            ...['m-report-sup', 'number', 'op-percentOf', 'op-add', 'op-round', 'op-atMost', 'formula'].map((key) => {
+                              const item = BLOCK_LIBRARY.find((i) => i.key === key)!;
+                              return {
+                                key,
+                                label: item.title,
+                                icon: item.icon,
+                                // Placed at the click point, so right-click-to-add puts the
+                                // block exactly where it was aimed.
+                                onSelect: () => addFromLibrary(item, { x: menu.x, y: menu.y }),
+                              };
+                            }),
+                            {
+                              key: 'library',
+                              label: 'All blocks…',
+                              icon: LibraryBig,
+                              onSelect: () => setLibraryOpen(true),
+                            },
+                          ],
                         },
                         {
                           key: 'view',
                           items: [
+                            {
+                              key: 'tidy',
+                              label: 'Tidy up',
+                              icon: Wand2,
+                              onSelect: tidyUp,
+                            },
                             {
                               key: 'fit',
                               label: 'Fit to view',
@@ -910,6 +1131,24 @@ function EditorInner({ id }: { id: string }) {
           {inspector}
         </aside>
       </div>
+
+      {/* The library on small screens: a pop-up, with an honest note about screen size. */}
+      <Sheet open={libraryOpen} onOpenChange={setLibraryOpen}>
+        <SheetContent side="left" className="flex w-full flex-col gap-0 p-0 sm:max-w-sm">
+          <SheetTitle className="border-b px-4 py-3 text-sm">Add a block</SheetTitle>
+          <SmallScreenNote />
+          <BlockLibrary onAdd={(item) => addFromLibrary(item)} draggable={false} className="flex-1" />
+        </SheetContent>
+      </Sheet>
+
+      <ConversionDialog
+        preview={conversion?.preview ?? null}
+        onCancel={() => setConversion(null)}
+        onApply={() => {
+          conversion?.apply();
+          setConversion(null);
+        }}
+      />
 
       {outcomes && (
         <OutcomesDialog

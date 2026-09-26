@@ -17,14 +17,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, Link2, ExternalLink, Check, X } from 'lucide-react';
+import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { TrackSchemePanel } from './TrackSchemePanel';
+import { GroupsBrowser } from './GroupsBrowser';
+import { SessionStageBar } from './SessionStageBar';
+import type { SessionStatus } from '@/lib/capstoneStatus';
+import { SessionStatusPill } from '../components/SessionStatusPill';
+import { isPastSession } from '@/lib/capstoneStatus';
+import { cn } from '@/lib/utils';
 import { MemberEntry, type MemberRow } from './MemberEntry';
 import { SetupChecklist } from './SetupChecklist';
 import { DeleteSessionDialog } from './DeleteSessionDialog';
 import { InvitePersonForm, PendingInviteNote, type InvitedUser } from './InvitePersonForm';
 import { EvaluatorPickerDialog } from './EvaluatorPickerDialog';
+import { ChangeSupervisorDialog } from './ChangeSupervisorDialog';
+import { GroupModal } from '../components/GroupModal';
 import { Tip } from '@/app/components/Tip';
 import { StudentDetailDialog } from '../components/StudentDetailDialog';
 import { JournalReminderButton } from '../components/JournalReminderButton';
@@ -76,6 +84,8 @@ interface GroupRow {
   evaluators: { evaluatorId: UserOption | string; unassignedAt?: string | null }[];
   reportUrl?: string | null;
   lastJournalReminderAt?: string | null;
+  /** Set when every member's journal is closed and the journal marks are in. */
+  journalCompletedAt?: string | null;
 }
 
 /** A report link must be a real web address - anything else is almost certainly a paste slip. */
@@ -101,10 +111,9 @@ const OTHER = '__other__';
 const normalizeSemesterName = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 
 /**
- * What each stage change means, in words. The session moves draft → open → grading → closed;
- * these describe only what the server actually enforces at each stage (marks are accepted
- * only while "open", members can't be added from "grading" on, groups can't be added once
- * "closed"), so the buttons don't promise locks that don't exist.
+ * What each stage change means, in words. The session moves Setting up → Running → Finished;
+ * these describe only what the server enforces (marks, journals and members change only while
+ * Running; a Finished session is read-only), so the buttons don't promise locks that don't exist.
  */
 const STATUS_ACTIONS: Record<string, { label: string; hint: string; done: string; confirm?: string }> = {
   'draft->open': {
@@ -112,43 +121,37 @@ const STATUS_ACTIONS: Record<string, { label: string; hint: string; done: string
     hint: 'Start the semester: supervisors and evaluators can submit marks while the session is open.',
     done: 'Session opened',
   },
-  'open->grading': {
-    label: 'Start Grading',
-    hint: 'Stop mark submissions and new members, and compute grades from what was submitted.',
-    done: 'Grading started - mark submission is now closed',
-    confirm: 'Supervisors and evaluators will no longer be able to submit or change marks, and no more members can be added. You can reopen submissions later if needed.',
+  'open->closed': {
+    label: 'Publish Results & Finish',
+    hint: 'Publish the final grades and finish the semester. Then move students on to the next session.',
+    done: 'Results published - the session is finished',
+    confirm: 'This publishes the results and finishes the semester: marks, journals and members become read-only. You can then move students on to the next session. You can reopen it later if something needs fixing.',
   },
   'grading->open': {
-    label: 'Reopen Submissions',
+    label: 'Back to Running',
     hint: 'Let supervisors and evaluators submit or correct marks again.',
-    done: 'Submissions reopened',
+    done: 'Session is running again',
   },
   'grading->closed': {
-    label: 'Close Session',
-    hint: 'Finalise the semester. Only an admin can reopen a closed session, with a reason.',
-    done: 'Session closed',
-    confirm: 'This finalises the semester. Only an admin can reopen it afterwards, and a reason is required.',
+    label: 'Publish Results & Finish',
+    hint: 'Publish the final grades and finish the semester. Then move students on to the next session.',
+    done: 'Results published - the session is finished',
+    confirm: 'This publishes the results and finishes the semester: marks, journals and members become read-only. You can then move students on to the next session. You can reopen it later if something needs fixing.',
   },
-  'closed->grading': {
+  'closed->open': {
     label: 'Reopen for Correction',
-    hint: 'Admin only: move a closed session back to grading, e.g. to fix a mark. A reason is required.',
+    hint: 'Make a finished session running again, e.g. to fix a mark.',
     done: 'Session reopened for correction',
+    confirm: 'The session goes back to Running: marks, journals and members can be changed again.',
   },
 };
 
 /** One line on what the current stage means, shown next to the status badge. */
 const STATUS_MEANING: Record<string, string> = {
-  draft: 'Setting up - marks cannot be submitted yet.',
-  open: 'In progress - supervisors and evaluators can submit marks.',
-  grading: 'Marks are closed; grades are computed from what was submitted.',
-  closed: 'Finalised. Only an admin can reopen it.',
-};
-
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  draft: ['open'],
-  open: ['grading'],
-  grading: ['closed', 'open'],
-  closed: ['grading'],
+  draft: 'Setting up - nothing can be submitted yet.',
+  open: 'Running - journals, marks and grading.',
+  grading: 'Running - journals, marks and grading.',
+  closed: 'Finished - results published. Reopen it if something needs fixing.',
 };
 
 export default function CapstoneSessionManagement() {
@@ -185,6 +188,7 @@ export default function CapstoneSessionManagement() {
   const [selectedSession, setSelectedSession] = useState<CapstoneSessionRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CapstoneSessionRow | null>(null);
   const [groups, setGroups] = useState<GroupRow[]>([]);
+  const [showSchemes, setShowSchemes] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -203,6 +207,9 @@ export default function CapstoneSessionManagement() {
   const [addingMembers, setAddingMembers] = useState(false);
 
   const [evaluatorPickerFor, setEvaluatorPickerFor] = useState<GroupRow | null>(null);
+  const [supervisorPickerFor, setSupervisorPickerFor] = useState<GroupRow | null>(null);
+  // The group open in the modal, and which tab it opened on.
+  const [openGroup, setOpenGroup] = useState<{ id: string; tab: string } | null>(null);
 
   // Student detail dialog (marks, grade, journal; coordinators can edit name/email).
   const [openStudent, setOpenStudent] = useState<{ groupId: string; studentAccountId: string } | null>(null);
@@ -390,19 +397,11 @@ export default function CapstoneSessionManagement() {
     const action = STATUS_ACTIONS[`${session.status}->${status}`];
     if (action?.confirm && !confirm(`${action.label}?\n\n${action.confirm}`)) return;
 
-    // Reopening a closed session is admin-only and the server requires a reason for the
-    // record - without asking, this transition could never succeed.
-    let reason: string | undefined;
-    if (session.status === 'closed') {
-      reason = window.prompt('Why is this closed session being reopened? (kept in the session history)')?.trim();
-      if (!reason) return;
-    }
-
     try {
       const res = await fetch(`/api/capstone/sessions/${session._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ status }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update status');
@@ -561,6 +560,12 @@ export default function CapstoneSessionManagement() {
   };
 
   const handleRemoveMember = async (group: GroupRow, studentAccountId: string) => {
+    // A small × next to a name is easy to hit by accident - confirm first.
+    const member = group.members.find((m) => (typeof m.studentAccountId === 'object' ? m.studentAccountId._id : m.studentAccountId) === studentAccountId);
+    const who = member && typeof member.studentAccountId === 'object' ? member.studentAccountId.name : member?.studentIdText || 'this student';
+    if (!window.confirm(`Remove ${who} from "${group.projectTitle}"?
+
+Their journal and marks are kept.`)) return;
     try {
       const res = await fetch(`/api/capstone/groups/${group._id}`, {
         method: 'PATCH',
@@ -625,8 +630,7 @@ export default function CapstoneSessionManagement() {
         handleTransition(selectedSession, 'open');
         break;
       case 'marks':
-        if (selectedSession.status === 'open') handleTransition(selectedSession, 'grading');
-        else handleRequestMarks();
+        handleRequestMarks();
         break;
       case 'chosen': {
         // First group that still needs a choice: more than two evaluators and a component with
@@ -636,17 +640,211 @@ export default function CapstoneSessionManagement() {
           const chosen = (g as GroupRow & { chosenEvaluators?: { presentation?: string[]; report?: string[] } }).chosenEvaluators;
           return !chosen?.presentation?.length || !chosen?.report?.length;
         });
-        if (target) window.location.href = `/capstone/groups/${target._id}?tab=manage`;
+        if (target) setOpenGroup({ id: target._id, tab: 'manage' });
         else toast.info('Every group with more than two evaluators already has a choice');
         break;
       }
       case 'pin':
-        // The pinning panel is already on this page; scrolling beats a dialog here.
-        document.getElementById('track-schemes')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setShowSchemes(true);
         break;
       default:
         break;
     }
+  };
+
+  // One group's full details: members, evaluators, report link and actions. Used by both
+  // the cards view and an expanded row of the list view (`bare` drops the card border).
+  const renderGroupDetails = (group: GroupRow, bare = false) => {
+    const activeMembers = group.members.filter((m) => !m.removedAt);
+    const activeEvaluators = group.evaluators.filter((e) => !e.unassignedAt);
+    const supervisor = typeof group.supervisorId === 'object' ? group.supervisorId : null;
+    // A finished semester is kept for reference only - no edit controls.
+    const readOnly = isPastSession(selectedSession?.status);
+    return (
+      <div key={group._id} className={bare ? 'space-y-3' : 'rounded-lg border p-4 space-y-3'}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="font-semibold">{group.projectTitle}</h4>
+              <Badge variant="outline">Track {group.track} #{group.groupNumber}</Badge>
+              {group.journalCompletedAt && (
+                <Tip label={`Every weekly journal is closed and the journal marks are in (${new Date(group.journalCompletedAt).toLocaleDateString()})`}>
+                  <Badge variant="outline" className="gap-1 border-emerald-500/50 text-emerald-700 dark:text-emerald-300">
+                    <Check className="h-3 w-3" /> Journal done
+                  </Badge>
+                </Tip>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+              <UserCog className="h-3.5 w-3.5" />
+              Supervisor: {supervisor?.name || 'Unknown'} ({supervisor?.email})
+              {!readOnly && (
+                <Tip label="Hand this group to a different supervisor">
+                  <Button variant="ghost" size="sm" className="ml-1 h-6 px-2 text-xs" onClick={() => setSupervisorPickerFor(group)}>
+                    Change
+                  </Button>
+                </Tip>
+              )}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Tip label="Open this group here: marks, rubric sheets, chosen evaluators and journals">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setOpenGroup({ id: group._id, tab: 'manage' })}>
+                Open <ExternalLink className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </Tip>
+          </div>
+          <div className={cn('flex shrink-0 items-center gap-1', readOnly && 'hidden')}>
+            <JournalReminderButton
+              groupId={group._id}
+              lastSentAt={group.lastJournalReminderAt}
+              compact
+              variant="ghost"
+              onSent={(at) =>
+                setGroups((prev) => prev.map((g) => (g._id === group._id ? { ...g, lastJournalReminderAt: at } : g)))
+              }
+            />
+            <Tip label="Delete this group and its journal entries and marks (only while the session is a draft or open)">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteGroup(group)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </Tip>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-muted-foreground">Members · click a name for marks, grade and journal</p>
+            {!readOnly && <Tip label="Add students to this group">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => {
+                  setMemberPickerFor(group);
+                  setNewMembers([]);
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add
+              </Button>
+            </Tip>}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {activeMembers.map((m) => {
+              const account = typeof m.studentAccountId === 'object' ? m.studentAccountId : null;
+              const sid = account ? account._id : (m.studentAccountId as string);
+              return (
+                <span key={sid} className="inline-flex items-center rounded-md border bg-secondary/60 text-xs">
+                  <Tip label={account?.email ? `${account.email} - view marks, grade and journal` : 'No email on record - view or edit details'}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenStudent({ groupId: group._id, studentAccountId: sid })}
+                      className="flex items-center gap-1.5 rounded-l-md px-2 py-1 hover:bg-secondary"
+                    >
+                      <span className="font-medium">{account?.name || m.studentIdText}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{account?.studentId || m.studentIdText}</span>
+                      {account && !account.email && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="no email" />}
+                    </button>
+                  </Tip>
+                  {!readOnly && <Tip label="Remove from this group (journal and marks are kept)">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMember(group, sid)}
+                      className="rounded-r-md border-l px-1.5 py-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Remove member"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Tip>}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-muted-foreground">Evaluators</p>
+            {!readOnly && <Tip label="Assign an evaluator - or invite someone who isn't registered yet">
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEvaluatorPickerFor(group)}>
+                <ShieldPlus className="h-3 w-3 mr-1" />
+                Add
+              </Button>
+            </Tip>}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {activeEvaluators.length === 0 && <span className="text-xs text-muted-foreground">None assigned</span>}
+            {activeEvaluators.map((e) => {
+              const evUser = typeof e.evaluatorId === 'object' ? e.evaluatorId : null;
+              const evId = typeof e.evaluatorId === 'object' ? e.evaluatorId._id : e.evaluatorId;
+              return (
+                <Badge key={evId} variant="outline" className="gap-1">
+                  {evUser?.name || evId}
+                  {!readOnly && <Tip label="Unassign this evaluator (their submitted marks are kept)">
+                    <button onClick={() => handleRemoveEvaluator(group, evId)} className="ml-1 hover:text-destructive" aria-label="Unassign evaluator">
+                      <ShieldMinus className="h-3 w-3" />
+                    </button>
+                  </Tip>}
+                </Badge>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Report link - usually filled in at semester end, once students upload. */}
+        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+          <p className="text-xs font-medium text-muted-foreground">Report</p>
+          {reportEditFor === group._id ? (
+            <>
+              <Input
+                autoFocus
+                value={reportDraft}
+                onChange={(e) => setReportDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveReport(group._id);
+                  if (e.key === 'Escape') setReportEditFor(null);
+                }}
+                placeholder="https://drive.google.com/..."
+                className="h-8 min-w-48 flex-1 text-xs"
+                disabled={savingReport}
+              />
+              <Tip label="Save the report link (leave empty to remove it)">
+                <Button size="icon" className="h-8 w-8" onClick={() => handleSaveReport(group._id)} disabled={savingReport}>
+                  {savingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                </Button>
+              </Tip>
+              <Tip label="Cancel">
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setReportEditFor(null)} disabled={savingReport}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </Tip>
+            </>
+          ) : group.reportUrl ? (
+            <>
+              <Tip label={group.reportUrl}>
+                <a href={group.reportUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                  <FileText className="h-3.5 w-3.5" /> Open report <ExternalLink className="h-3 w-3" />
+                </a>
+              </Tip>
+              {!readOnly && <Tip label="Change the report link">
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setReportEditFor(group._id); setReportDraft(group.reportUrl || ''); }}>
+                  Edit
+                </Button>
+              </Tip>}
+            </>
+          ) : readOnly ? (
+            <span className="text-xs text-muted-foreground">No report linked</span>
+          ) : (
+            <Tip label="Paste the link to the group's final report (e.g. Google Drive) once they've uploaded it">
+              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => { setReportEditFor(group._id); setReportDraft(''); }}>
+                <Link2 className="h-3 w-3 mr-1" /> Add report link
+              </Button>
+            </Tip>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const handleAddMembers = async (notify: boolean) => {
@@ -709,6 +907,11 @@ export default function CapstoneSessionManagement() {
   };
 
   const handleRemoveEvaluator = async (group: GroupRow, evaluatorId: string) => {
+    const ev = group.evaluators.find((e) => (typeof e.evaluatorId === 'object' ? e.evaluatorId._id : e.evaluatorId) === evaluatorId);
+    const who = ev && typeof ev.evaluatorId === 'object' ? ev.evaluatorId.name : 'this evaluator';
+    if (!window.confirm(`Unassign ${who} from "${group.projectTitle}"?
+
+Marks they already submitted are kept.`)) return;
     try {
       const res = await fetch(`/api/capstone/groups/${group._id}/evaluators/${evaluatorId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -768,7 +971,7 @@ export default function CapstoneSessionManagement() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   {selectedSession.department} Capstone - {semesterName}
-                  <Badge variant="secondary" className="capitalize">{selectedSession.status}</Badge>
+                  <SessionStatusPill status={selectedSession.status} />
                 </CardTitle>
                 <CardDescription>
                   {STATUS_MEANING[selectedSession.status]} · {selectedSession.journalWeekCount} week journal
@@ -814,20 +1017,31 @@ export default function CapstoneSessionManagement() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                {(STATUS_TRANSITIONS[selectedSession.status] || []).map((next) => {
-                  const action = STATUS_ACTIONS[`${selectedSession.status}->${next}`];
-                  return (
-                    <Tip key={next} label={action?.hint || `Move the session to ${next}`}>
-                      <Button
-                        variant={next === 'open' && selectedSession.status === 'draft' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => handleTransition(selectedSession, next)}
-                      >
-                        {action?.label || `Move to ${next}`}
-                      </Button>
-                    </Tip>
-                  );
-                })}
+                <Tip label="Every group's marks in one table - type any grader's marks in, as coordinator">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/capstone/sessions/${selectedSession._id}/marks`}>
+                      <ClipboardEdit className="h-4 w-4 mr-1.5" />
+                      Enter marks
+                    </a>
+                  </Button>
+                </Tip>
+                <Tip label="Every student's marks and grade - and, once the session is finished, move groups on to the next session">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/capstone/sessions/${selectedSession._id}/grades`}>
+                      <FileText className="h-4 w-4 mr-1.5" />
+                      Grades{selectedSession.status === 'closed' ? ' & move on' : ''}
+                    </a>
+                  </Button>
+                </Tip>
+                <Tip label="Which grading scheme each track is graded under">
+                  <Button variant="outline" size="sm" onClick={() => setShowSchemes(true)}>
+                    <SlidersHorizontal className="h-4 w-4 mr-1.5" />
+                    Grading Schemes
+                    {selectedSession.tracks.some((t) => !t.gradingSchemeId) && (
+                      <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-500" aria-label="A track has no scheme" />
+                    )}
+                  </Button>
+                </Tip>
                 <Tip label="Paste report links for many groups at once, e.g. at semester end">
                   <Button variant="outline" size="sm" onClick={() => setShowBulkReports(true)} disabled={groups.length === 0}>
                     <Link2 className="h-4 w-4 mr-1.5" />
@@ -852,196 +1066,48 @@ export default function CapstoneSessionManagement() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-5">
+            {/* Where the session is, what to do now, and the one next step. */}
+            <SessionStageBar
+              status={selectedSession.status as SessionStatus}
+              actionLabel={(from, to) => STATUS_ACTIONS[`${from}->${to}`]?.label || `Move to ${to}`}
+              onMove={(to) => handleTransition(selectedSession, to)}
+              canGoBackFromClosed
+            />
             {groupsLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
             ) : groups.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">No groups yet.</p>
             ) : (
-              <div className="space-y-3">
-                {groups.map((group) => {
-                  const activeMembers = group.members.filter((m) => !m.removedAt);
-                  const activeEvaluators = group.evaluators.filter((e) => !e.unassignedAt);
-                  const supervisor = typeof group.supervisorId === 'object' ? group.supervisorId : null;
-                  return (
-                    <div key={group._id} className="rounded-lg border p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="font-semibold">{group.projectTitle}</h4>
-                            <Badge variant="outline">Track {group.track} #{group.groupNumber}</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-                            <UserCog className="h-3.5 w-3.5" />
-                            Supervisor: {supervisor?.name || 'Unknown'} ({supervisor?.email})
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <JournalReminderButton
-                            groupId={group._id}
-                            lastSentAt={group.lastJournalReminderAt}
-                            compact
-                            variant="ghost"
-                            onSent={(at) =>
-                              setGroups((prev) => prev.map((g) => (g._id === group._id ? { ...g, lastJournalReminderAt: at } : g)))
-                            }
-                          />
-                          <Tip label="Delete this group and its journal entries and marks (only while the session is a draft or open)">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteGroup(group)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </Tip>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-muted-foreground">Members · click a name for marks, grade and journal</p>
-                          <Tip label="Add students to this group">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => {
-                                setMemberPickerFor(group);
-                                setNewMembers([]);
-                              }}
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add
-                            </Button>
-                          </Tip>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {activeMembers.map((m) => {
-                            const account = typeof m.studentAccountId === 'object' ? m.studentAccountId : null;
-                            const sid = account ? account._id : (m.studentAccountId as string);
-                            return (
-                              <span key={sid} className="inline-flex items-center rounded-md border bg-secondary/60 text-xs">
-                                <Tip label={account?.email ? `${account.email} - view marks, grade and journal` : 'No email on record - view or edit details'}>
-                                  <button
-                                    type="button"
-                                    onClick={() => setOpenStudent({ groupId: group._id, studentAccountId: sid })}
-                                    className="flex items-center gap-1.5 rounded-l-md px-2 py-1 hover:bg-secondary"
-                                  >
-                                    <span className="font-medium">{account?.name || m.studentIdText}</span>
-                                    <span className="font-mono text-[10px] text-muted-foreground">{account?.studentId || m.studentIdText}</span>
-                                    {account && !account.email && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="no email" />}
-                                  </button>
-                                </Tip>
-                                <Tip label="Remove from this group (journal and marks are kept)">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveMember(group, sid)}
-                                    className="rounded-r-md border-l px-1.5 py-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                    aria-label="Remove member"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </Tip>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-medium text-muted-foreground">Evaluators</p>
-                          <Tip label="Assign an evaluator - or invite someone who isn't registered yet">
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEvaluatorPickerFor(group)}>
-                              <ShieldPlus className="h-3 w-3 mr-1" />
-                              Add
-                            </Button>
-                          </Tip>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {activeEvaluators.length === 0 && <span className="text-xs text-muted-foreground">None assigned</span>}
-                          {activeEvaluators.map((e) => {
-                            const evUser = typeof e.evaluatorId === 'object' ? e.evaluatorId : null;
-                            const evId = typeof e.evaluatorId === 'object' ? e.evaluatorId._id : e.evaluatorId;
-                            return (
-                              <Badge key={evId} variant="outline" className="gap-1">
-                                {evUser?.name || evId}
-                                <Tip label="Unassign this evaluator (their submitted marks are kept)">
-                                  <button onClick={() => handleRemoveEvaluator(group, evId)} className="ml-1 hover:text-destructive" aria-label="Unassign evaluator">
-                                    <ShieldMinus className="h-3 w-3" />
-                                  </button>
-                                </Tip>
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Report link - usually filled in at semester end, once students upload. */}
-                      <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-                        <p className="text-xs font-medium text-muted-foreground">Report</p>
-                        {reportEditFor === group._id ? (
-                          <>
-                            <Input
-                              autoFocus
-                              value={reportDraft}
-                              onChange={(e) => setReportDraft(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveReport(group._id);
-                                if (e.key === 'Escape') setReportEditFor(null);
-                              }}
-                              placeholder="https://drive.google.com/..."
-                              className="h-8 min-w-48 flex-1 text-xs"
-                              disabled={savingReport}
-                            />
-                            <Tip label="Save the report link (leave empty to remove it)">
-                              <Button size="icon" className="h-8 w-8" onClick={() => handleSaveReport(group._id)} disabled={savingReport}>
-                                {savingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                              </Button>
-                            </Tip>
-                            <Tip label="Cancel">
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setReportEditFor(null)} disabled={savingReport}>
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </Tip>
-                          </>
-                        ) : group.reportUrl ? (
-                          <>
-                            <Tip label={group.reportUrl}>
-                              <a href={group.reportUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                                <FileText className="h-3.5 w-3.5" /> Open report <ExternalLink className="h-3 w-3" />
-                              </a>
-                            </Tip>
-                            <Tip label="Change the report link">
-                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setReportEditFor(group._id); setReportDraft(group.reportUrl || ''); }}>
-                                Edit
-                              </Button>
-                            </Tip>
-                          </>
-                        ) : (
-                          <Tip label="Paste the link to the group's final report (e.g. Google Drive) once they've uploaded it">
-                            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => { setReportEditFor(group._id); setReportDraft(''); }}>
-                              <Link2 className="h-3 w-3 mr-1" /> Add report link
-                            </Button>
-                          </Tip>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <GroupsBrowser
+                groups={groups}
+                tracks={selectedSession.tracks.map((t) => t.track)}
+                renderDetails={renderGroupDetails}
+                onChangeSupervisor={isPastSession(selectedSession.status) ? undefined : setSupervisorPickerFor}
+              />
             )}
           </CardContent>
         </Card>
 
-        <div id="track-schemes">
-          <TrackSchemePanel
-          sessionId={selectedSession._id}
-          department={selectedSession.department}
-          tracks={selectedSession.tracks}
-          onUpdated={(updatedTracks) => {
-            setSelectedSession((prev) => (prev ? { ...prev, tracks: updatedTracks as typeof prev.tracks } : prev));
-            bumpSetup();
-          }}
-          />
-        </div>
+        {/* Grading schemes per track - behind the header's button, in a modal. */}
+        <Dialog open={showSchemes} onOpenChange={setShowSchemes}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Grading schemes</DialogTitle>
+              <DialogDescription>Which published grading scheme each track is graded under.</DialogDescription>
+            </DialogHeader>
+            <TrackSchemePanel
+              sessionId={selectedSession._id}
+              department={selectedSession.department}
+              tracks={selectedSession.tracks}
+              embedded
+              onUpdated={(updatedTracks) => {
+                setSelectedSession((prev) => (prev ? { ...prev, tracks: updatedTracks as typeof prev.tracks } : prev));
+                bumpSetup();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* Create group */}
         <Dialog open={showCreateGroup} onOpenChange={(open) => !creatingGroup && setShowCreateGroup(open)}>
@@ -1203,6 +1269,31 @@ export default function CapstoneSessionManagement() {
           }}
         />
 
+        {/* A group, opened without leaving the session */}
+        <GroupModal
+          groupId={openGroup?.id ?? null}
+          tab={openGroup?.tab}
+          onClosed={() => {
+            setOpenGroup(null);
+            // Evaluators, members or marks may have changed in there.
+            refreshGroups();
+          }}
+        />
+
+        {/* Change a group's supervisor */}
+        <ChangeSupervisorDialog
+          group={supervisorPickerFor}
+          sessionId={selectedSession._id}
+          users={users}
+          allGroups={groups}
+          onClose={() => setSupervisorPickerFor(null)}
+          onInvited={upsertUser}
+          onChanged={() => {
+            setSupervisorPickerFor(null);
+            refreshGroups();
+          }}
+        />
+
         {/* Add members to an existing group */}
         <Dialog
           open={memberPickerFor !== null}
@@ -1277,36 +1368,70 @@ export default function CapstoneSessionManagement() {
         {sessions.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">No capstone sessions yet.</p>
         ) : (
-          <div className="space-y-3">
-            {sessions.map((session) => (
-              <div
-                key={session._id}
-                className="flex w-full items-center justify-between gap-2 border rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <button onClick={() => openSession(session)} className="flex-1 p-4 text-left">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold">
-                      {session.department} - {typeof session.semesterId === 'object' ? session.semesterId.name : ''}
-                    </h4>
-                    <Badge variant="secondary" className="capitalize">{session.status}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
-                    Tracks {session.tracks.map((t) => t.track).join(', ')} · {session.journalWeekCount} week journal
+          <div className="space-y-6">
+            {[
+              { key: 'current', title: null as string | null, items: sessions.filter((x) => !isPastSession(x.status)) },
+              { key: 'past', title: 'Past semesters', items: sessions.filter((x) => isPastSession(x.status)) },
+            ].map(({ key, title, items }) => {
+              if (items.length === 0) {
+                return key === 'current' ? (
+                  <p key={key} className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+                    No running session. Open one for the new semester.
                   </p>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="mr-3 text-muted-foreground hover:text-destructive"
-                  title="Delete session"
-                  aria-label={`Delete ${sessionLabel(session)}`}
-                  onClick={() => setDeleteTarget(session)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+                ) : null;
+              }
+              const list = (
+                <div className="space-y-2">
+                  {items.map((session) => (
+                    <div
+                      key={session._id}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-2 rounded-lg border transition-colors hover:bg-muted/50',
+                        key === 'past' && 'bg-muted/20'
+                      )}
+                    >
+                      <button onClick={() => openSession(session)} className="flex flex-1 items-center gap-3 p-4 text-left">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-semibold">
+                              {session.department} - {typeof session.semesterId === 'object' ? session.semesterId.name : ''}
+                            </h4>
+                            <SessionStatusPill status={session.status} />
+                          </div>
+                          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Users className="h-3.5 w-3.5" />
+                            Tracks {session.tracks.map((t) => t.track).join(', ')} · {session.journalWeekCount} week journal
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="mr-3 text-muted-foreground hover:text-destructive"
+                        title="Delete session"
+                        aria-label={`Delete ${sessionLabel(session)}`}
+                        onClick={() => setDeleteTarget(session)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              );
+              // Finished semesters stay reachable but out of the way.
+              return title ? (
+                <details key={key} className="group">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+                    <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                    <Archive className="h-4 w-4" /> {title} ({items.length})
+                  </summary>
+                  <div className="mt-3">{list}</div>
+                </details>
+              ) : (
+                <div key={key}>{list}</div>
+              );
+            })}
           </div>
         )}
       </CardContent>

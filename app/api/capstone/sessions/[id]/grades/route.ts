@@ -78,6 +78,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({
       sessionId: id,
       department: session.department,
+      sessionStatus: session.status,
       canSeeWholeSession,
       tracks,
       groups,

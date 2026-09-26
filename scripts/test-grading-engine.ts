@@ -60,9 +60,10 @@ const result = evaluateScheme(defaultCseScheme('A'), ctx);
 //          40 * (0.6*.90909 + 0.4*.77273) = 40 * (.545454 + .309091) = 40 * .854545 = 34.18
 const expectedReport = 34.18;
 // Pres:    sup 40/45 = .88889, chosen eval mean 37/45 = .82222
-//          45 * (0.6*.88889 + 0.4*.82222) = 45 * (.533333 + .328889) = 45 * .862222 = 38.80
-const expectedPres = 38.8;
-const expectedTotal = expectedReport + expectedPres + 4 + 9; // 85.98
+//          As the department's workbook: blended on a 50-mark scale, capped at 45:
+//          min(45, 50 * (0.6*.88889 + 0.4*.82222)) = 50 * .862222 = 43.11
+const expectedPres = 43.11;
+const expectedTotal = expectedReport + expectedPres + 4 + 9; // 90.29
 
 const byId = Object.fromEntries(result.trace.map((t) => [t.nodeId, t.value]));
 check('report component', byId.report_blend, expectedReport);
@@ -70,7 +71,7 @@ check('presentation component', byId.pres_blend, expectedPres);
 check('peer passes through raw', byId.peer, 4);
 check('journal passes through raw', byId.journal, 9);
 check('total', result.score, expectedTotal);
-check('letter grade (85.98 -> A)', result.letter, 'A');
+check('letter grade (90.29 -> A)', result.letter, 'A');
 check('nothing missing', result.missingComponents, []);
 
 // The unchosen evaluator's 0 must have been excluded - if it leaked in, the report mean
@@ -165,6 +166,40 @@ const noMax = evaluateScheme(defaultCseScheme('A'), {
   chosenEvaluators: {},
 });
 check('missing rubric max falls back to the override', noMax.trace.find((t) => t.nodeId === 'report_sup')?.value, 1);
+
+// ── Real rows from the department's workbooks must come out to the cent ─────────────────
+// public/templates/capstone/CSE 4098A/B Spring 2026.xlsx - the sheets' own cached totals.
+function workbookRow(track: 'A' | 'B', r: { sup: number; evs: number[]; presSup: number; presEvs: number[]; peer: number; journal: number }) {
+  const max = track === 'A' ? 33 : 42;
+  const evIds = [...r.evs.map((_, i) => `r${i}`), ...r.presEvs.map((_, i) => `p${i}`)];
+  const m: MarkInput[] = [
+    { component: 'report', submitterId: 'S', submitterRole: 'supervisor', rawScore: r.sup, rubricMax: max },
+    ...r.evs.map((v, i): MarkInput => ({ component: 'report', submitterId: `r${i}`, submitterRole: 'evaluator', rawScore: v, rubricMax: max })),
+    { component: 'presentation', submitterId: 'S', submitterRole: 'supervisor', rawScore: r.presSup, rubricMax: 45 },
+    ...r.presEvs.map((v, i): MarkInput => ({ component: 'presentation', submitterId: `p${i}`, submitterRole: 'evaluator', rawScore: v, rubricMax: 45 })),
+    { component: 'peer', submitterId: 'S', submitterRole: 'supervisor', rawScore: r.peer, rubricMax: 5 },
+    { component: 'weeklyJournal', submitterId: 'S', submitterRole: 'supervisor', rawScore: r.journal, rubricMax: 10 },
+  ];
+  return evaluateScheme(defaultCseScheme(track), {
+    studentAccountId: 'w',
+    marks: m,
+    supervisorId: 'S',
+    chosenEvaluators: { report: evIds, presentation: evIds },
+  });
+}
+const nodeValue = (r: ReturnType<typeof evaluateScheme>, id: string) => r.trace.find((t) => t.nodeId === id)?.value;
+// 4098A row 5 (231014004): sheet Report 34.18, Presentation 41.11, Total 90.29, A
+const wA = workbookRow('A', { sup: 30, evs: [27, 24], presSup: 39, presEvs: [36, 42, 33, 33, 33, 27], peer: 5, journal: 10 });
+check('4098A workbook row: report', nodeValue(wA, 'report_blend'), 34.18);
+check('4098A workbook row: presentation', nodeValue(wA, 'pres_blend'), 41.11);
+check('4098A workbook row: total', wA.score, 90.29);
+check('4098A workbook row: grade', wA.letter, 'A');
+// 4098B row 5 (223014152): sheet Report 31.43, Presentation 36.89, Total 76.32, B+
+const wB = workbookRow('B', { sup: 37, evs: [27], presSup: 33, presEvs: [38, 36, 36, 24], peer: 2, journal: 6 });
+check('4098B workbook row: report', nodeValue(wB, 'report_blend'), 31.43);
+check('4098B workbook row: presentation', nodeValue(wB, 'pres_blend'), 36.89);
+check('4098B workbook row: total', wB.score, 76.32);
+check('4098B workbook row: grade', wB.letter, 'B+');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

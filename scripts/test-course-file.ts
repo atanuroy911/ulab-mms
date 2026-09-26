@@ -91,7 +91,7 @@ const member: MemberGrade = {
 };
 const group: GroupGrades = {
   groupId: 'g1', track: 'A', groupNumber: 1, projectTitle: 'Smart Farming', supervisorName: 'Dr. Mahmudul Hasan',
-  schemeName: 'CSE', schemeVersion: 1, componentNodeIds: [], chosenAggregate: {}, members: [member],
+  schemeName: 'CSE', schemeVersion: 1, componentNodeIds: [], chosenAggregate: {}, evaluatorRules: { report: { mode: 'pick', k: null, how: 'mean' }, presentation: { mode: 'pick', k: null, how: 'mean' } }, members: [member],
 };
 
 const file = buildCourseFileData({ track: 'A', graph, outcomes: outA, groups: [group] });
@@ -110,8 +110,8 @@ check('CO1 final = (14+12+10)/3', row.co.CO1, 12);
 check('CO2 final = (2+3+1)/3', row.co.CO2, 2);
 check('CO3 final = (3+2+2)/3', row.co.CO3, 2.33);
 check('peer CO uses the actual peer mark', row.co.CO4, 4);
-// Presentation: 45*(0.6*36/45 + 0.4*36/45) = 36 -> 36*10/45 = 8
-check('presentation CO scaled to 10', row.co.CO5, 8);
+// Presentation (workbook arithmetic): min(45, 50*(0.6*36/45 + 0.4*36/45)) = 40 -> 40*10/45 = 8.89
+check('presentation CO scaled to 10', row.co.CO5, 8.89);
 
 check('CO1 % = 12/15', row.coPercent.CO1, 0.8);
 check('CO2 attained (66.7% >= 55%)', row.coAttained.CO2, true);

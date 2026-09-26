@@ -1,15 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import GradingScheme from '@/models/GradingScheme';
+import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession, { CapstoneSessionStatus } from '@/models/CapstoneSession';
 import { getCapstoneActor, canManageDepartment, isAdmin } from '@/lib/capstoneAuth';
 import { deleteSessionCascade, previewSessionCascade } from '@/lib/capstoneCascadeDelete';
+import { syncJournalCompletion } from '@/lib/capstoneJournalWorkflow';
 
+// Setting up -> Running -> Finished. Finishing publishes the results; the department's
+// coordinators (and admins) can reopen a finished session. 'grading' is an older Running stage, so it can finish too.
 const VALID_TRANSITIONS: Record<CapstoneSessionStatus, CapstoneSessionStatus[]> = {
   draft: ['open'],
-  open: ['grading'],
+  open: ['closed'],
   grading: ['closed', 'open'],
-  closed: ['grading'],
+  closed: ['open'],
 };
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -124,15 +128,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           { status: 400 }
         );
       }
-      // Reopening a closed session for correction is admin-only and requires a reason.
-      if (session.status === 'closed' && nextStatus === 'grading') {
-        if (!isAdmin(actor)) {
-          return NextResponse.json({ error: 'Only an admin can reopen a closed session' }, { status: 403 });
-        }
-        if (!body?.reason || typeof body.reason !== 'string' || !body.reason.trim()) {
-          return NextResponse.json({ error: 'A reason is required to reopen a closed session' }, { status: 400 });
-        }
-      }
 
       session.status = nextStatus;
       session.statusHistory.push({
@@ -142,10 +137,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ...(typeof body?.reason === 'string' && body.reason.trim() ? { reason: body.reason.trim() } : {}),
       });
       if (nextStatus === 'closed') session.closedAt = new Date();
-      if (nextStatus === 'grading' && session.closedAt) session.closedAt = null;
+      else if (session.closedAt) session.closedAt = null;
     }
 
+    const weekCountChanged = session.isModified('journalWeekCount');
     await session.save();
+    // More or fewer weeks changes which groups' journals are finished.
+    if (weekCountChanged) {
+      const groups = await CapstoneGroup.find({ sessionId: session._id }).select('_id').lean();
+      await Promise.all(groups.map((g) => syncJournalCompletion(g._id, { schedule: after, session })));
+    }
     return NextResponse.json(session);
   } catch (error: any) {
     console.error('PATCH /api/capstone/sessions/[id] error:', error);
@@ -169,7 +170,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // A closed session holds final results, so deleting it needs an explicit ?force=1 - the
     // UI only sends that after the user has seen the "results will be lost" warning.
-    // Admin-only, matching the rule that only an admin may reopen a closed session.
+    // Deleting a finished session (final results) is admin-only.
     const force = request.nextUrl.searchParams.get('force') === '1' && isAdmin(actor);
     const result = await deleteSessionCascade(id, { force });
     if (!result.deleted) {

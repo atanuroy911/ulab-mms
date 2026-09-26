@@ -331,3 +331,67 @@ export function evaluateExpression(expression: string, variables: Record<string,
 
 /** The function names the editor offers as autocomplete hints. */
 export const SUPPORTED_FUNCTIONS = Object.keys(FUNCTIONS);
+
+/** A parsed expression as a tree, for the formula <-> blocks converters (lib/formulaBlocks.ts). */
+export type ExprAst =
+  | { kind: 'num'; value: number }
+  | { kind: 'var'; name: string }
+  | { kind: 'neg'; arg: ExprAst }
+  | { kind: 'bin'; op: string; left: ExprAst; right: ExprAst }
+  | { kind: 'fn'; name: string; args: ExprAst[] };
+
+/** Parses with the same tokenizer and rules as compileExpression, then folds the RPN into a tree. */
+export function expressionToAst(expression: string): ExprAst {
+  compileExpression(expression); // same validation, same errors
+  const stack: ExprAst[] = [];
+  for (const item of toRpn(tokenize(expression))) {
+    if (item.kind === 'number') stack.push({ kind: 'num', value: parseFloat(item.value) });
+    else if (item.kind === 'var') stack.push({ kind: 'var', name: item.value });
+    else if (item.kind === 'unary') {
+      const arg = stack.pop();
+      if (!arg) throw new ExpressionError('Malformed expression');
+      stack.push({ kind: 'neg', arg });
+    } else if (item.kind === 'op') {
+      const right = stack.pop();
+      const left = stack.pop();
+      if (!left || !right) throw new ExpressionError('Malformed expression');
+      stack.push({ kind: 'bin', op: item.value, left, right });
+    } else if (item.kind === 'func') {
+      const argc = item.argc ?? 0;
+      const args = stack.splice(stack.length - argc, argc);
+      if (args.length !== argc) throw new ExpressionError('Malformed expression');
+      stack.push({ kind: 'fn', name: item.value, args });
+    }
+  }
+  if (stack.length !== 1) throw new ExpressionError('Malformed expression');
+  return stack[0];
+}
+
+const PRINT_PREC: Record<string, number> = { '==': 1, '!=': 1, '<': 2, '<=': 2, '>': 2, '>=': 2, '+': 3, '-': 3, '*': 4, '/': 4, '%': 4, '^': 5 };
+
+/** Prints a tree back to an expression, with only the parentheses it needs. */
+export function astToExpression(ast: ExprAst): string {
+  const num = (v: number) => String(Math.round(v * 1e10) / 1e10);
+  const go = (node: ExprAst, parentPrec: number, rightSide: boolean): string => {
+    switch (node.kind) {
+      case 'num':
+        return node.value < 0 ? `(${num(node.value)})` : num(node.value);
+      case 'var':
+        return node.name;
+      case 'neg':
+        return `-${go(node.arg, 6, false)}`;
+      case 'fn':
+        return `${node.name}(${node.args.map((a) => go(a, 0, false)).join(', ')})`;
+      case 'bin': {
+        const prec = PRINT_PREC[node.op];
+        const text = `${go(node.left, prec, false)} ${node.op} ${go(node.right, prec, true)}`;
+        // Same precedence: left-associative ops need brackets on the right (a - (b - c)); the
+        // right-associative power needs them on the left ((a ^ b) ^ c).
+        const needs =
+          prec < parentPrec || (prec === parentPrec && (node.op === '^' ? !rightSide : rightSide));
+        return needs ? `(${text})` : text;
+      }
+    }
+  };
+  return go(ast, 0, false);
+}

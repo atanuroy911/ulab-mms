@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   GraduationCap,
@@ -15,7 +14,10 @@ import {
   AlertCircle,
   Loader2,
   Workflow,
+  Archive,
 } from 'lucide-react';
+import { SessionStatusPill } from '@/app/capstone/components/SessionStatusPill';
+import { isPastSession } from '@/lib/capstoneStatus';
 import { toast } from 'sonner';
 
 interface SessionRow {
@@ -28,13 +30,6 @@ interface SessionRow {
   coordinatorIds: string[];
   createdAt: string;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  draft: 'bg-muted text-muted-foreground',
-  open: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-  grading: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  closed: 'bg-secondary text-secondary-foreground',
-};
 
 interface Props {
   canEdit: boolean; // true for admin, false for coordinator-only
@@ -132,12 +127,20 @@ export default function CoordinatorCapstonePanel({ canEdit, userId }: Props) {
     );
   }
 
+  // Finished semesters leave the dashboard; they stay one click away under Sessions.
+  const currentSessions = sessions.filter((x) => !isPastSession(x.status));
+  const pastCount = sessions.length - currentSessions.length;
+
   return (
     <div className="space-y-4">
-      {sessions.map((session) => {
+      {currentSessions.length === 0 && (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">No capstone session is running right now.</CardContent>
+        </Card>
+      )}
+      {currentSessions.map((session) => {
         const semName =
           typeof session.semesterId === 'object' ? session.semesterId.name : '';
-        const statusClass = STATUS_COLOR[session.status] ?? STATUS_COLOR.draft;
         const isRequesting = requestingMarks === session._id;
         const isExporting = exportingMarks === session._id;
         const isOpenOrGrading = session.status === 'open' || session.status === 'grading';
@@ -155,11 +158,7 @@ export default function CoordinatorCapstonePanel({ canEdit, userId }: Props) {
                       {session.department}
                       {semName ? ` — ${semName}` : ''}
                     </CardTitle>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusClass}`}
-                    >
-                      {session.status}
-                    </span>
+                    <SessionStatusPill status={session.status} />
                   </div>
                   <CardDescription className="mt-1 flex items-center gap-1.5">
                     <GraduationCap className="h-3.5 w-3.5 shrink-0" />
@@ -232,6 +231,12 @@ export default function CoordinatorCapstonePanel({ canEdit, userId }: Props) {
           </Card>
         );
       })}
+      {pastCount > 0 && (
+        <Link href="/capstone/sessions" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <Archive className="h-4 w-4" /> {pastCount} past {pastCount === 1 ? 'semester' : 'semesters'}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      )}
     </div>
   );
 }

@@ -70,7 +70,8 @@ check(
 
 // The four component columns a coordinator expects to see in the sheet.
 check('report column', cols['Report (out of 40)'], 34.18);
-check('presentation column', cols['Presentation (out of 45)'], 38.8);
+// Workbook arithmetic: min(45, 50 * (0.6*40/45 + 0.4*37/45)) = 43.11
+check('presentation column', cols['Presentation (out of 45)'], 43.11);
 check('peer column', cols['Peer Mark (0-5)'], 4);
 check('journal column', cols['Weekly Journal (0-10)'], 9);
 
@@ -145,7 +146,7 @@ check('sheet names', reread.SheetNames, ['Grades']);
 
 const back = XLSX.utils.sheet_to_json<Record<string, unknown>>(reread.Sheets['Grades']);
 check('two data rows', back.length, 2);
-check('row 1 total', back[0]['Total'], 85.98);
+check('row 1 total', back[0]['Total'], 90.29);
 check('row 1 grade', back[0]['Grade'], 'A');
 check('row 1 student id', back[0]['Student ID'], '2021-1-60-123');
 check('row 1 name present', back[0]['Name'], 'Test Student');

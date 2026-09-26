@@ -36,6 +36,8 @@ interface AppHeaderProps {
   gradient?: 'blue' | 'purple' | 'none';
   /** Right-aligned action buttons, rendered after the theme toggle. */
   actions?: AppHeaderAction[];
+  /** Rendered just before the theme toggle (e.g. a help/guide button). */
+  beforeTheme?: ReactNode;
   /** Fully custom content appended at the end of the action row (dropdowns, menus, etc.). */
   extra?: ReactNode;
   /** Additional content rendered as a second row inside the header (e.g. mobile tab switcher). */
@@ -77,6 +79,7 @@ export function AppHeader({
   actions = [],
   extra,
   bottomBar,
+  beforeTheme,
 }: AppHeaderProps) {
   return (
     <div className="sticky top-0 z-50">
@@ -109,6 +112,7 @@ export function AppHeader({
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <RoleSwitcher />
+              {beforeTheme}
               <ThemeToggle />
               {actions.map(({ key, label, icon: ActionIcon, href, onClick, variant = 'outline', alwaysShowLabel, hint }) => {
                 const content = (

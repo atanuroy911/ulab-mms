@@ -40,9 +40,45 @@ export function countedEvaluators(
   chosen: Array<unknown> | undefined,
   activeEvaluatorIds: string[]
 ): string[] {
-  const picked = (chosen || []).map(String);
+  // An evaluator unassigned after being chosen stops counting: their marks are kept, but a
+  // grade must not rest on someone no longer on the group.
+  const picked = (chosen || []).map(String).filter((id) => activeEvaluatorIds.includes(id));
   if (picked.length > 0) return picked;
-  return activeEvaluatorIds.length <= MIN_CHOSEN_EVALUATORS ? activeEvaluatorIds : [];
+  // No choice made: every assigned evaluator counts - the department's workbooks average every
+  // evaluator who marked. (This used to count none once there were more than two, silently
+  // zeroing 40% of the report and presentation until a coordinator chose.)
+  return activeEvaluatorIds;
+}
+
+/**
+ * How a group's evaluator marks for one component become the "chosen evaluators" input of
+ * the grading scheme, in words the screens use:
+ *   all  - every active evaluator, combined by average (or best)
+ *   topK - for each student, their K highest evaluator marks, averaged
+ *   pick - only the evaluators the coordinator picked, combined by average (or best)
+ * Stored as chosenEvaluators / chosenAggregate / evaluatorTopK; groups saved before Top K
+ * existed read as "pick" (something chosen) or "all" (nothing chosen), as they always did.
+ */
+export type EvaluatorRuleMode = 'all' | 'topK' | 'pick';
+export interface EvaluatorRule {
+  mode: EvaluatorRuleMode;
+  /** Evaluators whose marks are considered (all active ones for 'all' and 'topK'). */
+  counted: string[];
+  k: number | null;
+  how: 'mean' | 'max';
+}
+
+export function evaluatorRule(
+  saved: { chosen?: Array<unknown>; how?: 'mean' | 'max' | null; topK?: number | null },
+  activeEvaluatorIds: string[]
+): EvaluatorRule {
+  const how = saved.how === 'max' ? 'max' : 'mean';
+  if (saved.topK && saved.topK > 0) {
+    return { mode: 'topK', counted: activeEvaluatorIds, k: Math.min(saved.topK, Math.max(activeEvaluatorIds.length, 1)), how: 'mean' };
+  }
+  const counted = countedEvaluators(saved.chosen, activeEvaluatorIds);
+  const picked = (saved.chosen || []).map(String).filter((id) => activeEvaluatorIds.includes(id));
+  return { mode: picked.length > 0 ? 'pick' : 'all', counted, k: null, how };
 }
 
 export interface ICapstoneChosenEvaluators {
@@ -75,11 +111,27 @@ export interface ICapstoneGroup extends Document {
    * best ('max'). Overrides the grading scheme block's aggregate for chosen-evaluator blocks.
    */
   chosenAggregate?: { presentation?: 'mean' | 'max'; report?: 'mean' | 'max' };
+  /** Per component: count each student's K highest evaluator marks (see evaluatorRule). */
+  evaluatorTopK?: { presentation?: number | null; report?: number | null };
   /** Google Drive / external link for the group's submitted report. */
   reportUrl?: string | null;
   /** When the supervisor/coordinator last emailed this group a journal reminder. */
   lastJournalReminderAt?: Date | null;
+  /** When every member's journal was closed and the journal marks were in - the coordinator
+   *  was notified then. Cleared if an entry is reopened (lib/capstoneJournalWorkflow.ts). */
+  journalCompletedAt?: Date | null;
   previousGroupId?: mongoose.Types.ObjectId | null;
+  /**
+   * Set once this group has been moved on to the next session (lib/capstoneProgression.ts):
+   * where it went, and who stayed behind and why. Its presence is what stops a second move.
+   */
+  progression?: {
+    targetSessionId: mongoose.Types.ObjectId;
+    targetGroupId: mongoose.Types.ObjectId | null;
+    movedAt: Date;
+    movedBy: mongoose.Types.ObjectId | null;
+    stayed: Array<{ studentAccountId: mongoose.Types.ObjectId; decision: 'hold' | 'withdrawn'; reason: string }>;
+  } | null;
   createdBy: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
@@ -176,6 +228,16 @@ const CapstoneGroupSchema: Schema = new Schema(
       ),
       default: () => ({ presentation: 'mean', report: 'mean' }),
     },
+    evaluatorTopK: {
+      type: new Schema(
+        {
+          presentation: { type: Number, min: 1, default: null },
+          report: { type: Number, min: 1, default: null },
+        },
+        { _id: false }
+      ),
+      default: () => ({ presentation: null, report: null }),
+    },
     reportUrl: {
       type: String,
       default: null,
@@ -184,9 +246,39 @@ const CapstoneGroupSchema: Schema = new Schema(
       type: Date,
       default: null,
     },
+    journalCompletedAt: {
+      type: Date,
+      default: null,
+    },
     previousGroupId: {
       type: Schema.Types.ObjectId,
       ref: 'CapstoneGroup',
+      default: null,
+    },
+    progression: {
+      type: new Schema(
+        {
+          targetSessionId: { type: Schema.Types.ObjectId, ref: 'CapstoneSession', required: true },
+          // null when the whole group stayed behind (nothing was created).
+          targetGroupId: { type: Schema.Types.ObjectId, ref: 'CapstoneGroup', default: null },
+          movedAt: { type: Date, required: true },
+          movedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+          stayed: {
+            type: [
+              new Schema(
+                {
+                  studentAccountId: { type: Schema.Types.ObjectId, ref: 'StudentAccount', required: true },
+                  decision: { type: String, enum: ['hold', 'withdrawn'], required: true },
+                  reason: { type: String, default: '' },
+                },
+                { _id: false }
+              ),
+            ],
+            default: [],
+          },
+        },
+        { _id: false }
+      ),
       default: null,
     },
     createdBy: {

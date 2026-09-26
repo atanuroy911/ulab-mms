@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
 import { resolveMembers } from '@/lib/capstoneStudentAccounts';
 import { sendGroupJournalEmails } from '@/lib/capstoneJournalEmails';
 import { getCapstoneActor, canManageGroup } from '@/lib/capstoneAuth';
+import { syncJournalCompletion } from '@/lib/capstoneJournalWorkflow';
 
 // Add a member to an existing group. Coordinator/admin only.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const session = await CapstoneSession.findById(group.sessionId).select('status department');
-    if (session?.status === 'grading' || session?.status === 'closed') {
+    if (session?.status === 'closed') {
       return NextResponse.json({ error: 'The cohort is locked for this session status' }, { status: 409 });
     }
 
@@ -70,6 +71,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       role: 'member',
     } as any);
     await group.save();
+    // A new member has weeks to write, so a finished journal is no longer finished.
+    await syncJournalCompletion(group._id, { schedule: after, group });
 
     // "Save & email" in the Add Members dialog: tell the student they've joined and how the
     // weekly journal works. Sent only after the save succeeded; a mail failure never undoes it.

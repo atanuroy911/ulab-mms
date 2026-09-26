@@ -1,12 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import mongoose from 'mongoose';
 import dbConnect from '@/lib/mongodb';
+import CapstoneSession from '@/models/CapstoneSession';
+import Semester from '@/models/Semester';
+import User from '@/models/User';
+import StudentAccount from '@/models/StudentAccount';
 import CapstoneGroup, { CHOOSABLE_COMPONENTS, MIN_CHOSEN_EVALUATORS } from '@/models/CapstoneGroup';
-import { getCapstoneActor, canManageGroup, isGroupSupervisor, isGroupGrader } from '@/lib/capstoneAuth';
+import { getCapstoneActor, canManageGroup, canManageDepartment, isGroupSupervisor, isGroupGrader } from '@/lib/capstoneAuth';
 import { assignableUserError } from '@/lib/webAdminAccount';
-import { getMarkingPlan } from '@/lib/capstoneMarkingPlan';
+import { markingPlanForSession } from '@/lib/capstoneMarkingPlan';
 
 const VALID_REMOVE_REASONS = ['dropped', 'transferred', 'withdrawn', 'admin-correction'];
 import { deleteGroupCascade } from '@/lib/capstoneCascadeDelete';
+import { syncJournalCompletion, notifyNewSupervisor } from '@/lib/capstoneJournalWorkflow';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,21 +22,47 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     await dbConnect();
 
-    const group = await CapstoneGroup.findById(id)
-      .populate('supervisorId', 'name email')
-      .populate('evaluators.evaluatorId', 'name email')
-      .populate('members.studentAccountId', 'studentId name email');
+    if (!mongoose.Types.ObjectId.isValid(id)) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    const group = await CapstoneGroup.findById(id);
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
-    const canManage = await canManageGroup(actor, group);
+    // One parallel batch instead of populate + separate session lookups: each round trip to
+    // the remote database is ~250ms. Nothing is returned before the permission check.
+    const userIds = [group.supervisorId, ...group.evaluators.map((e) => e.evaluatorId)];
+    const [session, users, students] = await Promise.all([
+      CapstoneSession.findById(group.sessionId).select('department tracks status semesterId').lean(),
+      User.find({ _id: { $in: userIds } }).select('name email').lean(),
+      StudentAccount.find({ _id: { $in: group.members.map((m) => m.studentAccountId) } }).select('studentId name email').lean(),
+    ]);
+    const canManage = !!session && canManageDepartment(actor, session.department);
     if (!canManage && !isGroupGrader(actor, group)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Which marks the supervisor and evaluators give, read from the track's active scheme,
     // so the page shows exactly the marking tasks the scheme will grade from.
-    const markingPlan = await getMarkingPlan(group.sessionId, group.track);
-    return NextResponse.json({ ...group.toObject(), markingPlan });
+    const [markingPlan, semester] = await Promise.all([
+      markingPlanForSession(session, group.track),
+      session?.semesterId ? Semester.findById(session.semesterId).select('name').lean<{ name?: string }>() : null,
+    ]);
+
+    // The same shape populate() gave (ids replaced by { _id, name, ... }); an id whose
+    // document is gone stays a plain id rather than becoming null.
+    const userById = new Map(users.map((u) => [String(u._id), u]));
+    const studentById = new Map(students.map((s) => [String(s._id), s]));
+    const plain = group.toObject();
+    return NextResponse.json({
+      ...plain,
+      supervisorId: userById.get(String(plain.supervisorId)) ?? plain.supervisorId,
+      evaluators: plain.evaluators.map((e) => ({ ...e, evaluatorId: userById.get(String(e.evaluatorId)) ?? e.evaluatorId })),
+      members: plain.members.map((m) => ({ ...m, studentAccountId: studentById.get(String(m.studentAccountId)) ?? m.studentAccountId })),
+      markingPlan,
+      sessionStatus: session?.status,
+      semesterName: semester?.name ?? null,
+      // What this viewer may do here, decided here rather than from their roles in the browser.
+      canManage,
+      canChooseEvaluators: canManage && !isGroupGrader(actor, group),
+    });
   } catch (error) {
     console.error('GET /api/capstone/groups/[id] error:', error);
     return NextResponse.json({ error: 'Failed to fetch group' }, { status: 500 });
@@ -68,6 +100,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       group.projectAbstract = body.projectAbstract.trim();
     }
 
+    let previousSupervisorId: string | null = null;
     if (typeof body?.supervisorId === 'string') {
       if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       // A group's supervisor must not also be an active evaluator of the same group - see
@@ -84,6 +117,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
       const supervisorError = await assignableUserError(body.supervisorId);
       if (supervisorError) return NextResponse.json({ error: supervisorError }, { status: 400 });
+      if (String(group.supervisorId) !== body.supervisorId) previousSupervisorId = String(group.supervisorId);
       group.supervisorId = body.supervisorId;
     }
 
@@ -121,6 +155,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // without clobbering the other.
     if (body?.chosenEvaluators && typeof body.chosenEvaluators === 'object') {
       if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      // Whoever grades this group (even a coordinator or admin) must not pick whose marks count.
+      if (isGroupGrader(actor, group)) {
+        return NextResponse.json({ error: "You grade this group, so you can't choose which evaluators count - another coordinator has to" }, { status: 403 });
+      }
 
       const activeEvaluatorIds = new Set(
         group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId))
@@ -171,6 +209,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Average (default) or best of the chosen evaluators, per component.
     if (body?.chosenAggregate && typeof body.chosenAggregate === 'object') {
       if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      // Whoever grades this group (even a coordinator or admin) must not pick whose marks count.
+      if (isGroupGrader(actor, group)) {
+        return NextResponse.json({ error: "You grade this group, so you can't choose which evaluators count - another coordinator has to" }, { status: 403 });
+      }
       const next = { presentation: group.chosenAggregate?.presentation || 'mean', report: group.chosenAggregate?.report || 'mean' };
       for (const component of CHOOSABLE_COMPONENTS) {
         const value = body.chosenAggregate[component];
@@ -184,7 +226,49 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       group.markModified('chosenAggregate');
     }
 
+    // Top K per component: each student's K highest evaluator marks count (null turns it off).
+    if (body?.evaluatorTopK && typeof body.evaluatorTopK === 'object') {
+      if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (isGroupGrader(actor, group)) {
+        return NextResponse.json({ error: "You grade this group, so you can't choose which evaluators count - another coordinator has to" }, { status: 403 });
+      }
+      const activeCount = group.evaluators.filter((e) => !e.unassignedAt).length;
+      const next = { presentation: group.evaluatorTopK?.presentation ?? null, report: group.evaluatorTopK?.report ?? null };
+      for (const component of CHOOSABLE_COMPONENTS) {
+        const value = body.evaluatorTopK[component];
+        if (value === undefined) continue;
+        if (value === null || value === 0) {
+          next[component] = null;
+          continue;
+        }
+        if (!Number.isInteger(value) || value < 1 || value > activeCount) {
+          return NextResponse.json(
+            { error: `Top K for ${component} must be a whole number from 1 to ${activeCount} (this group's evaluators)` },
+            { status: 400 }
+          );
+        }
+        next[component] = value;
+        // Top K draws from every evaluator, so a picked list would only confuse - clear it.
+        if (group.chosenEvaluators) {
+          group.chosenEvaluators[component] = [] as any;
+          group.markModified('chosenEvaluators');
+        }
+      }
+      group.evaluatorTopK = next;
+      group.markModified('evaluatorTopK');
+    }
+
     await group.save();
+    // A new supervisor is told they have the group (after the response; never fails it).
+    if (previousSupervisorId) {
+      const [actorUser, previous] = await Promise.all([
+        User.findById(actor.userId).select('name').lean<{ name?: string }>(),
+        User.findById(previousSupervisorId).select('name').lean<{ name?: string }>(),
+      ]);
+      after(() => notifyNewSupervisor(group, actorUser?.name || 'The capstone coordinator', previous?.name));
+    }
+    // Removing a member can complete (or un-complete) the group's journal.
+    if (typeof body?.removeMemberStudentAccountId === 'string') await syncJournalCompletion(group._id, { schedule: after, group });
     return NextResponse.json(group);
   } catch (error: any) {
     console.error('PATCH /api/capstone/groups/[id] error:', error);

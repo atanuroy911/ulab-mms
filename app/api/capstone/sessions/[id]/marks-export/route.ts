@@ -1,19 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import CapstoneSession from '@/models/CapstoneSession';
-import CapstoneGroup from '@/models/CapstoneGroup';
-import CapstoneMarkSubmission from '@/models/CapstoneMarkSubmission';
-import StudentAccount from '@/models/StudentAccount';
-import User from '@/models/User';
+import '@/models/Semester';
 import { getCapstoneActor, isAdmin, isCoordinatorFor } from '@/lib/capstoneAuth';
+import { computeSessionGrades } from '@/lib/capstoneGrades';
 
 // GET /api/capstone/sessions/[id]/marks-export
-// Returns a CSV with all submitted marks for every group in a session.
+//
+// Every submitted mark in the session as a CSV, one row per mark - every grader, every
+// component (poster included), with its scale and whether the grade counts it.
+//
+// Built on computeSessionGrades, the same function the grades page, the gradebook export and
+// the course file use, so "Counted" here is exactly what the grade was computed from. It
+// previously read the collection itself: it included unsubmitted drafts, showed only the
+// first two assigned evaluators (not the ones that count) and only the current supervisor.
+//
 // Admin or coordinator for this department only.
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+
+const COMPONENT_LABEL: Record<string, string> = {
+  report: 'Report',
+  presentation: 'Presentation',
+  peer: 'Peer',
+  weeklyJournal: 'Weekly Journal',
+  poster: 'Poster',
+};
+
+const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const actor = await getCapstoneActor();
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,110 +37,83 @@ export async function GET(
 
     const session = await CapstoneSession.findById(id).populate('semesterId', 'name');
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-
     if (!isAdmin(actor) && !isCoordinatorFor(actor, session.department)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const groups = await CapstoneGroup.find({ sessionId: id }).sort({ track: 1, groupNumber: 1 });
-    const submissions = await CapstoneMarkSubmission.find({ sessionId: id });
+    const { groups } = await computeSessionGrades(session);
 
-    // Collect all student IDs and user IDs for lookup
-    const allStudentIds = new Set<string>();
-    const allUserIds = new Set<string>();
-
-    for (const g of groups) {
-      for (const m of g.members) {
-        if (!m.removedAt) allStudentIds.add(String(m.studentAccountId));
-      }
-      if (g.supervisorId) allUserIds.add(String(g.supervisorId));
-      for (const ev of g.evaluators) {
-        if (!ev.unassignedAt) allUserIds.add(String(ev.evaluatorId));
-      }
-    }
-
-    const [students, users] = await Promise.all([
-      StudentAccount.find({ _id: { $in: [...allStudentIds] } }).select('studentId name'),
-      User.find({ _id: { $in: [...allUserIds] } }).select('name email'),
-    ]);
-
-    const studentMap = new Map(students.map((s: any) => [String(s._id), s]));
-    const userMap = new Map(users.map((u: any) => [String(u._id), u]));
-
-    // Index submissions: studentAccountId -> component -> submitterId -> rawScore
-    const subIndex = new Map<string, Map<string, Map<string, number>>>();
-    for (const sub of submissions) {
-      const sid = String(sub.studentAccountId);
-      if (!subIndex.has(sid)) subIndex.set(sid, new Map());
-      const bySid = subIndex.get(sid)!;
-      if (!bySid.has(sub.component)) bySid.set(sub.component, new Map());
-      bySid.get(sub.component)!.set(String(sub.submitterId), sub.rawScore);
-    }
-
-    const semName = typeof session.semesterId === 'object' && session.semesterId !== null
-      ? (session.semesterId as any).name
-      : String(session.semesterId || '');
-
-    const COMPONENTS = ['weeklyJournal', 'peer', 'report', 'presentation'];
-    const ROLES = ['supervisor', 'evaluator1', 'evaluator2'];
-
-    const headers = [
-      'Group', 'Track', 'Supervisor', 'Student ID', 'Student Name',
-      ...COMPONENTS.flatMap((c) => ROLES.map((r) => `${c}_${r}`)),
+    const header = [
+      'Track',
+      'Group',
+      'Project',
+      'Supervisor',
+      'Student ID',
+      'Student Name',
+      'Component',
+      'Grader',
+      'Grader Role',
+      'Mark',
+      'Out Of',
+      'Counted In Grade',
+      'Entered By',
     ];
-
-    const rows: string[] = [headers.map((h) => `"${h}"`).join(',')];
+    const rows: string[] = [header.map(csvCell).join(',')];
 
     for (const group of groups) {
-      const supervisorId = String(group.supervisorId);
-      const supervisor = userMap.get(supervisorId);
-      const supervisorName = supervisor?.name || supervisorId;
-      const activeEvaluatorIds = group.evaluators.filter((e: any) => !e.unassignedAt).map((e: any) => String(e.evaluatorId));
-
-      const activeMembers = group.members.filter((m: any) => !m.removedAt);
-      for (const member of activeMembers) {
-        const memberId = String(member.studentAccountId);
-        const student = studentMap.get(memberId);
-        const studentId = student?.studentId || memberId;
-        const studentName = student?.name || '';
-
-        const bySub = subIndex.get(memberId);
-        const markCols: (number | string)[] = [];
-
-        for (const component of COMPONENTS) {
-          const byComp = bySub?.get(component);
-          // Supervisor
-          markCols.push(byComp?.get(supervisorId) ?? '');
-          // Evaluator 1 and 2
-          for (let e = 0; e < 2; e++) {
-            const evId = activeEvaluatorIds[e];
-            markCols.push(evId && byComp?.get(evId) !== undefined ? byComp!.get(evId)! : '');
-          }
-        }
-
-        rows.push(
-          [
-            `"${group.projectTitle.replace(/"/g, '""')}"`,
-            `"${group.track}"`,
-            `"${supervisorName.replace(/"/g, '""')}"`,
-            `"${studentId}"`,
-            `"${studentName.replace(/"/g, '""')}"`,
-            ...markCols.map((v) => `"${v}"`),
-          ].join(',')
+      for (const member of group.members) {
+        const subs = [...member.submissions].sort(
+          (a, b) =>
+            a.component.localeCompare(b.component) ||
+            (a.submitterRole === b.submitterRole ? a.submitterName.localeCompare(b.submitterName) : a.submitterRole === 'supervisor' ? -1 : 1)
         );
+        if (subs.length === 0) {
+          // Keep ungraded students visible so gaps are obvious.
+          rows.push(
+            [group.track, group.groupNumber, group.projectTitle, group.supervisorName, member.studentId, member.name, '', '', '', '', '', '', '']
+              .map(csvCell)
+              .join(',')
+          );
+          continue;
+        }
+        for (const s of subs) {
+          rows.push(
+            [
+              group.track,
+              group.groupNumber,
+              group.projectTitle,
+              group.supervisorName,
+              member.studentId,
+              member.name,
+              COMPONENT_LABEL[s.component] || s.component,
+              s.submitterName,
+              s.submitterRole === 'supervisor' ? 'Supervisor' : 'Evaluator',
+              s.rawScore,
+              s.rubricMax ?? '',
+              s.counted ? 'Yes' : 'No',
+              s.enteredByName || '',
+            ]
+              .map(csvCell)
+              .join(',')
+          );
+        }
       }
     }
 
-    const csv = rows.join('\r\n');
-    return new NextResponse(csv, {
+    const semName =
+      typeof session.semesterId === 'object' && session.semesterId !== null
+        ? String((session.semesterId as unknown as { name?: string }).name || '')
+        : '';
+    // BOM so Excel opens UTF-8 names correctly.
+    return new NextResponse(`﻿${rows.join('\r\n')}`, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="capstone-marks-${session.department}-${semName}.csv"`,
+        'Content-Disposition': `attachment; filename="capstone-marks-${session.department}-${semName.replace(/[^\w-]+/g, '_')}.csv"`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('GET /api/capstone/sessions/[id]/marks-export error:', error);
-    return NextResponse.json({ error: error.message || 'Export failed' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Export failed' }, { status: 500 });
   }
 }

@@ -12,7 +12,14 @@ import {
   Award,
   Flag,
   AlertCircle,
+  Plus,
+  Calculator,
+  Ruler,
+  Layers,
+  ArrowRightLeft,
+  GitBranch,
 } from 'lucide-react';
+import { BLOCKS, BLOCK_BY_OP, BLOCK_CATEGORY_LABEL, blockParams, type BlockCategory } from '@/lib/gradingBlocks';
 
 /**
  * Node renderers for the grading-scheme canvas.
@@ -338,3 +345,198 @@ export const NODE_PALETTE = [
     defaults: { label: 'Final Grade' },
   },
 ] as const;
+
+// ── Plain-language math blocks (node type `op`, lib/gradingBlocks.ts) ─────────────────
+
+const OP_ACCENT: Record<BlockCategory, string> = {
+  arithmetic: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  rounding: 'bg-orange-500/10 text-orange-700 dark:text-orange-300',
+  combine: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  convert: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
+  logic: 'bg-pink-500/10 text-pink-700 dark:text-pink-300',
+};
+
+export const OP_ICON: Record<BlockCategory, typeof Plus> = {
+  arithmetic: Calculator,
+  rounding: Ruler,
+  combine: Layers,
+  convert: ArrowRightLeft,
+  logic: GitBranch,
+};
+
+/**
+ * A math block reads as a sentence ("Take 60% of"), and each input with a role gets its own
+ * labelled plug on the left edge ("start with" / "take away"), so order can't be mixed up.
+ */
+export const OpNode = memo(({ data, selected }: NodeProps) => {
+  const d = data as Record<string, any>;
+  const def = BLOCK_BY_OP[d.op];
+  if (!def) {
+    return (
+      <NodeShell selected={selected} invalid accent="bg-destructive/10 text-destructive" icon={<AlertCircle className="h-3.5 w-3.5" />} title="Unknown block" />
+    );
+  }
+  const Icon = OP_ICON[def.category];
+  const ports = def.inputs === 'many' ? null : def.inputs;
+  const sentence = def.sentence(blockParams(def, d));
+  // Plugs line up with their labels: header ~34px, body padding 8px, then 22px per row.
+  const rowTop = (i: number) => 53 + i * 22;
+  return (
+    <>
+      {ports ? (
+        ports.map((p, i) => (
+          <Handle key={p.id} type="target" position={Position.Left} id={p.id} className={handleClass} style={{ top: rowTop(i) }} />
+        ))
+      ) : (
+        <Handle type="target" position={Position.Left} className={handleClass} />
+      )}
+      <NodeShell
+        selected={selected}
+        invalid={d.__invalid}
+        accent={OP_ACCENT[def.category]}
+        icon={<Icon className="h-3.5 w-3.5 shrink-0" />}
+        title={d.label && d.label !== def.title ? d.label : def.title}
+      >
+        {ports ? (
+          ports.map((p) => (
+            <p key={p.id} className="flex h-[22px] items-center text-[11px]">
+              ← {p.label}
+            </p>
+          ))
+        ) : (
+          <p className="text-[11px]">← any number of inputs</p>
+        )}
+        <p className="pt-1 text-sm font-semibold text-foreground">{sentence}</p>
+      </NodeShell>
+      <Handle type="source" position={Position.Right} className={handleClass} />
+    </>
+  );
+});
+OpNode.displayName = 'OpNode';
+
+(nodeTypes as Record<string, unknown>).op = OpNode;
+
+// ── The block library: everything a scheme can be built from, grouped and searchable ──
+
+export interface LibraryItem {
+  key: string;
+  type: string;
+  title: string;
+  description: string;
+  keywords: string[];
+  icon: typeof Plus;
+  group: string;
+  defaults: Record<string, unknown>;
+}
+
+const markPreset = (key: string, title: string, description: string, component: string, scope: string, normalize: boolean): LibraryItem => ({
+  key,
+  type: 'source',
+  title,
+  description,
+  keywords: [component, scope, 'mark', 'marks', 'component', 'score'],
+  icon: Database,
+  group: 'Marks',
+  defaults: { label: title, component, scope, aggregate: 'mean', normalize },
+});
+
+export const LIBRARY_GROUPS = ['Marks', 'Numbers', 'Arithmetic', 'Rounding & limits', 'Combine', 'Convert', 'Logic', 'Result', 'Advanced'] as const;
+
+export const BLOCK_LIBRARY: LibraryItem[] = [
+  // Every marking field, ready to drop in.
+  markPreset('m-report-sup', 'Report · Supervisor', 'The supervisor report rubric mark, as a fraction (0-1).', 'report', 'supervisor', true),
+  markPreset('m-report-ev', 'Report · Evaluators', 'The evaluators report marks averaged, as a fraction (0-1).', 'report', 'chosenEvaluator', true),
+  markPreset('m-pres-sup', 'Presentation · Supervisor', 'The supervisor presentation mark, as a fraction (0-1).', 'presentation', 'supervisor', true),
+  markPreset('m-pres-ev', 'Presentation · Evaluators', 'The evaluators presentation marks averaged, as a fraction (0-1).', 'presentation', 'chosenEvaluator', true),
+  markPreset('m-peer', 'Peer mark', 'The peer mark as entered (0-5).', 'peer', 'supervisor', false),
+  markPreset('m-journal', 'Weekly journal mark', 'The weekly journal mark as entered (0-10).', 'weeklyJournal', 'supervisor', false),
+  markPreset('m-poster-sup', 'Poster · Supervisor', 'The supervisor poster mark, as entered.', 'poster', 'supervisor', false),
+  markPreset('m-poster-ev', 'Poster · Evaluators', 'The evaluators poster marks averaged, as entered.', 'poster', 'allEvaluator', false),
+  {
+    key: 'm-custom',
+    type: 'source',
+    title: 'Any mark…',
+    description: 'Pick the component and who it comes from in the settings panel.',
+    keywords: ['component', 'source', 'custom'],
+    icon: Database,
+    group: 'Marks',
+    defaults: { label: 'Mark', component: 'report', scope: 'supervisor', aggregate: 'mean', normalize: true },
+  },
+  {
+    key: 'number',
+    type: 'constant',
+    title: 'Number',
+    description: 'A fixed number, e.g. 45.',
+    keywords: ['constant', 'value', 'fixed'],
+    icon: Hash,
+    group: 'Numbers',
+    defaults: { label: 'Number', value: 0 },
+  },
+  ...BLOCKS.map(
+    (b): LibraryItem => ({
+      key: `op-${b.op}`,
+      type: 'op',
+      title: b.title,
+      description: b.description,
+      keywords: b.keywords,
+      icon: OP_ICON[b.category],
+      group: BLOCK_CATEGORY_LABEL[b.category],
+      defaults: { op: b.op, label: b.title, ...Object.fromEntries(b.params.map((p) => [p.key, p.default])) },
+    })
+  ),
+  {
+    key: 'bands',
+    type: 'gradeBands',
+    title: 'Letter grade',
+    description: 'Turns the total into a letter (A+, A, A-, ...).',
+    keywords: ['grade', 'bands', 'letter', 'gpa'],
+    icon: Award,
+    group: 'Result',
+    defaults: { ...(NODE_PALETTE.find((p) => p.type === 'gradeBands')!.defaults as Record<string, unknown>) },
+  },
+  {
+    key: 'final',
+    type: 'output',
+    title: 'Final grade',
+    description: 'Where the result comes out - exactly one per scheme.',
+    keywords: ['output', 'result', 'end'],
+    icon: Flag,
+    group: 'Result',
+    defaults: { label: 'Final Grade' },
+  },
+  {
+    key: 'formula',
+    type: 'formula',
+    title: 'Formula',
+    description: 'Write the arithmetic as text. Can be turned into blocks and back.',
+    keywords: ['expression', 'equation', 'custom', 'excel'],
+    icon: FunctionSquare,
+    group: 'Advanced',
+    defaults: { label: 'Formula', expression: 'a' },
+  },
+  {
+    key: 'weighted-sum',
+    type: 'sum',
+    title: 'Weighted total',
+    description: 'Adds inputs, each with its own weight.',
+    keywords: ['sum', 'total', 'weights'],
+    icon: Sigma,
+    group: 'Advanced',
+    defaults: { label: 'Total', weights: {} },
+  },
+];
+
+/** The fixed plugs of a block, if it has any (to wire saved connections back onto them). */
+export function portIdsOf(type: string | undefined, data: Record<string, unknown> | undefined): string[] {
+  if (type !== 'op') return [];
+  const def = BLOCK_BY_OP[String(data?.op)];
+  return def && def.inputs !== 'many' ? def.inputs.map((p) => p.id) : [];
+}
+
+/** "take away" for the Subtract block's `b` plug; null for blocks without named plugs. */
+export function portLabel(type: string | undefined, data: Record<string, unknown> | undefined, port: string): string | null {
+  if (type !== 'op') return null;
+  const def = BLOCK_BY_OP[String(data?.op)];
+  if (!def || def.inputs === 'many') return null;
+  return def.inputs.find((p) => p.id === port)?.label ?? null;
+}

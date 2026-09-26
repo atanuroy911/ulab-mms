@@ -42,11 +42,13 @@ interface Props {
   department: string;
   tracks: TrackState[];
   onUpdated: (updatedTracks: TrackState[]) => void;
+  /** Rendered inside a modal: drop the card frame and heading. */
+  embedded?: boolean;
 }
 
 const UNPINNED = '__none__';
 
-export function TrackSchemePanel({ sessionId, department, tracks, onUpdated }: Props) {
+export function TrackSchemePanel({ sessionId, department, tracks, onUpdated, embedded = false }: Props) {
   const [schemes, setSchemes] = useState<SchemeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingTrack, setSavingTrack] = useState<string | null>(null);
@@ -101,10 +103,11 @@ export function TrackSchemePanel({ sessionId, department, tracks, onUpdated }: P
   const publishable = schemes.filter((s) => s.currentVersion > 0 && !s.isArchived);
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
+    // `embedded`: inside a modal that already has the title - no card frame, no repeated heading.
+    <Card className={embedded ? 'gap-3 border-0 py-0 shadow-none' : undefined}>
+      <CardHeader className={embedded ? 'px-0 pb-0' : 'pb-3'}>
+        <div className={embedded ? 'flex justify-end gap-2' : 'flex flex-wrap items-start justify-between gap-2'}>
+          <div className={embedded ? 'hidden' : undefined}>
             <CardTitle className="flex items-center gap-2 text-base">
               <Workflow className="h-4 w-4" />
               Grading Scheme per Track
@@ -130,7 +133,7 @@ export function TrackSchemePanel({ sessionId, department, tracks, onUpdated }: P
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2">
+      <CardContent className={embedded ? 'space-y-2 px-0' : 'space-y-2'}>
         {loading ? (
           <div className="flex justify-center py-4">
             <Loader2 className="h-5 w-5 animate-spin" />

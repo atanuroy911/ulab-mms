@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +58,8 @@ interface Detail {
 }
 
 interface Props {
+  /** Off on the group's own page, where the journal is already the main tab. */
+  showJournalLink?: boolean;
   groupId: string | null;
   studentAccountId: string | null;
   onClose: () => void;
@@ -67,7 +69,7 @@ interface Props {
 
 const round = (n: number) => (Number.isFinite(n) ? Math.round(n * 100) / 100 : n);
 
-export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpdated }: Props) {
+export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpdated, showJournalLink = true }: Props) {
   const open = !!groupId && !!studentAccountId;
   const [detail, setDetail] = useState<Detail | null>(null);
   const [editing, setEditing] = useState(false);
@@ -137,30 +139,31 @@ export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpda
   const submittedWeeks = (detail?.journal || []).filter((j) => j.submitted).length;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+    // A right-hand drawer rather than a centred modal, so the group page stays visible beside it.
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full gap-4 overflow-y-auto p-5 sm:max-w-xl">
         {loading || !detail ? (
           <>
-            <DialogHeader>
-              <DialogTitle>Student</DialogTitle>
-              <DialogDescription>Loading…</DialogDescription>
-            </DialogHeader>
+            <SheetHeader className="p-0 pr-8">
+              <SheetTitle>Student</SheetTitle>
+              <SheetDescription>Loading…</SheetDescription>
+            </SheetHeader>
             <div className="flex justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           </>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle className="flex flex-wrap items-center gap-2">
+            <SheetHeader className="p-0 pr-8">
+              <SheetTitle className="flex flex-wrap items-center gap-2">
                 {detail.student.name || detail.student.studentId}
                 {detail.student.removedAt && <Badge variant="outline">Removed from group</Badge>}
-              </DialogTitle>
-              <DialogDescription>
+              </SheetTitle>
+              <SheetDescription>
                 {detail.student.studentId} · Track {detail.group.track} #{detail.group.groupNumber} ·{' '}
                 {detail.group.projectTitle}
-              </DialogDescription>
-            </DialogHeader>
+              </SheetDescription>
+            </SheetHeader>
 
             {/* Details */}
             <section className="rounded-lg border p-3">
@@ -312,14 +315,19 @@ export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpda
             <section className="rounded-lg border p-3">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Weekly journal</h3>
-                <span className="text-xs text-muted-foreground">
+                <span className="flex items-center gap-3 text-xs text-muted-foreground">
                   {submittedWeeks} of {detail.session.journalWeekCount} weeks submitted
+                  {showJournalLink && (
+                    <a href={`/capstone/groups/${groupId}?student=${studentAccountId}`} className="font-medium text-primary hover:underline">
+                      Open weekly journal →
+                    </a>
+                  )}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {weeks.map((w) => {
                   const entry = journalByWeek.get(w);
-                  const state = entry?.reviewed ? 'reviewed' : entry?.submitted ? 'submitted' : 'missing';
+                  const state = entry?.reviewed ? (entry.submitted ? 'reviewed' : 'closed') : entry?.submitted ? 'submitted' : 'missing';
                   return (
                     <Tip
                       key={w}
@@ -328,7 +336,9 @@ export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpda
                           ? `Week ${w}: submitted and reviewed`
                           : state === 'submitted'
                             ? `Week ${w}: submitted, waiting for the supervisor's review`
-                            : `Week ${w}: not submitted`
+                            : state === 'closed'
+                              ? `Week ${w}: closed by the supervisor as not submitted`
+                              : `Week ${w}: not submitted`
                       }
                     >
                       <span
@@ -337,7 +347,9 @@ export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpda
                             ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                             : state === 'submitted'
                               ? 'border-primary/50 bg-primary/10 text-primary'
-                              : 'text-muted-foreground'
+                              : state === 'closed'
+                                ? 'border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                                : 'text-muted-foreground'
                         }`}
                       >
                         {w}
@@ -354,7 +366,7 @@ export function StudentDetailDialog({ groupId, studentAccountId, onClose, onUpda
             </section>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -1,4 +1,5 @@
 import { compileExpression, expressionVariables, ExpressionError } from './gradingExpression';
+import { blockIssues, evaluateBlock } from './gradingBlocks';
 import type {
   IGradingNode,
   IGradingEdge,
@@ -51,6 +52,25 @@ export interface StudentContext {
    * chosen-evaluator blocks only; absent means "use the block's setting".
    */
   chosenAggregate?: Partial<Record<CapstoneMarkComponent, 'mean' | 'max'>>;
+  /**
+   * "Top K": for each student, only their K highest evaluator marks count (averaged), drawn
+   * from every evaluator in `chosenEvaluators`. Set per component; absent or 0 means off.
+   */
+  evaluatorTopK?: Partial<Record<CapstoneMarkComponent, number | null>>;
+}
+
+/** A mark's size on its own scale, so marks on different rubrics rank fairly. */
+const markFraction = (m: Pick<MarkInput, 'rawScore' | 'rubricMax'>) => (m.rubricMax && m.rubricMax > 0 ? m.rawScore / m.rubricMax : m.rawScore);
+
+/**
+ * The evaluator marks "Top K" keeps for one student and component: the K highest, ties broken
+ * by evaluator id so the choice is stable. The grades, the "counted" flags on every screen and
+ * the exports all use this, so they can never disagree about which marks counted.
+ */
+export function topKMarks<T extends Pick<MarkInput, 'rawScore' | 'rubricMax' | 'submitterId'>>(marks: T[], k: number): T[] {
+  return [...marks]
+    .sort((a, b) => markFraction(b) - markFraction(a) || String(a.submitterId).localeCompare(String(b.submitterId)))
+    .slice(0, Math.max(0, Math.floor(k)));
 }
 
 export interface ValidationIssue {
@@ -211,6 +231,14 @@ export function validateScheme(graph: SchemeGraph): ValidationIssue[] {
         break;
       }
 
+      case 'op': {
+        // A plain-language math block (lib/gradingBlocks.ts).
+        for (const message of blockIssues(String(data.op || ''), data, inputs.map((e) => e.targetHandle || 'in'))) {
+          issues.push({ nodeId: node.id, message });
+        }
+        break;
+      }
+
       case 'gradeBands': {
         if (inputs.length !== 1) {
           issues.push({ nodeId: node.id, message: `A Grade Bands node takes exactly 1 input (it has ${inputs.length}).` });
@@ -310,7 +338,7 @@ export function componentNodeIds(graph: SchemeGraph): string[] {
   let current = output;
   const seen = new Set<string>();
 
-  while (PASS_THROUGH.has(current.type)) {
+  while (PASS_THROUGH.has(current.type) || (current.type === 'op' && (incoming.get(current.id) || []).length === 1)) {
     // Defensive: validateScheme rejects cycles, but this walk must terminate even if it is
     // ever called on an unvalidated graph.
     if (seen.has(current.id)) return [];
@@ -376,6 +404,19 @@ function aggregate(values: number[], how: GradingAggregate): number {
   }
 }
 
+/**
+ * Whose supervisor mark counts for a component. Normally the group's current supervisor's. If
+ * the supervisor was changed after marking, the previous supervisor's mark is used only while
+ * the current one hasn't marked that component - never averaged with it.
+ */
+export function isCountedSupervisorMark(mark: MarkInput, ctx: Pick<StudentContext, 'marks' | 'supervisorId'>): boolean {
+  if (mark.submitterRole !== 'supervisor') return false;
+  if (String(mark.submitterId) === String(ctx.supervisorId)) return true;
+  return !ctx.marks.some(
+    (m) => m.component === mark.component && m.submitterRole === 'supervisor' && String(m.submitterId) === String(ctx.supervisorId)
+  );
+}
+
 function resolveSource(node: IGradingNode, ctx: StudentContext): { value: number; count: number } {
   const component = node.data.component as CapstoneMarkComponent;
   const scope = node.data.scope as GradingSubmitterScope;
@@ -388,13 +429,17 @@ function resolveSource(node: IGradingNode, ctx: StudentContext): { value: number
 
   const chosen = new Set((ctx.chosenEvaluators[component] || []).map(String));
 
-  const relevant = ctx.marks.filter((mark) => {
+  let relevant = ctx.marks.filter((mark) => {
     if (mark.component !== component) return false;
-    if (scope === 'supervisor') return mark.submitterRole === 'supervisor';
+    if (scope === 'supervisor') return mark.submitterRole === 'supervisor' && isCountedSupervisorMark(mark, ctx);
     if (scope === 'allEvaluator') return mark.submitterRole === 'evaluator';
     // chosenEvaluator: only the evaluators the coordinator picked FOR THIS COMPONENT.
     return mark.submitterRole === 'evaluator' && chosen.has(String(mark.submitterId));
   });
+  // Top K: this student's K highest of those, averaged.
+  const topK = scope === 'chosenEvaluator' ? ctx.evaluatorTopK?.[component] : null;
+  if (topK && topK > 0) relevant = topKMarks(relevant, topK);
+  const combine = (topK && topK > 0 ? 'mean' : how) as GradingAggregate;
 
   const values = relevant.map((mark) => {
     if (!normalize) return mark.rawScore;
@@ -410,7 +455,7 @@ function resolveSource(node: IGradingNode, ctx: StudentContext): { value: number
     return mark.rawScore / max;
   });
 
-  return { value: aggregate(values, how), count: relevant.length };
+  return { value: aggregate(values, combine), count: relevant.length };
 }
 
 function applyBands(value: number, bands: Array<{ min: number; letter: string }>): string {
@@ -486,6 +531,9 @@ export function evaluateScheme(graph: SchemeGraph, ctx: StudentContext): Evaluat
       }
       case 'formula':
         value = compileExpression(node.data.expression)(named);
+        break;
+      case 'op':
+        value = evaluateBlock(String(node.data.op || ''), node.data, named, inputValues);
         break;
       case 'gradeBands': {
         const input = inputValues[0] ?? 0;
@@ -567,7 +615,8 @@ export function defaultCseScheme(track: 'A' | 'B' | 'C' = 'A'): SchemeGraph {
       id: 'report_blend',
       type: 'formula',
       position: { x: 300, y: 65 },
-      data: { label: 'Report (out of 40)', expression: 'round(40 * (0.6 * sup + 0.4 * ev), 2)' },
+      // As the workbook: each part is rounded to 2 places before the 60/40 blend.
+      data: { label: 'Report (out of 40)', expression: 'round(0.6 * round(40 * sup, 2) + 0.4 * round(40 * ev, 2), 2)' },
     },
     {
       id: 'pres_sup',
@@ -585,7 +634,8 @@ export function defaultCseScheme(track: 'A' | 'B' | 'C' = 'A'): SchemeGraph {
       id: 'pres_blend',
       type: 'formula',
       position: { x: 300, y: 345 },
-      data: { label: 'Presentation (out of 45)', expression: 'min(45, round(45 * (0.6 * sup + 0.4 * ev), 2))' },
+      // As the workbook: blended on a 50-mark scale, then capped at 45.
+      data: { label: 'Presentation (out of 45)', expression: 'min(45, round(50 * (0.6 * sup + 0.4 * ev), 2))' },
     },
     {
       id: 'peer',

@@ -4,6 +4,7 @@ import CapstoneGroup from '@/models/CapstoneGroup';
 import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
 import StudentAccount from '@/models/StudentAccount';
 import { getCapstoneActor, isGroupGrader, canManageGroup } from '@/lib/capstoneAuth';
+import { entryState } from '@/lib/capstoneJournalStatus';
 
 // GET /api/capstone/groups/[id]/journal/export
 // Returns a CSV of all journal entries for the group, grouped by member.
@@ -32,7 +33,7 @@ export async function GET(
 
     const [accounts, entries] = await Promise.all([
       StudentAccount.find({ _id: { $in: studentIds } }).select('studentId name'),
-      WeeklyJournalEntry.find({ groupId: id }).sort({ studentAccountId: 1, weekNumber: 1 }),
+      WeeklyJournalEntry.find({ sessionId: group.sessionId, studentAccountId: { $in: studentIds } }).sort({ studentAccountId: 1, weekNumber: 1 }),
     ]);
 
     const accountMap = new Map(accounts.map((a: any) => [String(a._id), a]));
@@ -40,7 +41,7 @@ export async function GET(
     // Build CSV
     const rows: string[] = [
       // header
-      ['Student ID', 'Student Name', 'Week', 'Work Done', 'Submitted At', 'Supervisor Comment', 'Reviewed At']
+      ['Student ID', 'Student Name', 'Week', 'Status', 'Work Done', 'Submitted At', 'Supervisor Comment', 'Reviewed At']
         .map((h) => `"${h}"`)
         .join(','),
     ];
@@ -53,7 +54,7 @@ export async function GET(
 
       const memberEntries = entries.filter((e: any) => String(e.studentAccountId) === sid);
       if (memberEntries.length === 0) {
-        rows.push(`"${studentId}","${studentName}","","","","",""`);
+        rows.push(`"${studentId}","${studentName}","","","","","",""`);
       } else {
         for (const entry of memberEntries) {
           rows.push(
@@ -61,6 +62,7 @@ export async function GET(
               studentId,
               studentName,
               entry.weekNumber,
+              { reviewed: 'Reviewed', missed: 'Not submitted', submitted: 'Awaiting review', 'not-started': '' }[entryState(entry)],
               (entry.workDone || '').replace(/"/g, '""'),
               entry.submittedAt ? new Date(entry.submittedAt).toISOString() : '',
               (entry.supervisorComment || '').replace(/"/g, '""'),

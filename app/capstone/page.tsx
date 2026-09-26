@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,12 +20,22 @@ import {
   Search,
   CheckCircle2,
   ExternalLink,
+  ChevronRight,
+  Archive,
+  PenLine,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { Tip } from '@/app/components/Tip';
-import { StudentDetailDialog } from './components/StudentDetailDialog';
 import { JournalReminderButton } from './components/JournalReminderButton';
+import { SessionStatusPill } from './components/SessionStatusPill';
+import { isPastSession, isRunning } from '@/lib/capstoneStatus';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// The details drawer loads the first time a student is opened.
+const StudentDetailDialog = dynamic(() => import('./components/StudentDetailDialog').then((m) => m.StudentDetailDialog), { ssr: false });
 
 interface MyGroup {
   _id: string;
@@ -33,11 +44,14 @@ interface MyGroup {
   projectTitle: string;
   reportUrl: string | null;
   lastJournalReminderAt: string | null;
+  journalCompletedAt: string | null;
   role: 'supervisor' | 'evaluator';
   supervisorName: string | null;
   session: { _id: string; department: string; status: string; semesterName: string | null; journalWeekCount: number } | null;
   members: Array<{ studentAccountId: string; studentId: string; name: string; email: string; journalSubmitted: number }>;
   journalUnreviewed: number;
+  /** Group-wide, in student-weeks: the same counts as the group's journal tab. */
+  journal?: { toReview: number; reviewed: number; missed: number; notWritten: number; total: number };
   marks: Array<{ component: string; done: number; total: number }>;
 }
 
@@ -49,12 +63,24 @@ const COMPONENT_LABEL: Record<string, string> = {
   poster: 'Poster',
 };
 
-const STAGE_HINT: Record<string, string> = {
-  draft: 'The session is still being set up - marks cannot be submitted yet.',
-  open: 'Marks can be submitted now.',
-  grading: 'Mark submission is closed; grades are being computed.',
-  closed: 'The semester is finalised.',
+/** Where on the group page each component is marked. */
+const COMPONENT_TAB: Record<string, string> = {
+  report: 'report',
+  presentation: 'presentation',
 };
+const tabFor = (component: string) => COMPONENT_TAB[component] || 'supervisor-marks';
+
+const VIEW_KEY = 'capstone-mygroups-view';
+
+/** "Umme Anisha (233014020)" -> "Umme Anisha": the ID is shown separately. */
+const cleanName = (name: string) => name.replace(/\s*\(\d+\)\s*$/, '');
+const initials = (name: string) =>
+  cleanName(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join('') || '?';
 
 export default function CapstonePage() {
   const { data: session, status } = useSession();
@@ -62,8 +88,36 @@ export default function CapstonePage() {
   const [groups, setGroups] = useState<MyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<'all' | 'supervisor' | 'evaluator'>('all');
+  const [period, setPeriod] = useState<'current' | 'past'>('current');
   const [query, setQuery] = useState('');
   const [openStudent, setOpenStudent] = useState<{ groupId: string; studentAccountId: string } | null>(null);
+  const [view, setView] = useState<'cards' | 'list'>('list');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // List or cards is a per-person preference, remembered on this device.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(VIEW_KEY);
+      if (saved === 'list' || saved === 'cards') setView(saved);
+    } catch {
+      /* default view */
+    }
+  }, []);
+  const changeView = (v: 'cards' | 'list') => {
+    setView(v);
+    try {
+      window.localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* not remembered */
+    }
+  };
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -83,25 +137,32 @@ export default function CapstonePage() {
   const roles = (session?.user as { roles?: string[] } | undefined)?.roles;
   const canManage = roles?.includes('admin') || roles?.includes('coordinator');
 
+  // A finished semester's groups leave the working view and live under "Past semesters".
+  const current = useMemo(() => groups.filter((g) => !isPastSession(g.session?.status)), [groups]);
+  const past = useMemo(() => groups.filter((g) => isPastSession(g.session?.status)), [groups]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return groups.filter((g) => {
+    return (period === 'current' ? current : past).filter((g) => {
       if (roleFilter !== 'all' && g.role !== roleFilter) return false;
       if (!q) return true;
       return (
         g.projectTitle.toLowerCase().includes(q) ||
+        `#${g.groupNumber}`.includes(q) ||
+        (g.supervisorName || '').toLowerCase().includes(q) ||
         g.members.some((m) => m.name.toLowerCase().includes(q) || m.studentId.toLowerCase().includes(q))
       );
     });
-  }, [groups, roleFilter, query]);
+  }, [current, past, period, roleFilter, query]);
 
   // Grouped by session (semester), newest first as the API returns them.
   const bySession = useMemo(() => {
-    const map = new Map<string, { label: string; status: string; groups: MyGroup[] }>();
+    const map = new Map<string, { key: string; label: string; status: string; groups: MyGroup[] }>();
     for (const g of visible) {
       const key = g.session?._id || 'none';
       if (!map.has(key)) {
         map.set(key, {
+          key,
           label: g.session ? `${g.session.department} Capstone${g.session.semesterName ? ` · ${g.session.semesterName}` : ''}` : 'Capstone',
           status: g.session?.status || '',
           groups: [],
@@ -112,15 +173,16 @@ export default function CapstonePage() {
     return [...map.values()];
   }, [visible]);
 
+  // Only current work counts toward what's owed.
   const totals = useMemo(() => {
-    const toReview = groups.filter((g) => g.role === 'supervisor').reduce((n, g) => n + g.journalUnreviewed, 0);
-    const marksOwed = groups
-      .filter((g) => g.session?.status === 'open')
+    const toReview = current.filter((g) => g.role === 'supervisor').reduce((n, g) => n + g.journalUnreviewed, 0);
+    const marksOwed = current
+      .filter((g) => isRunning(g.session?.status))
       .reduce((n, g) => n + g.marks.reduce((m, c) => m + (c.total - c.done), 0), 0);
     return { toReview, marksOwed };
-  }, [groups]);
+  }, [current]);
 
-  const header = (
+  return (
     <TeacherShell
       title="Capstone"
       subtitle="Groups you supervise or evaluate"
@@ -143,14 +205,14 @@ export default function CapstonePage() {
         </div>
       ) : (
         <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-          {/* At-a-glance totals */}
+          {/* At-a-glance totals (current semesters only) */}
           <div className="grid gap-3 sm:grid-cols-3">
-            <SummaryTile icon={Users} label="My groups" value={groups.length} hint="Groups where you're the supervisor or an assigned evaluator." />
+            <SummaryTile icon={Users} label="Current groups" value={current.length} hint="Groups in running semesters where you're the supervisor or an assigned evaluator." />
             <SummaryTile
               icon={MessageSquareText}
               label="Journal entries to review"
               value={totals.toReview}
-              hint="Weekly journal entries your students submitted that you haven't commented on yet (supervised groups only)."
+              hint="Weekly journal weeks your students submitted that you haven't reviewed yet (groups you supervise)."
               tone={totals.toReview > 0 ? 'attention' : 'ok'}
             />
             <SummaryTile
@@ -165,7 +227,7 @@ export default function CapstonePage() {
           {groups.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground">
-                You are not currently assigned to any capstone group.
+                You are not assigned to any capstone group.
                 {canManage && (
                   <div className="mt-4">
                     <Button asChild variant="outline">
@@ -178,17 +240,43 @@ export default function CapstonePage() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-lg border p-0.5">
+                <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="Semesters">
+                  {(
+                    [
+                      ['current', `Current (${current.length})`],
+                      ['past', `Past semesters (${past.length})`],
+                    ] as const
+                  ).map(([p, label]) => (
+                    <button
+                      key={p}
+                      type="button"
+                      role="tab"
+                      aria-selected={period === p}
+                      onClick={() => setPeriod(p)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors',
+                        period === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {p === 'past' && <Archive className="h-3.5 w-3.5" />}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="Role">
                   {(['all', 'supervisor', 'evaluator'] as const).map((r) => (
                     <button
                       key={r}
                       type="button"
+                      role="tab"
+                      aria-selected={roleFilter === r}
                       onClick={() => setRoleFilter(r)}
-                      className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                        roleFilter === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={cn(
+                        'rounded-md px-3 py-1 text-sm transition-colors',
+                        roleFilter === r ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      )}
                     >
-                      {r === 'all' ? 'All' : r === 'supervisor' ? 'Supervising' : 'Evaluating'}
+                      {r === 'all' ? 'All roles' : r === 'supervisor' ? 'Supervising' : 'Evaluating'}
                     </button>
                   ))}
                 </div>
@@ -197,51 +285,106 @@ export default function CapstonePage() {
                   <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search project, student or ID"
+                    placeholder="Search project, #number, student or ID"
                     className="h-9 pl-8"
+                    aria-label="Search groups"
                   />
                 </div>
-              </div>
-
-              {bySession.length === 0 && <p className="text-sm text-muted-foreground">No groups match.</p>}
-
-              {bySession.map((s) => (
-                <section key={s.label} className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold">{s.label}</h2>
-                    {s.status && (
-                      <Tip label={STAGE_HINT[s.status] || s.status}>
-                        <Badge variant="secondary" className="capitalize">{s.status}</Badge>
-                      </Tip>
-                    )}
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    {s.groups.map((g) => (
-                      <GroupCard
-                        key={g._id}
-                        group={g}
-                        onOpenStudent={(studentAccountId) => setOpenStudent({ groupId: g._id, studentAccountId })}
-                        onReminderSent={(at) =>
-                          setGroups((prev) => prev.map((x) => (x._id === g._id ? { ...x, lastJournalReminderAt: at } : x)))
-                        }
-                      />
+                {period === 'current' && (
+                  <div className="ml-auto flex rounded-lg border p-0.5" role="tablist" aria-label="View">
+                    {(
+                      [
+                        ['list', List, 'List'],
+                        ['cards', LayoutGrid, 'Cards'],
+                      ] as const
+                    ).map(([v, Icon, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        role="tab"
+                        aria-selected={view === v}
+                        onClick={() => changeView(v)}
+                        title={`${label} view`}
+                        className={cn(
+                          'flex items-center gap-1.5 rounded-md px-2 py-1 text-sm',
+                          view === v ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="hidden sm:inline">{label}</span>
+                      </button>
                     ))}
                   </div>
+                )}
+              </div>
+
+              {bySession.length === 0 && (
+                <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+                  {query || roleFilter !== 'all'
+                    ? 'No groups match.'
+                    : period === 'current'
+                      ? 'No groups in a running semester.'
+                      : 'No past semesters yet.'}
+                  {period === 'current' && !query && past.length > 0 && (
+                    <Button variant="link" size="sm" onClick={() => setPeriod('past')}>
+                      See past semesters
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {bySession.map((s) => (
+                <section key={s.key} className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold">{s.label}</h2>
+                    {s.status && <SessionStatusPill status={s.status} />}
+                  </div>
+                  {period === 'past' ? (
+                    <PastGroupList groups={s.groups} />
+                  ) : view === 'list' ? (
+                    <ul className="divide-y overflow-hidden rounded-lg border">
+                      {s.groups.map((g) => (
+                        <GroupRow key={g._id} group={g} open={expanded.has(g._id)} onToggle={() => toggleExpanded(g._id)}>
+                          <GroupCard
+                            group={g}
+                            bare
+                            onOpenStudent={(studentAccountId) => setOpenStudent({ groupId: g._id, studentAccountId })}
+                            onReminderSent={(at) =>
+                              setGroups((prev) => prev.map((x) => (x._id === g._id ? { ...x, lastJournalReminderAt: at } : x)))
+                            }
+                          />
+                        </GroupRow>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {s.groups.map((g) => (
+                        <GroupCard
+                          key={g._id}
+                          group={g}
+                          onOpenStudent={(studentAccountId) => setOpenStudent({ groupId: g._id, studentAccountId })}
+                          onReminderSent={(at) =>
+                            setGroups((prev) => prev.map((x) => (x._id === g._id ? { ...x, lastJournalReminderAt: at } : x)))
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
                 </section>
               ))}
             </>
           )}
         </div>
       )}
-      <StudentDetailDialog
-        groupId={openStudent?.groupId || null}
-        studentAccountId={openStudent?.studentAccountId || null}
-        onClose={() => setOpenStudent(null)}
-      />
+      {openStudent && (
+        <StudentDetailDialog
+          groupId={openStudent.groupId}
+          studentAccountId={openStudent.studentAccountId}
+          onClose={() => setOpenStudent(null)}
+        />
+      )}
     </TeacherShell>
   );
-
-  return header;
 }
 
 function SummaryTile({
@@ -278,112 +421,237 @@ function SummaryTile({
   );
 }
 
+/** A finished semester: one quiet, read-only row per group. */
+function PastGroupList({ groups }: { groups: MyGroup[] }) {
+  return (
+    <ul className="divide-y overflow-hidden rounded-lg border">
+      {groups.map((g) => (
+        <li key={g._id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
+          <span className="w-16 shrink-0 font-mono text-xs text-muted-foreground">
+            {g.track} #{g.groupNumber}
+          </span>
+          <Link href={`/capstone/groups/${g._id}`} className="min-w-0 flex-1 truncate font-medium hover:underline">
+            {g.projectTitle}
+          </Link>
+          <span className="text-xs text-muted-foreground">
+            {g.role === 'supervisor' ? 'Supervised' : 'Evaluated'} · {g.members.length} students
+          </span>
+          {g.reportUrl && (
+            <a href={g.reportUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+              <FileText className="h-3.5 w-3.5" /> Report
+            </a>
+          )}
+          <Link href={`/capstone/groups/${g._id}`} className="flex items-center text-xs text-muted-foreground hover:text-foreground" aria-label={`View ${g.projectTitle}`}>
+            View <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One thin row per group: what it is, your role, and what's waiting on you. Clicking the
+ * row expands the full card in place; the quick action works without expanding.
+ */
+function GroupRow({ group: g, open, onToggle, children }: { group: MyGroup; open: boolean; onToggle: () => void; children: ReactNode }) {
+  const isSupervisor = g.role === 'supervisor';
+  const marksDone = g.marks.reduce((n, c) => n + Math.min(c.done, c.total), 0);
+  const marksTotal = g.marks.reduce((n, c) => n + c.total, 0);
+  return (
+    <li className={cn(open && 'bg-muted/20')}>
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <ChevronRight className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
+          <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground">
+            {g.track} #{g.groupNumber}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{g.projectTitle}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {isSupervisor ? 'Supervisor' : `Evaluator${g.supervisorName ? ` · supervised by ${g.supervisorName}` : ''}`} · {g.members.length} students
+            </span>
+          </span>
+          {marksTotal > 0 && (
+            <span
+              className={cn(
+                'hidden shrink-0 items-center gap-1 text-xs sm:flex',
+                marksDone >= marksTotal ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+              )}
+              title="Your marks submitted"
+            >
+              {marksDone >= marksTotal && <CheckCircle2 className="h-3.5 w-3.5" />} Marks {marksDone}/{marksTotal}
+            </span>
+          )}
+          {g.journalCompletedAt && (
+            <span className="hidden shrink-0 items-center gap-1 text-xs text-emerald-600 md:flex dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Journal done
+            </span>
+          )}
+        </button>
+        {isSupervisor && g.journalUnreviewed > 0 ? (
+          <Button asChild size="sm" className="h-8 shrink-0">
+            <Link href={`/capstone/groups/${g._id}`}>
+              <PenLine className="mr-1.5 h-3.5 w-3.5" /> Review {g.journalUnreviewed}
+            </Link>
+          </Button>
+        ) : (
+          <Button asChild size="sm" variant="ghost" className="h-8 shrink-0">
+            <Link href={`/capstone/groups/${g._id}`}>
+              Open <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        )}
+      </div>
+      {open && <div className="border-t px-4 py-4 sm:pl-12">{children}</div>}
+    </li>
+  );
+}
+
 function GroupCard({
   group: g,
   onOpenStudent,
   onReminderSent,
+  bare = false,
 }: {
   group: MyGroup;
   onOpenStudent: (studentAccountId: string) => void;
   onReminderSent: (at: string) => void;
+  /** Inside an expanded list row: no card frame, and the row already shows the title. */
+  bare?: boolean;
 }) {
   const weeks = g.session?.journalWeekCount || 0;
   const isSupervisor = g.role === 'supervisor';
-  const marksOpen = g.session?.status === 'open';
+  const marksOpen = isRunning(g.session?.status);
+  const groupHref = `/capstone/groups/${g._id}`;
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="pb-3">
+    <Card className={bare ? 'flex flex-col gap-0 border-0 bg-transparent py-0 shadow-none' : 'flex flex-col'}>
+      <CardHeader className={bare ? 'hidden' : 'pb-3'}>
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="outline">Track {g.track} #{g.groupNumber}</Badge>
           <Tip label={isSupervisor ? 'You supervise this group: review journals, and submit every component.' : 'You evaluate this group: submit report and presentation marks.'}>
             <Badge variant={isSupervisor ? 'default' : 'secondary'}>{isSupervisor ? 'Supervisor' : 'Evaluator'}</Badge>
           </Tip>
-          {isSupervisor && g.journalUnreviewed > 0 && (
-            <Tip label="Submitted journal entries you haven't commented on yet. Open the group to review them.">
-              <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-300">
-                {g.journalUnreviewed} to review
+          {g.journalCompletedAt && (
+            <Tip label="Every week is closed and the journal marks are in - the coordinator has been notified.">
+              <Badge variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="mr-1 h-3 w-3" /> Journal done
               </Badge>
             </Tip>
           )}
         </div>
-        <CardTitle className="mt-1 text-base leading-snug">{g.projectTitle}</CardTitle>
-        {!isSupervisor && g.supervisorName && (
-          <p className="text-xs text-muted-foreground">Supervisor: {g.supervisorName}</p>
-        )}
+        <CardTitle className="mt-1 text-base leading-snug">
+          <Link href={groupHref} className="hover:underline">
+            {g.projectTitle}
+          </Link>
+        </CardTitle>
+        {!isSupervisor && g.supervisorName && <p className="text-xs text-muted-foreground">Supervisor: {g.supervisorName}</p>}
       </CardHeader>
 
-      <CardContent className="flex flex-1 flex-col gap-3">
-        {/* Students - click for their marks, grade and journal. */}
-        <div className="divide-y rounded-lg border">
-          {g.members.map((m) => {
-            const pct = weeks ? Math.min(100, Math.round((m.journalSubmitted / weeks) * 100)) : 0;
-            return (
-              <Tip key={m.studentAccountId} label="View this student's marks, grade and journal" side="left">
+      <CardContent className={bare ? 'flex flex-1 flex-col gap-4 px-0' : 'flex flex-1 flex-col gap-4'}>
+        {/* What needs doing - every item here is a way into the group, and says where it goes. */}
+        {(isSupervisor || g.marks.length > 0) && (
+          <div className="space-y-2">
+            {isSupervisor && weeks > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                <Tip label={`Across all ${g.members.length} students, ${weeks} weeks each - the same counts as the group's Weekly Journal tab.`}>
+                  <span className="text-sm">
+                    <span className="font-medium">Weekly journal</span>
+                    {g.journal && (
+                      <span className="text-muted-foreground">
+                        {g.journal.toReview > 0 && (
+                          <span className="font-medium text-amber-600 dark:text-amber-400"> · {g.journal.toReview} to review</span>
+                        )}
+                        {' '}· {g.journal.reviewed} reviewed
+                        {g.journal.missed > 0 && ` · ${g.journal.missed} missed`}
+                        {g.journal.notWritten > 0 && ` · ${g.journal.notWritten} not written`}
+                      </span>
+                    )}
+                  </span>
+                </Tip>
+                {g.journalUnreviewed > 0 ? (
+                  <Button asChild size="sm" className="h-8">
+                    <Link href={groupHref}>
+                      <PenLine className="mr-1.5 h-3.5 w-3.5" /> Review {g.journalUnreviewed}
+                    </Link>
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Nothing to review</span>
+                )}
+              </div>
+            )}
+            {g.marks.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-xs text-muted-foreground">Your marks</span>
+                {g.marks.map((c) => {
+                  const complete = c.total > 0 && c.done >= c.total;
+                  return (
+                    <Tip
+                      key={c.component}
+                      label={`${COMPONENT_LABEL[c.component] || c.component}: ${c.done} of ${c.total} students marked${
+                        marksOpen ? ' - click to open' : ' (marking is not open right now)'
+                      }`}
+                    >
+                      <Link
+                        href={`${groupHref}?tab=${tabFor(c.component)}`}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors hover:bg-muted',
+                          complete ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-300' : marksOpen ? 'border-amber-500/50' : ''
+                        )}
+                      >
+                        {complete && <CheckCircle2 className="h-3 w-3" />}
+                        {COMPONENT_LABEL[c.component] || c.component} {c.done}/{c.total}
+                        <ChevronRight className="h-3 w-3 opacity-60" />
+                      </Link>
+                    </Tip>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Students: each row opens that student's details drawer - and looks like it. */}
+        <div>
+          <p className="mb-1.5 text-xs text-muted-foreground">Students · tap for marks, grade and journal</p>
+          <ul className="divide-y rounded-lg border">
+            {g.members.map((m) => (
+              <li key={m.studentAccountId}>
                 <button
                   type="button"
                   onClick={() => onOpenStudent(m.studentAccountId)}
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                  className="group flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/50"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{m.name || m.studentId}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground">{m.studentId}</div>
-                  </div>
-                  {weeks > 0 && (
-                    <div className="w-24 shrink-0">
-                      <div className="mb-0.5 text-right text-[11px] text-muted-foreground">
-                        Journal {m.journalSubmitted}/{weeks}
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  )}
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+                    {initials(m.name || m.studentId)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{cleanName(m.name) || m.studentId}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{m.studentId}</span>
+                  </span>
+                  <span className="flex items-center gap-0.5 text-xs text-muted-foreground group-hover:text-foreground">
+                    Details <ChevronRight className="h-4 w-4" />
+                  </span>
                 </button>
-              </Tip>
-            );
-          })}
-        </div>
-
-        {/* Your marks per component. */}
-        <div className="flex flex-wrap gap-1.5">
-          {g.marks.map((c) => {
-            const complete = c.total > 0 && c.done >= c.total;
-            return (
-              <Tip
-                key={c.component}
-                label={`Your ${COMPONENT_LABEL[c.component] || c.component} marks: ${c.done} of ${c.total} students submitted${
-                  marksOpen ? '' : ' (marking is not open right now)'
-                }`}
-              >
-                <Badge variant="outline" className={complete ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-300' : ''}>
-                  {complete && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                  {COMPONENT_LABEL[c.component] || c.component} {c.done}/{c.total}
-                </Badge>
-              </Tip>
-            );
-          })}
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
-          <Tip label="Open the group to review journals and submit marks">
-            <Button asChild size="sm">
-              <Link href={`/capstone/groups/${g._id}`}>
-                Open group <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </Tip>
-          {isSupervisor && (
-            <JournalReminderButton groupId={g._id} lastSentAt={g.lastJournalReminderAt} onSent={onReminderSent} />
-          )}
+          <Button asChild size="sm" variant={isSupervisor && g.journalUnreviewed > 0 ? 'outline' : 'default'}>
+            <Link href={groupHref}>
+              Open group <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          {isSupervisor && marksOpen && <JournalReminderButton groupId={g._id} lastSentAt={g.lastJournalReminderAt} onSent={onReminderSent} />}
           {g.reportUrl ? (
-            <Tip label="Open the group's submitted report">
-              <Button asChild size="sm" variant="ghost">
-                <a href={g.reportUrl} target="_blank" rel="noopener noreferrer">
-                  <FileText className="mr-1.5 h-3.5 w-3.5" /> Report <ExternalLink className="ml-1 h-3 w-3" />
-                </a>
-              </Button>
-            </Tip>
+            <Button asChild size="sm" variant="ghost">
+              <a href={g.reportUrl} target="_blank" rel="noopener noreferrer">
+                <FileText className="mr-1.5 h-3.5 w-3.5" /> Report <ExternalLink className="ml-1 h-3 w-3" />
+              </a>
+            </Button>
           ) : (
             <Tip label="The coordinator adds the report link once students submit their final report.">
               <span className="text-xs text-muted-foreground">No report link yet</span>

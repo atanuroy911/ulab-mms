@@ -25,7 +25,8 @@ export type GradingNodeType =
   | 'sum'
   | 'formula'
   | 'gradeBands'
-  | 'output';
+  | 'output'
+  | 'op';
 
 /** How to collapse several submitters' scores for one component into a single number. */
 export type GradingAggregate = 'mean' | 'sum' | 'max' | 'min' | 'count';
@@ -96,7 +97,7 @@ const GradingNodeSchema = new Schema(
     id: { type: String, required: true },
     type: {
       type: String,
-      enum: ['source', 'constant', 'scale', 'sum', 'formula', 'gradeBands', 'output'],
+      enum: ['source', 'constant', 'scale', 'sum', 'formula', 'op', 'gradeBands', 'output'],
       required: true,
     },
     position: {
