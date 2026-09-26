@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/atanuroy911/ulab-mms/compare/v1.17.0...v1.18.0) (2026-09-26)
+
+
+### Features
+
+* capstone stages, coordinator marks tools, evaluator selection ([fab2351](https://github.com/atanuroy911/ulab-mms/commit/fab235157f3fd598838935bba31d651d683d2f85))
+
 # [1.17.0](https://github.com/atanuroy911/ulab-mms/compare/v1.16.0...v1.17.0) (2026-09-25)
 
 
