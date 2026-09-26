@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/atanuroy911/ulab-mms/compare/v1.18.0...v1.19.0) (2026-09-26)
+
+
+### Features
+
+* CSE 4098C grading - report rubric, poster, per-track schemes ([9c96114](https://github.com/atanuroy911/ulab-mms/commit/9c9611464b63090cd2ad94ff9bf8d2309d9c1ca1))
+
 # [1.18.0](https://github.com/atanuroy911/ulab-mms/compare/v1.17.0...v1.18.0) (2026-09-26)
 
 
