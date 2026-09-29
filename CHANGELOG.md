@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/atanuroy911/ulab-mms/compare/v1.21.0...v1.22.0) (2026-09-29)
+
+
+### Features
+
+* editable grading scheme descriptions and a one-line breakdown on scheme cards ([d4e0be8](https://github.com/atanuroy911/ulab-mms/commit/d4e0be8903655259fa14b12a1253f5a4f058def2))
+
 # [1.21.0](https://github.com/atanuroy911/ulab-mms/compare/v1.20.0...v1.21.0) (2026-09-29)
 
 
