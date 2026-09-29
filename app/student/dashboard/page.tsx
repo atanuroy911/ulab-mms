@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ClipboardList, GraduationCap, LogOut } from 'lucide-react';
+import { Loader2, ClipboardList, GraduationCap, LogOut, Zap } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function StudentDashboardPage() {
@@ -51,6 +51,18 @@ export default function StudentDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Link href="/student/dashboard/quick-exams" className="md:col-span-2">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-primary/30 hover:border-primary/60 h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                  <Zap className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle>Quick Exams</CardTitle>
+                <CardDescription>MCQ exams from your teachers - take them here and see your score at once</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
           <Link href="/student/check-marks">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary/50 h-full">
               <CardHeader>

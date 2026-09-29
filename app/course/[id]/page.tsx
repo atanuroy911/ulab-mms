@@ -76,8 +76,20 @@ import {
   Link2,
   Rocket,
   GraduationCap,
-  Info
+  Info,
+  Zap
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+// Quick exams (with the maths renderer) load only when that section is opened.
+const QuickExamView = dynamic(() => import('./components/QuickExamView').then((m) => m.QuickExamView), {
+  ssr: false,
+  loading: () => (
+    <div className="flex justify-center py-16 text-muted-foreground">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </div>
+  ),
+});
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { openGlobalSearch } from '@/app/components/GlobalSearch';
 import { notify } from '@/app/utils/notifications';
@@ -189,7 +201,7 @@ export default function CoursePage() {
   const [isPopulating, setIsPopulating] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport' | 'alias' | 'copo'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project' | 'quickExam'>('overview');
 
   // The active view lives in the URL (?view=marks), so a refresh, the Back button, a shared
   // link and the global search all land on the same section. Read once after mount (reading
@@ -200,7 +212,7 @@ export default function CoursePage() {
     if (viewFromUrlRead.current) return;
     viewFromUrlRead.current = true;
     const requested = new URLSearchParams(window.location.search).get('view');
-    const views = ['overview', 'exams', 'students', 'marks', 'attendance', 'copo', 'project'] as const;
+    const views = ['overview', 'exams', 'students', 'marks', 'attendance', 'copo', 'project', 'quickExam'] as const;
     const match = views.find((v) => v === requested);
     if (match && match !== 'overview') setActiveView(match);
   }, []);
@@ -2094,6 +2106,7 @@ export default function CoursePage() {
                 ['attendance', CalendarCheck, 'Attendance'],
                 ['copo', Link2, 'CO PO'],
                 ['project', course?.courseType === 'Lab' ? Rocket : GraduationCap, course?.courseType === 'Lab' ? 'OEL/CE' : 'Project'],
+                ['quickExam', Zap, 'Quick Exam'],
               ] as const).map(([view, Icon, label]) => (
                 <Button
                   key={view}
@@ -2211,6 +2224,22 @@ export default function CoursePage() {
               {sidebarOpen && <span className="ml-2 font-medium">
                 {course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}
               </span>}
+            </Button>
+
+            <Button
+              variant={activeView === 'quickExam' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('quickExam')}
+              className="w-full justify-start h-11"
+              title="Quick Exam (beta): MCQs marked instantly"
+            >
+              <Zap className="w-5 h-5" />
+              {sidebarOpen && (
+                <div className="flex-1 flex items-center justify-between ml-2">
+                  <span className="font-medium">Quick Exam</span>
+                  <Badge variant="secondary" className="ml-2 text-[10px]">Beta</Badge>
+                </div>
+              )}
             </Button>
 
             {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
@@ -2515,6 +2544,15 @@ export default function CoursePage() {
                 projectCoMode={course?.coPoMapping?.projectCoMode === 'weightage' ? 'weightage' : 'marks'}
                 onEditProjectCoSettings={() => openCategoryConfigDialog('Project')}
                 onExamsChanged={fetchCourseData}
+              />
+            )}
+
+            {/* Quick Exam (beta) */}
+            {activeView === 'quickExam' && (
+              <QuickExamView
+                courseId={courseId}
+                exams={exams.map((e) => ({ _id: e._id, displayName: e.displayName, totalMarks: e.totalMarks, examCategory: e.examCategory }))}
+                onMarksChanged={fetchCourseData}
               />
             )}
 

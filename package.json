@@ -10,7 +10,8 @@
     "migrate": "node scripts/migrate.js",
     "cleanup:legacy": "node scripts/cleanup-legacy-collections.js",
     "fix:sparse-nulls": "node scripts/fix-sparse-unique-nulls.js",
-    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts && npx tsx scripts/test-grade-redaction.ts && npx tsx scripts/test-semester-name.ts && npx tsx scripts/test-search-features.ts && npx tsx scripts/test-marking-plan.ts && npx tsx scripts/test-course-file.ts && npx tsx scripts/test-journal-status.ts && npx tsx scripts/test-journal-sections.ts && npx tsx scripts/test-formula-blocks.ts && npx tsx scripts/test-scheme-layout.ts && npx tsx scripts/test-progression-rules.ts && npx tsx scripts/test-evaluator-rules.ts && npx tsx scripts/test-track-c.ts"
+    "test:grading": "npx tsx scripts/test-grading-expression.ts && npx tsx scripts/test-grading-engine.ts && npx tsx scripts/test-grades-export.ts && npx tsx scripts/test-member-parse.ts && npx tsx scripts/test-grade-redaction.ts && npx tsx scripts/test-semester-name.ts && npx tsx scripts/test-search-features.ts && npx tsx scripts/test-marking-plan.ts && npx tsx scripts/test-course-file.ts && npx tsx scripts/test-journal-status.ts && npx tsx scripts/test-journal-sections.ts && npx tsx scripts/test-formula-blocks.ts && npx tsx scripts/test-scheme-layout.ts && npx tsx scripts/test-progression-rules.ts && npx tsx scripts/test-evaluator-rules.ts && npx tsx scripts/test-track-c.ts",
+    "test:quick-exam": "npx tsx scripts/test-quick-exam-format.ts && npx tsx scripts/test-quick-exam-paper.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
@@ -46,6 +47,7 @@
     "graphql-tag": "^2.12.7",
     "jsonwebtoken": "^9.0.3",
     "jszip": "^3.10.1",
+    "katex": "^0.18.9",
     "lucide-react": "^0.554.0",
     "mongoose": "^8.20.1",
     "next": "^16.0.7",
@@ -55,6 +57,10 @@
     "pdfjs-dist": "^6.1.200",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tesseract.js": "^7.0.0",
