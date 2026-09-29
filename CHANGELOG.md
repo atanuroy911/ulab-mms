@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/atanuroy911/ulab-mms/compare/v1.22.0...v1.23.0) (2026-09-29)
+
+
+### Features
+
+* past-semester imports - groups without a supervisor, name-only evaluators, recorded CO marks ([efd1402](https://github.com/atanuroy911/ulab-mms/commit/efd140238cbf5ecef2ac91b3976daff3cf873c53))
+
 # [1.22.0](https://github.com/atanuroy911/ulab-mms/compare/v1.21.0...v1.22.0) (2026-09-29)
 
 
