@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/atanuroy911/ulab-mms/compare/v1.23.0...v1.24.0) (2026-09-29)
+
+
+### Features
+
+* simple marks mode for teachers, link or remove name-only evaluators from imported workbooks ([27208bd](https://github.com/atanuroy911/ulab-mms/commit/27208bd20145cc5198978cb242727105191f203f))
+
 # [1.23.0](https://github.com/atanuroy911/ulab-mms/compare/v1.22.0...v1.23.0) (2026-09-29)
 
 
