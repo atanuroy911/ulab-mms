@@ -300,13 +300,21 @@ export function buildCourseFileData(params: {
     const coGraders: StudentCourseFileRow['coGraders'] = {};
     for (const component of coRubricComponents) {
       const cos = outcomes.filter((o) => o.source.kind === 'rubric' && o.source.component === component);
+      // Counted graders - and any grader whose CO marks were recorded with the mark (an imported
+      // workbook's CO sheet averages every grader it lists, counted toward the grade or not).
       const counted = member.submissions
-        .filter((s) => s.component === component && s.counted)
+        .filter((s) => s.component === component && (s.counted || (s.coScores && Object.keys(s.coScores).length > 0)))
         .sort((a, b) => (a.submitterRole === b.submitterRole ? a.submitterName.localeCompare(b.submitterName) : a.submitterRole === 'evaluator' ? -1 : 1));
       coGraders[component] = counted.map((s) => {
         const scores = s.rubricScores && Object.keys(s.rubricScores).length ? s.rubricScores : null;
+        // CO marks recorded with the mark (an imported workbook's CO sheet) are used as they are.
+        const recorded = s.coScores && Object.keys(s.coScores).length ? s.coScores : null;
         const values: Record<string, number> = {};
         for (const o of cos) {
+          if (recorded && typeof recorded[o.key] === 'number') {
+            values[o.key] = recorded[o.key];
+            continue;
+          }
           const idx = taggedCriteria(component, track, o.key);
           values[o.key] = scores
             ? idx.reduce((sum, i) => sum + (Number(scores[`c${i}`]) || 0), 0)
@@ -314,7 +322,7 @@ export function buildCourseFileData(params: {
               // across the COs in proportion to their share of the rubric.
               round2(((s.rubricMax ? s.rawScore / s.rubricMax : 0) || 0) * o.sourceMax);
         }
-        return { graderId: s.submitterId, role: s.submitterRole, name: s.submitterName, values, estimated: !scores };
+        return { graderId: s.submitterId, role: s.submitterRole, name: s.submitterName, values, estimated: !scores && !recorded };
       });
     }
 

@@ -47,7 +47,7 @@ interface GroupDetail {
   projectTitle: string;
   projectAbstract?: string;
   members: Member[];
-  supervisorId: { _id: string; name: string } | string;
+  supervisorId: { _id: string; name: string } | string | null;
   evaluators: EvaluatorRef[];
   chosenEvaluators?: { presentation: string[]; report: string[]; poster?: string[] };
   evaluatorTopK?: { presentation?: number | null; report?: number | null; poster?: number | null };
@@ -290,7 +290,7 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
   const canChooseEvaluators = !!group?.canChooseEvaluators;
 
   const isSupervisor = group
-    ? String(typeof group.supervisorId === 'object' ? group.supervisorId._id : group.supervisorId) === myId
+    ? String(group.supervisorId && typeof group.supervisorId === 'object' ? group.supervisorId._id : group.supervisorId) === myId
     : false;
 
   const isEvaluator = group
@@ -1082,7 +1082,7 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(() => {
-                    const supervisor = typeof group.supervisorId === 'object' ? group.supervisorId : null;
+                    const supervisor = group.supervisorId && typeof group.supervisorId === 'object' ? group.supervisorId : null;
                     const graders = [
                       ...(supervisor && presentationFromSupervisor ? [{ id: supervisor._id, name: supervisor.name, role: 'Supervisor' }] : []),
                       ...(presentationFromEvaluators ? activeEvaluators : []).map((ev) => ({

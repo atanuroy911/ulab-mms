@@ -36,13 +36,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const [groups, marks] = await Promise.all([
       CapstoneGroup.find({ sessionId: id }).sort({ track: 1, groupNumber: 1 }).lean(),
       CapstoneMarkSubmission.find({ sessionId: id, status: 'submitted' })
-        .select('groupId studentAccountId component submitterId submitterRole rawScore rubricScores enteredBy')
+        .select('groupId studentAccountId component submitterId submitterRole rawScore rubricScores enteredBy submitterLabel')
         .lean(),
     ]);
 
     const userIds = new Set<string>();
     for (const g of groups) {
-      userIds.add(String(g.supervisorId));
+      if (g.supervisorId) userIds.add(String(g.supervisorId));
       for (const e of g.evaluators) userIds.add(String(e.evaluatorId));
     }
     for (const m of marks) userIds.add(String(m.submitterId));
@@ -69,7 +69,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       },
       plans: planByTrack,
       groups: groups.map((g) => {
-        const supervisorId = String(g.supervisorId);
+        const supervisorId = g.supervisorId ? String(g.supervisorId) : '';
         const active = g.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId));
         // People who left the group but whose marks are still on record, shown read-only.
         const formerIds = [
@@ -99,11 +99,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
               return { id: String(m.studentAccountId), name: s?.name || m.studentIdText, studentId: s?.studentId || m.studentIdText };
             }),
           graders: [
-            { id: supervisorId, name: userName.get(supervisorId) || 'Supervisor', role: 'supervisor' as const, current: true },
+            ...(supervisorId ? [{ id: supervisorId, name: userName.get(supervisorId) || 'Supervisor', role: 'supervisor' as const, current: true }] : []),
             ...active.map((eid) => ({ id: eid, name: userName.get(eid) || 'Evaluator', role: 'evaluator' as const, current: true })),
             ...formerIds.map((fid) => ({
               id: fid,
-              name: userName.get(fid) || 'Former grader',
+              name: userName.get(fid) || marks.find((m) => String(m.submitterId) === fid && m.submitterLabel)?.submitterLabel || 'Former grader',
               role: (roleOf(fid) || 'evaluator') as 'supervisor' | 'evaluator',
               current: false,
             })),

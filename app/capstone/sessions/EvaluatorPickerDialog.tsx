@@ -22,11 +22,11 @@ interface PickerGroup {
   track: string;
   groupNumber: number;
   projectTitle: string;
-  supervisorId: Person | string;
+  supervisorId: Person | string | null;
   evaluators: { evaluatorId: Person | string; unassignedAt?: string | null }[];
 }
 
-const idOf = (p: Person | string) => (typeof p === 'object' ? p._id : p);
+const idOf = (p: Person | string | null) => (p && typeof p === 'object' ? p._id : p || '');
 
 function initials(name: string) {
   const words = name.split(/\s+/).filter((w) => w && !/^(dr|md|mr|mrs|ms|prof)\.?$/i.test(w));
@@ -81,7 +81,7 @@ export function EvaluatorPickerDialog({
     .map((e) => (typeof e.evaluatorId === 'object' ? e.evaluatorId : users.find((u) => u._id === e.evaluatorId)))
     .filter(Boolean) as Person[];
   const supervisor = group
-    ? typeof group.supervisorId === 'object'
+    ? group.supervisorId && typeof group.supervisorId === 'object'
       ? group.supervisorId
       : users.find((u) => u._id === group.supervisorId)
     : undefined;

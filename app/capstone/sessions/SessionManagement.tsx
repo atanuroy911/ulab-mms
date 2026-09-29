@@ -80,7 +80,7 @@ interface GroupRow {
   groupNumber: number;
   projectTitle: string;
   members: GroupMember[];
-  supervisorId: UserOption | string;
+  supervisorId: UserOption | string | null;
   evaluators: { evaluatorId: UserOption | string; unassignedAt?: string | null }[];
   reportUrl?: string | null;
   lastJournalReminderAt?: string | null;
@@ -687,7 +687,7 @@ Their journal and marks are kept.`)) return;
   const renderGroupDetails = (group: GroupRow, bare = false) => {
     const activeMembers = group.members.filter((m) => !m.removedAt);
     const activeEvaluators = group.evaluators.filter((e) => !e.unassignedAt);
-    const supervisor = typeof group.supervisorId === 'object' ? group.supervisorId : null;
+    const supervisor = group.supervisorId && typeof group.supervisorId === 'object' ? group.supervisorId : null;
     // A finished semester is kept for reference only - no edit controls.
     const readOnly = isPastSession(selectedSession?.status);
     return (
@@ -707,7 +707,13 @@ Their journal and marks are kept.`)) return;
             </div>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
               <UserCog className="h-3.5 w-3.5" />
-              Supervisor: {supervisor?.name || 'Unknown'} ({supervisor?.email})
+              {supervisor ? (
+                <>
+                  Supervisor: {supervisor.name} ({supervisor.email})
+                </>
+              ) : (
+                <span className="italic">No supervisor yet</span>
+              )}
               {!readOnly && (
                 <Tip label="Hand this group to a different supervisor">
                   <Button variant="ghost" size="sm" className="ml-1 h-6 px-2 text-xs" onClick={() => setSupervisorPickerFor(group)}>

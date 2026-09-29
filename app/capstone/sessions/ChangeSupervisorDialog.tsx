@@ -22,11 +22,11 @@ interface SupervisedGroup {
   track: string;
   groupNumber: number;
   projectTitle: string;
-  supervisorId: Person | string;
+  supervisorId: Person | string | null;
   evaluators: { evaluatorId: Person | string; unassignedAt?: string | null }[];
 }
 
-const idOf = (p: Person | string) => (typeof p === 'object' ? p._id : p);
+const idOf = (p: Person | string | null) => (p && typeof p === 'object' ? p._id : p || '');
 
 function initials(name: string) {
   const words = name.split(/\s+/).filter((w) => w && !/^(dr|md|mr|mrs|ms|prof)\.?$/i.test(w));
@@ -61,12 +61,12 @@ export function ChangeSupervisorDialog({
 
   const load = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const g of allGroups) counts.set(idOf(g.supervisorId), (counts.get(idOf(g.supervisorId)) || 0) + 1);
+    for (const g of allGroups) if (g.supervisorId) counts.set(idOf(g.supervisorId), (counts.get(idOf(g.supervisorId)) || 0) + 1);
     return counts;
   }, [allGroups]);
 
   const currentId = group ? idOf(group.supervisorId) : '';
-  const current = group ? (typeof group.supervisorId === 'object' ? group.supervisorId : users.find((u) => u._id === currentId)) : undefined;
+  const current = group ? (group.supervisorId && typeof group.supervisorId === 'object' ? group.supervisorId : users.find((u) => u._id === currentId)) : undefined;
   const evaluators = useMemo(
     () => new Set((group?.evaluators || []).filter((e) => !e.unassignedAt).map((e) => idOf(e.evaluatorId))),
     [group]

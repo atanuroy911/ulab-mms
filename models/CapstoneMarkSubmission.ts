@@ -13,6 +13,19 @@ export interface ICapstoneMarkSubmission extends Document {
   submitterRole: CapstoneSubmitterRole;
   /** Who typed it: the grader, or a coordinator entering the grader's paper sheet for them. */
   enteredBy?: mongoose.Types.ObjectId | null;
+  /**
+   * Imported from a past semester's workbook: the grader has no account here, so
+   * `submitterId` is a stand-in id shared by that grader's marks and `submitterLabel` holds
+   * their initials. Imported evaluator marks count as the group's evaluator panel.
+   */
+  imported?: boolean;
+  submitterLabel?: string | null;
+  /**
+   * CO marks as recorded elsewhere (an imported workbook's CO Report Evaluation sheet), e.g.
+   * { CO1: 14, CO2: 3 }. When set, the course file uses them as they are instead of summing
+   * rubric criteria - an old sheet's COs need not add up to its totals.
+   */
+  coScores?: Record<string, number> | null;
   rawScore: number;
   rubricScores?: Record<string, number> | null;
   rubricMax?: number | null;
@@ -74,6 +87,9 @@ const CapstoneMarkSubmissionSchema: Schema = new Schema(
       ref: 'User',
       default: null,
     },
+    imported: { type: Boolean, default: false },
+    coScores: { type: Schema.Types.Mixed, default: null },
+    submitterLabel: { type: String, default: null },
     // No blanket max:100 - report is out of 33/42, presentation 45, peer 5, journal 10.
     // Ceilings are enforced per-component server-side in the submit route, not here.
     rawScore: {

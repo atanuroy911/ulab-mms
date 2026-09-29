@@ -14,7 +14,7 @@ export interface BrowserGroup {
   groupNumber: number;
   projectTitle: string;
   members: Array<{ studentAccountId: { name?: string; studentId?: string; email?: string } | string; studentIdText: string; removedAt?: string | null }>;
-  supervisorId: Person;
+  supervisorId: Person | null;
   evaluators: Array<{ evaluatorId: Person; unassignedAt?: string | null }>;
   reportUrl?: string | null;
   journalCompletedAt?: string | null;
@@ -23,8 +23,8 @@ export interface BrowserGroup {
 type ViewMode = 'list' | 'cards';
 const VIEW_KEY = 'capstone-groups-view';
 
-const nameOf = (p: Person) => (typeof p === 'object' && p ? p.name || '' : '');
-const emailOf = (p: Person) => (typeof p === 'object' && p ? p.email || '' : '');
+const nameOf = (p: Person | null) => (typeof p === 'object' && p ? p.name || '' : '');
+const emailOf = (p: Person | null) => (typeof p === 'object' && p ? p.email || '' : '');
 
 /** Everything a coordinator might search a group by, lower-cased. */
 function haystack(g: BrowserGroup) {

@@ -99,7 +99,16 @@ export interface ICapstoneGroup extends Document {
   projectTitle: string;
   projectAbstract?: string;
   members: ICapstoneGroupMember[];
-  supervisorId: mongoose.Types.ObjectId;
+  /** Null until a supervisor is set (e.g. groups imported from a past semester's workbook). */
+  supervisorId: mongoose.Types.ObjectId | null;
+  /** The supervisor's initials from an imported workbook - a hint until a supervisor is set. */
+  supervisorLabel?: string | null;
+  /**
+   * Evaluators known only by name (initials from an imported workbook). Their imported marks
+   * (submitterId = `id`) count as the group's panel until the coordinator links the name to a
+   * real account (the marks move to it) or removes it (the marks stay but stop counting).
+   */
+  placeholderEvaluators?: Array<{ id: mongoose.Types.ObjectId; label: string; removedAt?: Date | null }>;
   evaluators: ICapstoneGroupEvaluator[];
   /**
    * Coordinator-selected evaluators whose marks count toward the final grade, held
@@ -207,10 +216,24 @@ const CapstoneGroupSchema: Schema = new Schema(
     supervisorId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     evaluators: {
       type: [EvaluatorSchema],
+      default: [],
+    },
+    supervisorLabel: { type: String, default: null },
+    placeholderEvaluators: {
+      type: [
+        new Schema(
+          {
+            id: { type: Schema.Types.ObjectId, required: true },
+            label: { type: String, required: true, trim: true },
+            removedAt: { type: Date, default: null },
+          },
+          { _id: false }
+        ),
+      ],
       default: [],
     },
     chosenEvaluators: {

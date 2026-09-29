@@ -50,6 +50,8 @@ export interface MemberGrade {
     rubricMax: number | null;
     /** Per-criterion scores (c0..cN) when the mark was entered on the rubric; the course file's CO sheets read these. */
     rubricScores?: Record<string, number> | null;
+    /** CO marks recorded with the mark (imported workbooks), used as they are. */
+    coScores?: Record<string, number> | null;
   }>;
   error?: string;
   /**
@@ -243,7 +245,10 @@ export async function computeSessionGrades(
 
     // The coordinator's choice, or every evaluator when there are too few to choose between -
     // previously a group with one or two evaluators and no explicit choice counted none of them.
-    const activeEvaluatorIds = group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId));
+    // Evaluators on the group, plus evaluators known only by name (placeholders from an
+    // imported workbook) - their imported marks stand in for the panel until linked or removed.
+    const placeholderIds = (group.placeholderEvaluators || []).filter((p) => !p.removedAt).map((p) => String(p.id));
+    const activeEvaluatorIds = [...group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId)), ...placeholderIds];
     const own = override && override.groupId === String(group._id) ? override.rules : {};
     const saved = (c: Choosable) => ({
       chosen: own[c]?.chosen ?? group.chosenEvaluators?.[c],
@@ -290,7 +295,7 @@ export async function computeSessionGrades(
           return {
             component: sub.component,
             submitterId,
-            submitterName: userById.get(submitterId)?.name || submitterId,
+            submitterName: userById.get(submitterId)?.name || sub.submitterLabel || submitterId,
             // Set when a coordinator entered this grader's paper sheet for them.
             enteredByName:
               sub.enteredBy && String(sub.enteredBy) !== submitterId
@@ -301,6 +306,7 @@ export async function computeSessionGrades(
             rawScore: sub.rawScore,
             rubricMax: sub.rubricMax ?? null,
             rubricScores: sub.rubricScores ?? null,
+            coScores: (sub as { coScores?: Record<string, number> | null }).coScores ?? null,
           };
         });
 
