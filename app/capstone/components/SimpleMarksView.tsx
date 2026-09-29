@@ -38,8 +38,10 @@ const left = (g: SimpleGroup) => g.marks.reduce((n, c) => n + Math.max(0, c.tota
 function marksHref(g: SimpleGroup) {
   const base = `/capstone/groups/${g._id}`;
   if (g.role === 'supervisor') return `${base}?tab=supervisor-marks`;
-  const next = ['report', 'presentation'].find((c) => g.marks.some((m) => m.component === c && m.done < m.total));
-  return `${base}?tab=${next || (g.marks.some((m) => m.component === 'report') ? 'report' : 'presentation')}`;
+  // Report and presentation have their own tabs; anything else (poster) is on the marks tab.
+  const tabOf = (c: string) => (c === 'report' || c === 'presentation' ? c : 'supervisor-marks');
+  const next = g.marks.find((m) => m.done < m.total) || g.marks[0];
+  return `${base}?tab=${next ? tabOf(next.component) : 'report'}`;
 }
 
 const ROLE = {

@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     const existing = await findSemesterByName(name);
     if (existing) {
       return NextResponse.json(
-        { error: `A semester named "${existing.name}" already exists` },
+        // The listing only shows active semesters, so hand back the one that exists.
+        { error: `A semester named "${existing.name}" already exists`, semester: { _id: String(existing._id), name: existing.name } },
         { status: 409 }
       );
     }

@@ -350,6 +350,12 @@ export default function CapstoneSessionManagement() {
         return;
       }
       // Someone else may have created it since the list loaded - reload and use theirs.
+      if (res.status === 409 && data.semester?._id) {
+        // Exists but inactive, so the list never showed it.
+        setNewSemesterId(data.semester._id);
+        setWizardStep(1);
+        return;
+      }
       if (res.status === 409) {
         const listRes = await fetch('/api/semesters');
         const list: Semester[] = listRes.ok ? await listRes.json() : [];

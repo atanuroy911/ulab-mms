@@ -41,7 +41,7 @@ interface PlanGroup {
   members: PlanMember[];
 }
 interface Plan {
-  session: { id: string; label: string; status: string };
+  session: { id: string; department: string; label: string; status: string };
   canMove: boolean;
   targets: Array<{ id: string; label: string; status: string; tracks: string[]; groupCount: number }>;
   groups: PlanGroup[];
@@ -84,6 +84,7 @@ export function ProgressionWizard({ sessionId, open, onOpenChange, onDone }: { s
   const [notify, setNotify] = useState(false);
   const [moving, setMoving] = useState(false);
   const [result, setResult] = useState<MoveResult | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -107,7 +108,7 @@ export function ProgressionWizard({ sessionId, open, onOpenChange, onDone }: { s
     return () => {
       cancelled = true;
     };
-  }, [open, sessionId]);
+  }, [open, sessionId, reloadKey]);
 
   const target = plan?.targets.find((t) => t.id === targetId) || null;
   const outcomeOf = (g: PlanGroup) =>
@@ -222,13 +223,11 @@ export function ProgressionWizard({ sessionId, open, onOpenChange, onDone }: { s
                 <p className="text-sm text-muted-foreground">Usually next semester&apos;s session. It has to be set up or running.</p>
               </div>
               {plan.targets.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-8 text-center">
-                  <p className="font-medium">There&apos;s no next session to move into yet</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Open next semester&apos;s capstone session first, then come back here.</p>
-                  <Button asChild className="mt-4">
-                    <Link href="/capstone/sessions">Go to sessions</Link>
-                  </Button>
-                </div>
+                <OpenNextSession
+                  department={plan.session.department}
+                  currentLabel={plan.session.label}
+                  onCreated={() => setReloadKey((k) => k + 1)}
+                />
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {plan.targets.map((t) => (
@@ -544,5 +543,92 @@ function MemberRow({ m, decision, locked, onChange }: { m: PlanMember; decision:
       <span className="w-36 text-xs text-muted-foreground">{REASON_LABEL[m.reason]}</span>
       <DecisionPicker value={decision} locked={locked} onChange={onChange} />
     </li>
+  );
+}
+
+const TERMS = ['Spring', 'Summer', 'Fall'] as const;
+const sameName = (a: string, b: string) => a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** The term after the one in "CSE Capstone · Summer 2026" (ULAB: Spring, Summer, Fall). */
+function nextTermAfter(label: string): { term: (typeof TERMS)[number]; year: number } {
+  const m = label.match(/(Spring|Summer|Fall)\s+(\d{4})/i);
+  if (!m) return { term: 'Spring', year: new Date().getFullYear() + 1 };
+  const i = TERMS.findIndex((t) => t.toLowerCase() === m[1].toLowerCase());
+  return i === TERMS.length - 1 ? { term: TERMS[0], year: +m[2] + 1 } : { term: TERMS[i + 1], year: +m[2] };
+}
+
+/** No session to move into: open next semester's right here (it starts in Setting up). */
+function OpenNextSession({ department, currentLabel, onCreated }: { department: string; currentLabel: string; onCreated: () => void }) {
+  const suggested = nextTermAfter(currentLabel);
+  const [term, setTerm] = useState<string>(suggested.term);
+  const [year, setYear] = useState(String(suggested.year));
+  const [creating, setCreating] = useState(false);
+  const validYear = /^\d{4}$/.test(year) && +year >= 1990 && +year <= 2100;
+
+  const create = async () => {
+    const name = `${term} ${year}`;
+    setCreating(true);
+    try {
+      // Reuse the semester if it already exists - courses hang off the same record.
+      const list: Array<{ _id: string; name: string }> = await fetch('/api/semesters').then((r) => (r.ok ? r.json() : []));
+      let semester = list.find((s) => sameName(s.name, name));
+      if (!semester) {
+        const res = await fetch('/api/semesters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        const body = await res.json();
+        // 409: it exists but isn't active, so it wasn't in the list - use it anyway.
+        if (!res.ok && !body.semester) throw new Error(body.error || `Could not set up semester "${name}"`);
+        semester = res.ok ? body : body.semester;
+      }
+      const res = await fetch('/api/capstone/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ semesterId: semester!._id, department }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to open the session');
+      toast.success(`${department} Capstone · ${name} opened`);
+      onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to open the session');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-dashed p-6 text-center">
+      <p className="font-medium">There&apos;s no next session to move into yet</p>
+      <p className="mt-1 text-sm text-muted-foreground">Open next semester&apos;s {department} capstone session here. It starts in Setting up.</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <select
+          aria-label="Term"
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          className="h-10 rounded-md border bg-background px-3 text-sm"
+          disabled={creating}
+        >
+          {TERMS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="Year"
+          inputMode="numeric"
+          value={year}
+          onChange={(e) => setYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          className="h-10 w-24 rounded-md border bg-background px-3 text-sm"
+          disabled={creating}
+        />
+        <Button onClick={create} disabled={creating || !validYear} className="h-10">
+          {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Open {term} {year}
+        </Button>
+      </div>
+      <Link href="/capstone/sessions" className="mt-3 inline-block text-xs text-muted-foreground hover:underline">
+        Or set it up on the Sessions page
+      </Link>
+    </div>
   );
 }
