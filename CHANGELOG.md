@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/atanuroy911/ulab-mms/compare/v1.20.0...v1.21.0) (2026-09-29)
+
+
+### Features
+
+* scheme summary in plain words, quick exam attendance, tidier panels ([43c6a7b](https://github.com/atanuroy911/ulab-mms/commit/43c6a7b41200fb146b02282a7cdb9e0fb1535179))
+
 # [1.20.0](https://github.com/atanuroy911/ulab-mms/compare/v1.19.0...v1.20.0) (2026-09-29)
 
 
