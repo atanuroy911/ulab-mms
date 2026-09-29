@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/atanuroy911/ulab-mms/compare/v1.19.0...v1.20.0) (2026-09-29)
+
+
+### Features
+
+* Quick Exam (beta) - pasted MCQs, taken signed in, marked instantly ([67131f3](https://github.com/atanuroy911/ulab-mms/commit/67131f3c55253bca1c74f7bf27d36f40a780291f))
+
 # [1.19.0](https://github.com/atanuroy911/ulab-mms/compare/v1.18.0...v1.19.0) (2026-09-26)
 
 
