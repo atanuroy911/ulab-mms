@@ -25,11 +25,14 @@ import {
   PenLine,
   List,
   LayoutGrid,
+  MousePointerClick,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { Tip } from '@/app/components/Tip';
 import { JournalReminderButton } from './components/JournalReminderButton';
 import { SessionStatusPill } from './components/SessionStatusPill';
+import { SimpleMarksView } from './components/SimpleMarksView';
 import { isPastSession, isRunning } from '@/lib/capstoneStatus';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -71,6 +74,7 @@ const COMPONENT_TAB: Record<string, string> = {
 const tabFor = (component: string) => COMPONENT_TAB[component] || 'supervisor-marks';
 
 const VIEW_KEY = 'capstone-mygroups-view';
+const MODE_KEY = 'capstone-mygroups-mode';
 
 /** "Umme Anisha (233014020)" -> "Umme Anisha": the ID is shown separately. */
 const cleanName = (name: string) => name.replace(/\s*\(\d+\)\s*$/, '');
@@ -93,16 +97,26 @@ export default function CapstonePage() {
   const [openStudent, setOpenStudent] = useState<{ groupId: string; studentAccountId: string } | null>(null);
   const [view, setView] = useState<'cards' | 'list'>('list');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
 
-  // List or cards is a per-person preference, remembered on this device.
+  // List or cards, and Simple or Advanced, are per-person preferences remembered on this device.
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(VIEW_KEY);
       if (saved === 'list' || saved === 'cards') setView(saved);
+      if (window.localStorage.getItem(MODE_KEY) === 'advanced') setMode('advanced');
     } catch {
       /* default view */
     }
   }, []);
+  const changeMode = (m: 'simple' | 'advanced') => {
+    setMode(m);
+    try {
+      window.localStorage.setItem(MODE_KEY, m);
+    } catch {
+      /* not remembered */
+    }
+  };
   const changeView = (v: 'cards' | 'list') => {
     setView(v);
     try {
@@ -187,22 +201,50 @@ export default function CapstonePage() {
       title="Capstone"
       subtitle="Groups you supervise or evaluate"
       actions={
-        canManage ? (
-          <Tip label="Open, set up and manage capstone sessions for your department">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/capstone/sessions">
-                <Settings className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Sessions</span>
-              </Link>
-            </Button>
-          </Tip>
-        ) : null
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="Screen">
+            {(
+              [
+                ['simple', MousePointerClick, 'Simple', 'Two big buttons: submit marks as supervisor or as evaluator'],
+                ['advanced', SlidersHorizontal, 'Advanced', 'Every group with journals, reminders, students and past semesters'],
+              ] as const
+            ).map(([m, Icon, label, hint]) => (
+              <Tip key={m} label={hint}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m}
+                  onClick={() => changeMode(m)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm transition-colors',
+                    mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              </Tip>
+            ))}
+          </div>
+          {canManage && (
+            <Tip label="Open, set up and manage capstone sessions for your department">
+              <Button asChild variant="outline" size="sm">
+                <Link href="/capstone/sessions">
+                  <Settings className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Sessions</span>
+                </Link>
+              </Button>
+            </Tip>
+          )}
+        </div>
       }
     >
       {loading || status === 'loading' ? (
         <div className="flex items-center justify-center py-24">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      ) : mode === 'simple' ? (
+        <SimpleMarksView groups={groups} />
       ) : (
         <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
           {/* At-a-glance totals (current semesters only) */}

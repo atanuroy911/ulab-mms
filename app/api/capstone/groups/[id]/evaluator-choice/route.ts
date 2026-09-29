@@ -68,8 +68,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .filter((n) => n.type === 'source' && n.data?.component === c)
         .map((n) => ({ label: String(n.data?.label || c), scope: String(n.data?.scope || ''), aggregate: String(n.data?.aggregate || 'mean') }));
 
-    const activeIds = group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId));
-    const nameOf = new Map<string, string>();
+    const nameOnly = (group.placeholderEvaluators || []).filter((p) => !p.removedAt);
+    const activeIds = [...group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId)), ...nameOnly.map((p) => String(p.id))];
+    const nameOf = new Map<string, string>(nameOnly.map((p) => [String(p.id), p.label]));
     for (const m of current.members) for (const s of m.submissions) nameOf.set(s.submitterId, s.submitterName);
 
     const combined = (subs: GroupGrades['members'][number]['submissions'], c: Choosable, how: 'mean' | 'max') => {

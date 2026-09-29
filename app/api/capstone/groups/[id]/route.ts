@@ -160,9 +160,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: "You grade this group, so you can't choose which evaluators count - another coordinator has to" }, { status: 403 });
       }
 
-      const activeEvaluatorIds = new Set(
-        group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId))
-      );
+      // Name-only evaluators (from an imported workbook) are part of the panel too.
+      const activeEvaluatorIds = new Set([
+        ...group.evaluators.filter((e) => !e.unassignedAt).map((e) => String(e.evaluatorId)),
+        ...(group.placeholderEvaluators || []).filter((p) => !p.removedAt).map((p) => String(p.id)),
+      ]);
 
       for (const component of CHOOSABLE_COMPONENTS) {
         const incoming = body.chosenEvaluators[component];

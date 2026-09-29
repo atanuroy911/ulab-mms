@@ -18,6 +18,7 @@ import { Tip } from '@/app/components/Tip';
 import { JournalReminderButton } from '../../components/JournalReminderButton';
 import { JournalReviewPanel } from './JournalReviewPanel';
 import { EvaluatorChoicePanel } from './EvaluatorChoicePanel';
+import { NameOnlyEvaluators } from './NameOnlyEvaluators';
 import { MarkPicker } from '../../components/MarkPicker';
 import { SessionStatusPill } from '../../components/SessionStatusPill';
 import { isPastSession, isRunning } from '@/lib/capstoneStatus';
@@ -1066,6 +1067,7 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
           {/* ── Manage Tab (Coordinator/Admin) ── */}
           {canManage && (
             <TabsContent value="manage" className="space-y-4 mt-4">
+              <NameOnlyEvaluators groupId={id} staff={staff} sessionFinished={sessionPast} onChanged={fetchAll} />
               {/* Enter a grader's presentation marks from their paper sheet */}
               {(presentationFromSupervisor || presentationFromEvaluators) && (
               <Card>

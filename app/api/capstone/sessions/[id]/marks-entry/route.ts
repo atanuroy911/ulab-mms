@@ -80,6 +80,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
               .filter((sid) => sid !== supervisorId && !active.includes(sid))
           ),
         ];
+        // Evaluators known only by name (an imported workbook) still count as the panel.
+        const nameOnly = new Set((g.placeholderEvaluators || []).filter((x) => !x.removedAt).map((x) => String(x.id)));
         const roleOf = (sid: string) => marks.find((m) => String(m.groupId) === String(g._id) && String(m.submitterId) === sid)?.submitterRole;
         return {
           id: String(g._id),
@@ -106,6 +108,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
               name: userName.get(fid) || marks.find((m) => String(m.submitterId) === fid && m.submitterLabel)?.submitterLabel || 'Former grader',
               role: (roleOf(fid) || 'evaluator') as 'supervisor' | 'evaluator',
               current: false,
+              nameOnly: nameOnly.has(fid) || (!userName.has(fid) && roleOf(fid) === 'supervisor'),
             })),
           ],
         };

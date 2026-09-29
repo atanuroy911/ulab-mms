@@ -25,6 +25,8 @@ interface Grader {
   name: string;
   role: Role;
   current: boolean;
+  /** Known only by name from an imported workbook: read-only here, but their marks count. */
+  nameOnly?: boolean;
 }
 interface Group {
   id: string;
@@ -139,8 +141,10 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
   );
 
   const counts = (g: Group, gr: Grader) => {
-    if (!gr.current) return false;
-    if (gr.role === 'supervisor') return true;
+    if (!gr.current && !gr.nameOnly) return false;
+    // An imported supervisor mark counts until the group's own supervisor marks this part.
+    if (gr.role === 'supervisor')
+      return gr.current || !g.graders.some((x) => x.current && x.role === 'supervisor' && g.students.some((s) => markByKey.has(cellKey(g.id, x.id, s.id, component))));
     if (component !== 'presentation' && component !== 'report' && component !== 'poster') return true;
     // Top K: every evaluator's marks are in the running (each student's K highest count).
     if (g.evaluatorTopK?.[component]) return true;
@@ -390,13 +394,18 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
                             {cols.map(({ grader, req }) => {
                               const counted = counts(g, grader);
                               return (
-                                <th key={grader.id} className={cn('min-w-36 px-3 py-2 align-bottom', !grader.current && 'opacity-60')}>
+                                <th key={grader.id} className={cn('min-w-36 px-3 py-2 align-bottom', !grader.current && !grader.nameOnly && 'opacity-60')}>
                                   <span className="block truncate text-xs font-semibold" title={grader.name}>
                                     {grader.name}
                                   </span>
                                   <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] font-normal text-muted-foreground">
                                     {grader.role === 'supervisor' ? 'Supervisor' : 'Evaluator'} · /{req.max}
-                                    {!grader.current ? (
+                                    {grader.nameOnly && (
+                                      <span className="rounded bg-muted px-1" title="From the imported workbook - link the name to a real person in the group's Manage tab">
+                                        name only
+                                      </span>
+                                    )}
+                                    {!grader.current && !grader.nameOnly ? (
                                       <span className="rounded bg-muted px-1">left group</span>
                                     ) : counted && grader.role === 'evaluator' && (component === 'presentation' || component === 'report' || component === 'poster') && g.evaluatorTopK?.[component] ? (
                                       <span className="inline-flex items-center gap-0.5 text-sky-700 dark:text-sky-300" title={`Each student's ${g.evaluatorTopK[component]} highest evaluator marks count`}>
