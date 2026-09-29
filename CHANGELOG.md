@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/atanuroy911/ulab-mms/compare/v1.25.0...v1.26.0) (2026-09-29)
+
+
+### Features
+
+* redesigned student quick exam screens - clearer list, rules checklist, mark for review, submit summary, score review ([3d48e80](https://github.com/atanuroy911/ulab-mms/commit/3d48e8079a8122775937a1e86bac72c4469b4127))
+
 # [1.25.0](https://github.com/atanuroy911/ulab-mms/compare/v1.24.0...v1.25.0) (2026-09-29)
 
 
