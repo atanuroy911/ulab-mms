@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/atanuroy911/ulab-mms/compare/v1.24.0...v1.25.0) (2026-09-29)
+
+
+### Features
+
+* open next semester's session from the move-on wizard; fix: reuse an inactive semester, send poster marks to the marks tab ([f259231](https://github.com/atanuroy911/ulab-mms/commit/f2592313d38ad4729963c280b7c4a78f5bbb7459))
+
 # [1.24.0](https://github.com/atanuroy911/ulab-mms/compare/v1.23.0...v1.24.0) (2026-09-29)
 
 
