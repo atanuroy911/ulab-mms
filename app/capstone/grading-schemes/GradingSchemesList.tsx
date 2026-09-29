@@ -31,6 +31,8 @@ interface SchemeRow {
   _id: string;
   name: string;
   description: string;
+  /** "Report 40 · Presentation 45 · ... · out of 100", from the scheme itself. */
+  breakdown?: string;
   department: string;
   track: 'A' | 'B' | 'C' | null;
   currentVersion: number;
@@ -212,9 +214,8 @@ export function GradingSchemesList({ canCreate, defaultDepartment = '' }: Props)
                     <CardTitle className="text-base leading-tight">{scheme.name}</CardTitle>
                     <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                   </div>
-                  {scheme.description && (
-                    <CardDescription className="line-clamp-2">{scheme.description}</CardDescription>
-                  )}
+                  {scheme.description && <CardDescription className="line-clamp-2">{scheme.description}</CardDescription>}
+                  {scheme.breakdown && <p className="text-xs tabular-nums text-muted-foreground">{scheme.breakdown}</p>}
                 </CardHeader>
                 <CardContent className="flex flex-wrap items-center gap-1.5 pt-0">
                   <Badge variant="outline">{scheme.department}</Badge>

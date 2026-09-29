@@ -411,3 +411,15 @@ function perfectValues(graph: { nodes: SNode[]; edges: SEdge[] }): Map<string, n
     return null;
   }
 }
+
+/**
+ * One line for a list: "Report 40 · Presentation 45 · Peer 5 · Weekly Journal 10 · out of 100".
+ * Part names drop their "(out of N)" / "(0-5)" suffix, since the number follows.
+ */
+export function schemeBreakdown(graph: { nodes: SNode[]; edges: SEdge[] }): string {
+  const s = summarizeScheme(graph);
+  if (s.parts.length === 0) return '';
+  const short = (t: string) => t.replace(/\s*\((?:out of\s*)?[\d.\s-]+\)\s*$/i, '').replace(/\s+mark$/i, '').trim();
+  const parts = s.parts.map((p) => (p.max !== null ? `${short(p.title)} ${fmt(p.max)}` : short(p.title)));
+  return [...parts, ...(s.totalMax !== null && s.parts.length > 1 ? [`out of ${fmt(s.totalMax)}`] : [])].join(' · ');
+}

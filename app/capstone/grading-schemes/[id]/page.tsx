@@ -187,6 +187,7 @@ function EditorInner({ id }: { id: string }) {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -282,6 +283,7 @@ function EditorInner({ id }: { id: string }) {
 
         setScheme(data);
         setName(data.name);
+        setDescription(data.description || '');
         setOutcomes(
           data.outcomes?.outcomes ? { ...data.outcomes, track: data.outcomes.track || data.track || 'A' } : defaultOutcomes(data.track || 'A')
         );
@@ -635,7 +637,7 @@ function EditorInner({ id }: { id: string }) {
         const res = await fetch(`/api/capstone/grading-schemes/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, ...serialize(), ...(outcomes ? { outcomes } : {}), ...(publish ? { publish: true } : {}) }),
+          body: JSON.stringify({ name, description, ...serialize(), ...(outcomes ? { outcomes } : {}), ...(publish ? { publish: true } : {}) }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -653,7 +655,7 @@ function EditorInner({ id }: { id: string }) {
         publish ? setPublishing(false) : setSaving(false);
       }
     },
-    [id, name, serialize, readOnly, outcomes]
+    [id, name, description, serialize, readOnly, outcomes]
   );
 
   // Keyboard shortcuts, mirroring the right-click menu so both routes do the same thing.
@@ -925,6 +927,21 @@ function EditorInner({ id }: { id: string }) {
           </div>
         </div>
 
+        {/* What the scheme is for - shown under its name in the scheme list. */}
+        {(!readOnly || description) && (
+          <Input
+            value={description}
+            disabled={readOnly}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              markDirty();
+            }}
+            maxLength={300}
+            className="mt-2 h-8 w-full border-dashed text-xs sm:max-w-2xl"
+            placeholder="Description (optional) - what this scheme is for, shown on the scheme list"
+            aria-label="Scheme description"
+          />
+        )}
       </div>
 
       {/* Issues */}

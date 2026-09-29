@@ -4,6 +4,7 @@ import GradingScheme from '@/models/GradingScheme';
 import { getCapstoneActor, canManageDepartment } from '@/lib/capstoneAuth';
 import { defaultOutcomes } from '@/lib/capstoneOutcomes';
 import { defaultCseScheme } from '@/lib/gradingEngine';
+import { schemeBreakdown } from '@/lib/schemeSummary';
 
 /**
  * Grading schemes are authored by coordinators/admins and define how component marks
@@ -28,14 +29,23 @@ export async function GET(request: NextRequest) {
     if (department) query.department = department.toUpperCase();
     if (!includeArchived) query.isArchived = false;
 
-    // The graphs themselves can be large and the list view only needs metadata; the editor
-    // fetches the full document by id.
-    const schemes = await GradingScheme.find(query)
-      .select('-nodes -edges -versions')
-      .sort({ updatedAt: -1 })
-      .lean();
-
-    return NextResponse.json(schemes);
+    // The graphs can be large and the list only needs metadata plus a one-line breakdown of
+    // the latest published version (or the draft, never published); the editor fetches the
+    // full document by id.
+    const schemes = await GradingScheme.find(query).sort({ updatedAt: -1 }).lean();
+    return NextResponse.json(
+      schemes.map(({ nodes, edges, versions, ...meta }) => {
+        const latest = versions?.find((v) => v.version === meta.currentVersion);
+        const graph = latest ?? { nodes, edges };
+        let breakdown = '';
+        try {
+          breakdown = schemeBreakdown({ nodes: graph.nodes as never, edges: graph.edges.map((e) => ({ source: e.source, target: e.target, targetHandle: e.targetHandle })) });
+        } catch {
+          /* a broken draft just has no breakdown */
+        }
+        return { ...meta, breakdown };
+      })
+    );
   } catch (error: unknown) {
     console.error('GET /api/capstone/grading-schemes error:', error);
     return NextResponse.json({ error: 'Failed to load grading schemes' }, { status: 500 });

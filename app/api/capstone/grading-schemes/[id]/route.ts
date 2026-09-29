@@ -68,7 +68,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       scheme.name = body.name.trim();
     }
     if (typeof body?.description === 'string') {
-      scheme.description = body.description.trim();
+      scheme.description = body.description.trim().slice(0, 300);
     }
     if (['A', 'B', 'C', null].includes(body?.track)) {
       scheme.track = body.track;
