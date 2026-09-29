@@ -35,6 +35,7 @@ export function applyFields(qe: IQuickExam, body: Body, locked: boolean) {
   if (qe.opensAt && qe.closesAt && qe.closesAt <= qe.opensAt) throw new QuickExamError('The closing time must be after the opening time', 400);
   if (typeof body.showReview === 'boolean') qe.showReview = body.showReview;
   if (typeof body.requireFullscreen === 'boolean') qe.requireFullscreen = body.requireFullscreen;
+  if (typeof body.takeAttendance === 'boolean') qe.takeAttendance = body.takeAttendance;
 
   const paperFields = ['sourceText', 'shuffleQuestions', 'shuffleOptions', 'examId', 'newExamName', 'newExamTotal'];
   const touchesPaper = paperFields.some((f) => f in body);

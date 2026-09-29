@@ -17,14 +17,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive } from 'lucide-react';
+import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { TrackSchemePanel } from './TrackSchemePanel';
 import { GroupsBrowser } from './GroupsBrowser';
 import { SessionStageBar } from './SessionStageBar';
 import type { SessionStatus } from '@/lib/capstoneStatus';
 import { SessionStatusPill } from '../components/SessionStatusPill';
-import { isPastSession } from '@/lib/capstoneStatus';
+import { isPastSession, isRunning } from '@/lib/capstoneStatus';
 import { cn } from '@/lib/utils';
 import { MemberEntry, type MemberRow } from './MemberEntry';
 import { SetupChecklist } from './SetupChecklist';
@@ -581,9 +581,37 @@ Their journal and marks are kept.`)) return;
     }
   };
 
+  const [emailingGraders, setEmailingGraders] = useState(false);
+  const [exportingMarks, setExportingMarks] = useState(false);
+
+  /** Downloads every mark in the session as a CSV (the server names the file). */
+  const handleExportMarks = async () => {
+    if (!selectedSession) return;
+    setExportingMarks(true);
+    try {
+      const res = await fetch(`/api/capstone/sessions/${selectedSession._id}/marks-export`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Export failed');
+      }
+      const name = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || `capstone-marks-${selectedSession.department}.csv`;
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExportingMarks(false);
+    }
+  };
+
   /** Emails every supervisor and evaluator asking them to submit their marks. */
   const handleRequestMarks = async () => {
     if (!selectedSession) return;
+    setEmailingGraders(true);
     try {
       const res = await fetch(`/api/capstone/sessions/${selectedSession._id}/request-marks`, {
         method: 'POST',
@@ -600,6 +628,8 @@ Their journal and marks are kept.`)) return;
       bumpSetup();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send requests');
+    } finally {
+      setEmailingGraders(false);
     }
   };
 
@@ -1017,6 +1047,23 @@ Marks they already submitted are kept.`)) return;
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Tip label={isRunning(selectedSession.status) ? 'Email every supervisor and evaluator asking them to submit their marks' : 'Only while the session is running'}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={emailingGraders || !isRunning(selectedSession.status)}
+                    onClick={() => confirm('Email every supervisor and evaluator in this session asking them to submit their marks?') && handleRequestMarks()}
+                  >
+                    {emailingGraders ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
+                    Email graders
+                  </Button>
+                </Tip>
+                <Tip label="Download every mark in this session as a CSV">
+                  <Button variant="outline" size="sm" disabled={exportingMarks} onClick={handleExportMarks}>
+                    {exportingMarks ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+                    Export marks
+                  </Button>
+                </Tip>
                 <Tip label="Every group's marks in one table - type any grader's marks in, as coordinator">
                   <Button variant="outline" size="sm" asChild>
                     <a href={`/capstone/sessions/${selectedSession._id}/marks`}>

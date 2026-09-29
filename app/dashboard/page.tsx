@@ -26,7 +26,6 @@ import { AdminSidebar } from '@/app/components/AdminSidebar';
 import { useTeacherNavItems } from '@/app/components/useTeacherNavItems';
 import ImportCourseFileWizard from './components/ImportCourseFileWizard';
 import DepartmentOnboardingDialog from '@/app/components/DepartmentOnboardingDialog';
-import CoordinatorCapstonePanel from './components/CoordinatorCapstonePanel';
 import { DevModeBanner } from '@/app/components/DevModeBanner';
 
 interface Course {
@@ -1077,26 +1076,6 @@ export default function Dashboard() {
           </div>
         )}
       </div>
-
-      {/* Coordinator / Admin Capstone Panel */}
-      {(() => {
-        const userRoles: string[] = (session?.user as any)?.roles || [];
-        const userId: string = (session?.user as any)?.id || '';
-        const showCapstonePanel = userRoles.includes('coordinator') || userRoles.includes('admin');
-        if (!showCapstonePanel) return null;
-        return (
-          <div className="max-w-7xl mx-auto px-4 pb-8">
-            <div className="mb-4 mt-2">
-              <h2 className="text-xl font-bold">Capstone Sessions</h2>
-              <p className="text-sm text-muted-foreground">Your department's capstone sessions and groups</p>
-            </div>
-            <CoordinatorCapstonePanel
-              canEdit={userRoles.includes('admin')}
-              userId={userId}
-            />
-          </div>
-        );
-      })()}
 
       {/* Add Course Modal */}
       <Dialog open={showAddModal} onOpenChange={(open) => {

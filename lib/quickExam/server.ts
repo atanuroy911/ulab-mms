@@ -13,6 +13,7 @@ import QuickExam, { type IQuickExam } from '@/models/QuickExam';
 import QuickExamAttempt, { type IQuickExamAttempt } from '@/models/QuickExamAttempt';
 import { parseExamText } from '@/lib/quickExam/format';
 import { makePaper, markPaper, pickSet, scaledMark } from '@/lib/quickExam/paper';
+import { markPresentForQuickExam } from '@/lib/quickExam/attendance';
 
 /** Allowance for the network on the last save or submit. */
 export const GRACE_MS = 30_000;
@@ -179,6 +180,20 @@ export async function submitAttempt(attemptId: unknown, opts: { auto: boolean },
   attempt.correct = correct;
   attempt.mark = mark;
   await QuickExamAttempt.updateOne({ _id: attempt._id }, { $set: { correct, mark } });
+  // Taking the exam counts as attending class that day. Never fails the submit.
+  if (qe.takeAttendance) {
+    try {
+      await markPresentForQuickExam({
+        courseId: qe.courseId,
+        teacherId: qe.userId,
+        studentRecordId: attempt.studentRecordId,
+        studentIdText: attempt.studentIdText,
+        startedAt: attempt.startedAt,
+      });
+    } catch (err) {
+      console.error('quick exam attendance failed:', err);
+    }
+  }
   return attempt;
 }
 

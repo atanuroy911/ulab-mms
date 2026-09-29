@@ -31,6 +31,7 @@ interface Form {
   shuffleOptions: boolean;
   showReview: boolean;
   requireFullscreen: boolean;
+  takeAttendance: boolean;
   columnMode: 'new' | 'existing';
   examId: string;
   newExamName: string;
@@ -48,6 +49,7 @@ const EMPTY: Form = {
   shuffleOptions: true,
   showReview: false,
   requireFullscreen: true,
+  takeAttendance: true,
   columnMode: 'new',
   examId: '',
   newExamName: '',
@@ -109,6 +111,7 @@ export function QuickExamBuilder({
           shuffleOptions: d.shuffleOptions,
           showReview: d.showReview,
           requireFullscreen: d.requireFullscreen ?? true,
+          takeAttendance: d.takeAttendance ?? true,
           columnMode: d.examId ? 'existing' : 'new',
           examId: d.examId || '',
           newExamName: d.newExamName || '',
@@ -146,6 +149,7 @@ export function QuickExamBuilder({
     closesAt: form.closesAt ? new Date(form.closesAt).toISOString() : null,
     showReview: form.showReview,
     requireFullscreen: form.requireFullscreen,
+    takeAttendance: form.takeAttendance,
     ...(locked
       ? {}
       : {
@@ -371,6 +375,7 @@ function DetailsStep({
               ['shuffleOptions', 'Shuffle the options (A, B, C, ...) for each student', locked],
               ['requireFullscreen', 'Require full screen - leaving it clears the student’s answers and signs them out', false],
               ['showReview', 'After submitting, show students which answers were right', false],
+              ['takeAttendance', 'Mark students present in Attendance for the day they take it (others that day are marked absent - turn off for take-home exams)', false],
             ] as const
           ).map(([key, label, disabled]) => (
             <label key={key} className={cn('flex cursor-pointer items-start gap-2', disabled && 'opacity-60')}>
@@ -652,6 +657,8 @@ function ReviewStep({ form, parsed, column, problems }: { form: Form; parsed: Pa
           <dd>{form.requireFullscreen ? 'Required' : 'Not required'}</dd>
           <dt className="text-muted-foreground">After submitting</dt>
           <dd>{form.showReview ? 'Score and right answers' : 'Score only'}</dd>
+          <dt className="text-muted-foreground">Attendance</dt>
+          <dd>{form.takeAttendance ? 'Takers marked present for that day' : 'Not taken'}</dd>
         </dl>
         {problems.length > 0 && (
           <ul className="space-y-1 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-destructive">

@@ -31,6 +31,10 @@ import {
   CheckCircle2,
   ArrowLeft,
   PanelRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Copy as CopyIcon,
   Trash2,
   Unlink,
@@ -38,6 +42,7 @@ import {
   SlidersHorizontal,
   Maximize2,
   Target,
+  ScrollText,
   Blocks,
   FunctionSquare,
   LibraryBig,
@@ -55,6 +60,8 @@ import { formulaToBlocks, blocksToFormula, applyConversion, sameResult, type GNo
 import { NodeInspector } from './NodeInspector';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { OutcomesDialog } from './OutcomesDialog';
+import { SchemeSummaryPanel } from './SchemeSummaryPanel';
+import { summarizeScheme } from '@/lib/schemeSummary';
 import { defaultOutcomes, validateOutcomes, type CapstoneOutcomesConfig } from '@/lib/capstoneOutcomes';
 import { useMediaQuery, BREAKPOINTS } from '@/lib/useMediaQuery';
 
@@ -190,6 +197,7 @@ function EditorInner({ id }: { id: string }) {
     | null
   >(null);
   const [rf, setRf] = useState<ReactFlowInstance | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const modKeyLabel = useModKeyLabel();
 
@@ -197,6 +205,25 @@ function EditorInner({ id }: { id: string }) {
   // open the slide-over - that showed the same form twice, one on top of the other. Below
   // lg there is no side panel and the slide-over is the only way to reach it.
   const hasSidePanel = useMediaQuery(BREAKPOINTS.lg);
+  // Wide screens: either side panel can be folded away for more canvas (remembered here).
+  const [panels, setPanels] = useState<{ library: boolean; settings: boolean }>(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('scheme-editor-panels') || '{}');
+      return { library: saved.library !== false, settings: saved.settings !== false };
+    } catch {
+      return { library: true, settings: true };
+    }
+  });
+  const togglePanel = (which: 'library' | 'settings') =>
+    setPanels((prev) => {
+      const next = { ...prev, [which]: !prev[which] };
+      try {
+        window.localStorage.setItem('scheme-editor-panels', JSON.stringify(next));
+      } catch {
+        /* not remembered */
+      }
+      return next;
+    });
 
   // Widening the window while the slide-over is open would bring the side panel in behind
   // it and show the form twice again.
@@ -213,8 +240,28 @@ function EditorInner({ id }: { id: string }) {
     [hasSidePanel]
   );
 
+
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // The scheme in plain words, rebuilt as the blocks change.
+  const summary = useMemo(
+    () =>
+      summaryOpen
+        ? summarizeScheme({
+            nodes: nodes.map((n) => ({ id: n.id, type: n.type || '', data: n.data as Record<string, unknown> })),
+            edges: edges.map((e) => ({ source: e.source, target: e.target, targetHandle: inputName(e) })),
+          })
+        : null,
+    [summaryOpen, nodes, edges]
+  );
+  /** From the summary: show the block on the canvas. */
+  const pickFromSummary = (nodeId: string) => {
+    setSummaryOpen(false);
+    setSelectedId(nodeId);
+    setSelectedEdgeId(null);
+    requestAnimationFrame(() => rf?.fitView({ nodes: [{ id: nodeId }], duration: 400, maxZoom: 1.2, padding: 0.6 }));
+  };
 
   // Tracks whether there are unsaved changes, so we can warn on navigate-away rather than
   // silently discarding a graph someone spent time arranging.
@@ -802,6 +849,18 @@ function EditorInner({ id }: { id: string }) {
           )}
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Sheet open={summaryOpen} onOpenChange={setSummaryOpen}>
+              <SheetTrigger asChild>
+                <Button size="sm" variant="outline" title="What this scheme does, in plain words">
+                  <ScrollText className="h-4 w-4 sm:mr-1.5" />
+                  <span className="hidden sm:inline">Summary</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-md">
+                <SheetTitle className="border-b px-4 py-3 text-sm">What this scheme does</SheetTitle>
+                {summary && <SchemeSummaryPanel summary={summary} onPick={pickFromSummary} />}
+              </SheetContent>
+            </Sheet>
             <Button size="sm" variant="outline" onClick={tidyUp} title="Line every block up neatly from marks (left) to the final grade (right)">
               <Wand2 className="h-4 w-4 sm:mr-1.5" />
               <span className="hidden sm:inline">Tidy up</span>
@@ -897,12 +956,29 @@ function EditorInner({ id }: { id: string }) {
 
       {/* Library + canvas + inspector */}
       <div className="flex min-h-0 flex-1">
-        {!readOnly && (
-          <aside className="hidden w-72 shrink-0 border-r bg-card/30 lg:flex lg:flex-col">
-            <div className="border-b px-4 py-3 text-sm font-medium">Block library</div>
-            <BlockLibrary onAdd={(item) => addFromLibrary(item)} className="flex-1" />
-          </aside>
-        )}
+        {!readOnly &&
+          (panels.library ? (
+            <aside className="hidden w-72 shrink-0 border-r bg-card/30 lg:flex lg:flex-col">
+              <div className="flex items-center border-b py-2 pl-4 pr-2 text-sm font-medium">
+                <span className="flex-1">Block library</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePanel('library')} title="Hide the block library" aria-label="Hide the block library">
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
+              </div>
+              <BlockLibrary onAdd={(item) => addFromLibrary(item)} className="flex-1" />
+            </aside>
+          ) : (
+            <button
+              type="button"
+              onClick={() => togglePanel('library')}
+              className="hidden w-10 shrink-0 flex-col items-center gap-3 border-r bg-card/30 py-3 text-muted-foreground hover:bg-muted/50 hover:text-foreground lg:flex"
+              title="Show the block library"
+              aria-label="Show the block library"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+              <span className="text-xs font-medium [writing-mode:vertical-rl]">Block library</span>
+            </button>
+          ))}
         <div
           ref={wrapperRef}
           className="relative min-h-[60vh] flex-1"
@@ -1126,10 +1202,29 @@ function EditorInner({ id }: { id: string }) {
         </div>
 
         {/* Fixed inspector from lg up */}
-        <aside className="hidden w-80 shrink-0 border-l bg-card/30 lg:flex lg:flex-col">
-          <div className="border-b px-4 py-3 text-sm font-medium">Block settings</div>
-          {inspector}
-        </aside>
+        {panels.settings ? (
+          <aside className="hidden w-80 shrink-0 border-l bg-card/30 lg:flex lg:flex-col">
+            <div className="flex items-center border-b py-2 pl-4 pr-2 text-sm font-medium">
+              <span className="flex-1">Block settings</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePanel('settings')} title="Hide block settings" aria-label="Hide block settings">
+                <PanelRightClose className="h-4 w-4" />
+              </Button>
+            </div>
+            {inspector}
+          </aside>
+        ) : (
+          <button
+            type="button"
+            onClick={() => togglePanel('settings')}
+            className="relative hidden w-10 shrink-0 flex-col items-center gap-3 border-l bg-card/30 py-3 text-muted-foreground hover:bg-muted/50 hover:text-foreground lg:flex"
+            title={selectedId || selectedEdgeId ? 'Show the selected block’s settings' : 'Show block settings'}
+            aria-label="Show block settings"
+          >
+            <PanelRightOpen className="h-4 w-4" />
+            <span className="text-xs font-medium [writing-mode:vertical-rl]">Block settings</span>
+            {(selectedId || selectedEdgeId) && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+          </button>
+        )}
       </div>
 
       {/* The library on small screens: a pop-up, with an honest note about screen size. */}

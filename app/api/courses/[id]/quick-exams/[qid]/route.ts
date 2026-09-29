@@ -37,6 +37,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       shuffleOptions: qe.shuffleOptions,
       showReview: qe.showReview,
       requireFullscreen: qe.requireFullscreen,
+      takeAttendance: qe.takeAttendance,
       examId: qe.examId ? String(qe.examId) : null,
       newExamName: qe.newExamName ?? null,
       newExamTotal: qe.newExamTotal ?? null,

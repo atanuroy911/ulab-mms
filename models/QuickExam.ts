@@ -38,6 +38,8 @@ export interface IQuickExam extends Document {
   showReview: boolean;
   /** The paper only shows in full screen; leaving it clears the answers and signs the student out. */
   requireFullscreen: boolean;
+  /** Submitting marks the student present in Attendance for the day they took it. */
+  takeAttendance: boolean;
   /** The course exam column the score is written to (scaled to its total). Set by publish. */
   examId?: mongoose.Types.ObjectId | null;
   /** Until published: create a new Quiz column with this name and total instead. */
@@ -81,6 +83,7 @@ const QuickExamSchema = new Schema<IQuickExam>(
     shuffleOptions: { type: Boolean, default: true },
     showReview: { type: Boolean, default: false },
     requireFullscreen: { type: Boolean, default: true },
+    takeAttendance: { type: Boolean, default: true },
     examId: { type: Schema.Types.ObjectId, ref: 'Exam', default: null },
     newExamName: { type: String, default: null },
     newExamTotal: { type: Number, default: null, min: 1 },
