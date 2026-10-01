@@ -19,6 +19,20 @@ interface SetupStep {
 }
 
 
+type Steps = { steps: SetupStep[]; nextStepKey: string | null };
+
+// Last known setup status per session: shown at once on return, refreshed in the background.
+const stepsCache = new Map<string, Steps>();
+function cachedSteps(sessionId: string): Steps | null {
+  if (stepsCache.has(sessionId)) return stepsCache.get(sessionId)!;
+  try {
+    const raw = typeof window !== 'undefined' ? window.sessionStorage.getItem(`capstone-steps:${sessionId}`) : null;
+    return raw ? (JSON.parse(raw) as Steps) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The session in big buttons - only what running a capstone semester needs. Everything else
  * (and every detail) is one click away in the Advanced view; nothing here does anything the
@@ -30,6 +44,8 @@ export function SessionSimpleView(props: {
   tracks: string[];
   groups: SimpleGroup[];
   refreshKey: number;
+  /** The groups are still being fetched. */
+  loading?: boolean;
   stageBar: React.ReactNode;
   emailing: boolean;
   onNewGroup: () => void;
@@ -42,15 +58,29 @@ export function SessionSimpleView(props: {
   onSchemes: () => void;
 }) {
   const { sessionId, status, tracks, groups } = props;
-  const [steps, setSteps] = useState<{ steps: SetupStep[]; nextStepKey: string | null } | null>(null);
+  const [steps, setSteps] = useState<Steps | null>(() => cachedSteps(sessionId));
   const [exportsOpen, setExportsOpen] = useState(false);
   // Simple mode's own screens: the overview, or the groups list.
-  const [screen, setScreen] = useState<'home' | 'groups'>('home');
+  const [screen, setScreenState] = useState<'home' | 'groups'>('home');
+  // A new screen starts at the top, wherever the page was scrolled.
+  const setScreen = (next: 'home' | 'groups') => {
+    setScreenState(next);
+    window.scrollTo({ top: 0 });
+  };
 
   useEffect(() => {
     fetch(`/api/capstone/sessions/${sessionId}/setup-status`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setSteps(d))
+      .then((d) => {
+        if (!d) return;
+        stepsCache.set(sessionId, d);
+        try {
+          window.sessionStorage.setItem(`capstone-steps:${sessionId}`, JSON.stringify({ steps: d.steps, nextStepKey: d.nextStepKey }));
+        } catch {
+          /* not cached */
+        }
+        setSteps(d);
+      })
       .catch(() => undefined);
   }, [sessionId, props.refreshKey]);
 
@@ -62,7 +92,9 @@ export function SessionSimpleView(props: {
   const noSupervisor = groups.filter((g) => !g.supervisorId).length;
   const noEvaluator = groups.filter((g) => g.evaluators.filter((e) => !e.unassignedAt).length === 0).length;
 
-  const groupsLine = groups.length
+  const groupsLine = props.loading
+    ? 'Loading groups…'
+    : groups.length
     ? [`${groups.length} groups · ${students} students`, noSupervisor ? `${noSupervisor} need a supervisor` : null, !noSupervisor && noEvaluator ? `${noEvaluator} need evaluators` : null]
         .filter(Boolean)
         .join(' · ')
@@ -86,6 +118,8 @@ export function SessionSimpleView(props: {
     <div className="space-y-5">
       {props.stageBar}
 
+      {/* Space held for the next step while it loads, so nothing jumps in later. */}
+      {!finished && !steps && <div className="h-[104px] animate-pulse rounded-2xl bg-muted" aria-hidden />}
       {/* The one thing to do next, when there is one. */}
       {!finished && next && (
         <div className="flex flex-col gap-3 rounded-2xl border-2 border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center">

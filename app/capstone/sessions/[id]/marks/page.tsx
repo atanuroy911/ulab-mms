@@ -84,7 +84,11 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   // Simple mode: choose the part, then a group, then enter just that group's marks.
   const [mode, setMode] = useSessionMode();
-  const [simpleStep, setSimpleStep] = useState<'part' | 'group' | 'enter'>('part');
+  const [simpleStep, setSimpleStepState] = useState<'part' | 'group' | 'enter'>('part');
+  const setSimpleStep = (next: 'part' | 'group' | 'enter') => {
+    setSimpleStepState(next);
+    window.scrollTo({ top: 0 });
+  };
   const [focusId, setFocusId] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -284,9 +288,9 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
         <>
           <SessionModeToggle mode={mode} onChange={setMode} />
           <Button asChild variant="outline" size="sm">
-            <Link href="/capstone/sessions">
+            <Link href={`/capstone/sessions?session=${id}`}>
               <ArrowLeft className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Sessions</span>
+              <span className="hidden sm:inline">Session</span>
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">

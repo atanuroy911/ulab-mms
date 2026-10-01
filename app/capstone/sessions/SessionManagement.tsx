@@ -268,9 +268,11 @@ export default function CapstoneSessionManagement() {
         if (wanted) {
           const match = (sessData as CapstoneSessionRow[]).find((x) => x._id === wanted);
           if (match) openSession(match);
-          else toast.error('That capstone session was not found, or you cannot manage it');
-          url.searchParams.delete('session');
-          window.history.replaceState(window.history.state, '', url);
+          else {
+            toast.error('That capstone session was not found, or you cannot manage it');
+            url.searchParams.delete('session');
+            window.history.replaceState(window.history.state, '', url);
+          }
         }
       } else toast.error(sessData.error || 'Failed to load capstone sessions');
       if (usersRes.ok) setUsers(usersData);
@@ -385,6 +387,15 @@ export default function CapstoneSessionManagement() {
 
   const openSession = async (session: CapstoneSessionRow) => {
     setSelectedSession(session);
+    window.scrollTo({ top: 0 });
+    // The open session is in the address, so Back from Enter marks or Grades returns to it.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session', session._id);
+      window.history.replaceState(window.history.state, '', url);
+    } catch {
+      /* address unchanged */
+    }
     setGroupsLoading(true);
     try {
       const res = await fetch(`/api/capstone/sessions/${session._id}/groups`);
@@ -1005,7 +1016,17 @@ Marks they already submitted are kept.`)) return;
       <div className="space-y-4">
         {deleteDialog}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setSelectedSession(null)} className="gap-1.5">
+          <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSelectedSession(null);
+            const url = new URL(window.location.href);
+            url.searchParams.delete('session');
+            window.history.replaceState(window.history.state, '', url);
+          }}
+          className="gap-1.5"
+        >
             <ArrowLeft className="h-4 w-4" />
             Back to Sessions
           </Button>
@@ -1027,6 +1048,7 @@ Marks they already submitted are kept.`)) return;
               tracks={selectedSession.tracks.map((t) => t.track)}
               groups={groups}
               refreshKey={setupKey}
+              loading={groupsLoading}
               emailing={emailingGraders}
               stageBar={
                 <SessionStageBar

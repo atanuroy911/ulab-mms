@@ -237,9 +237,9 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
       actions={
         <>
           <SessionModeToggle mode={mode} onChange={setMode} />
-          <Button variant="outline" size="sm" onClick={() => router.push('/capstone/sessions')} title="Back to capstone sessions">
+          <Button variant="outline" size="sm" onClick={() => router.push(`/capstone/sessions?session=${id}`)} title="Back to this session">
             <ArrowLeft className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Sessions</span>
+            <span className="hidden sm:inline">Session</span>
           </Button>
           {data?.canSeeWholeSession && (
             <Button asChild size="sm" variant="outline" title="Every group's marks in one table - type any grader's marks in">
@@ -292,7 +292,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
                 </div>
               ))}
               <Link
-                href="/capstone/sessions"
+                href={`/capstone/sessions?session=${id}`}
                 className="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
               >
                 <Workflow className="h-3.5 w-3.5" />
