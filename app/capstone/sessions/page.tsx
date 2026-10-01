@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStaffViewer } from '@/app/components/useStaffViewer';
 import { Loader2, ShieldAlert } from 'lucide-react';
@@ -62,7 +62,10 @@ export default function CapstoneSessionsPage() {
   return (
     <TeacherShell title="Capstone Sessions" subtitle="Open sessions, add groups, assign supervisors">
       <div className="p-4 sm:p-6">
-        <SessionManagement />
+        {/* Reads ?session= from the address. */}
+        <Suspense fallback={null}>
+          <SessionManagement />
+        </Suspense>
       </div>
     </TeacherShell>
   );

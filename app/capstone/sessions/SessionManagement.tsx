@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -197,6 +198,9 @@ export default function CapstoneSessionManagement() {
   const [showCourseFile, setShowCourseFile] = useState(false);
   // Simple (the essentials) or Advanced (everything) - shared with Enter marks and Grades.
   const [sessionMode, changeSessionMode] = useSessionMode();
+  // The open session lives in the address (?session=<id>): a link to plain Sessions - the
+  // sidebar, a Back button - shows the list, whatever was open before.
+  const sessionParam = useSearchParams().get('session');
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -262,7 +266,7 @@ export default function CapstoneSessionManagement() {
         if (url.searchParams.get('action') === 'new-session') {
           setShowCreate(true);
           url.searchParams.delete('action');
-          window.history.replaceState(window.history.state, '', url);
+          window.history.replaceState(null, '', url);
         }
         const wanted = url.searchParams.get('session');
         if (wanted) {
@@ -271,7 +275,7 @@ export default function CapstoneSessionManagement() {
           else {
             toast.error('That capstone session was not found, or you cannot manage it');
             url.searchParams.delete('session');
-            window.history.replaceState(window.history.state, '', url);
+            window.history.replaceState(null, '', url);
           }
         }
       } else toast.error(sessData.error || 'Failed to load capstone sessions');
@@ -392,7 +396,7 @@ export default function CapstoneSessionManagement() {
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('session', session._id);
-      window.history.replaceState(window.history.state, '', url);
+      window.history.replaceState(null, '', url);
     } catch {
       /* address unchanged */
     }
@@ -1010,7 +1014,7 @@ Marks they already submitted are kept.`)) return;
     />
   );
 
-  if (selectedSession) {
+  if (selectedSession && sessionParam === selectedSession._id) {
     const semesterName = typeof selectedSession.semesterId === 'object' ? selectedSession.semesterId.name : '';
     return (
       <div className="space-y-4">
@@ -1023,7 +1027,7 @@ Marks they already submitted are kept.`)) return;
             setSelectedSession(null);
             const url = new URL(window.location.href);
             url.searchParams.delete('session');
-            window.history.replaceState(window.history.state, '', url);
+            window.history.replaceState(null, '', url);
           }}
           className="gap-1.5"
         >
