@@ -2,6 +2,7 @@
 
 import { use as usePromise, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
+import { StudentShell } from '../../../components/StudentShell';
 import { signOut } from 'next-auth/react';
 import {
   AlertTriangle,
@@ -337,20 +338,19 @@ const fmtDate = (iso: string) =>
 
 // ── Before starting (or returning to full screen) ──────────────────────────────────────────
 
+/** The exam's intro and results, inside the student portal (writing is full screen). */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-muted/30">
-      <nav className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-3xl items-center px-4">
-          <Button asChild variant="ghost" size="sm" className="-ml-2">
-            <Link href="/student/dashboard/quick-exams">
-              <ArrowLeft className="mr-1.5 h-4 w-4" /> Quick exams
-            </Link>
-          </Button>
-        </div>
-      </nav>
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:py-10">{children}</main>
-    </div>
+    <StudentShell>
+      <div className="mx-auto max-w-3xl">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 mb-4">
+          <Link href="/student/dashboard/quick-exams">
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> All quick exams
+          </Link>
+        </Button>
+        {children}
+      </div>
+    </StudentShell>
   );
 }
 

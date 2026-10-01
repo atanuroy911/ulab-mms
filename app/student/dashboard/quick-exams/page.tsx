@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, BookOpen, CalendarClock, CheckCircle2, Clock, ListChecks, PlayCircle, Zap } from 'lucide-react';
+import { ArrowRight, BookOpen, CalendarClock, CheckCircle2, Clock, ListChecks, PlayCircle, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { StudentShell } from '../../components/StudentShell';
 import { cn } from '@/lib/utils';
 
 interface Item {
@@ -60,30 +60,12 @@ export default function StudentQuickExamsPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-muted/30">
-      <nav className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
-          <Button asChild variant="ghost" size="sm" className="-ml-2">
-            <Link href="/student/dashboard">
-              <ArrowLeft className="mr-1.5 h-4 w-4" /> Dashboard
-            </Link>
-          </Button>
-          <div className="ml-auto">
-            <ThemeToggle />
-          </div>
+    <StudentShell>
+      <div className="mx-auto max-w-3xl space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Quick Exams</h1>
+          <p className="text-sm text-muted-foreground">Short timed tests from your courses</p>
         </div>
-      </nav>
-
-      <main className="mx-auto max-w-3xl space-y-8 px-4 py-8 sm:py-10">
-        <header className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Zap className="h-5 w-5" aria-hidden />
-          </span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Quick Exams</h1>
-            <p className="text-sm text-muted-foreground">Short timed tests from your courses</p>
-          </div>
-        </header>
 
         {error && (
           <p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
@@ -133,8 +115,8 @@ export default function StudentQuickExamsPage() {
             )}
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </StudentShell>
   );
 }
 
