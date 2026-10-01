@@ -463,6 +463,68 @@ export async function reopenEntry(
 }
 
 
+/**
+ * Supervisor (or coordinator) corrects a closed entry: edits the student's text, the
+ * supervisor response, or both. The entry stays reviewed/closed - this is not a reopen.
+ * `correctedAt` / `correctedBy` are stamped so the PDF report can show the edit.
+ */
+export async function correctEntry(
+  group: ICapstoneGroup,
+  entryId: string,
+  correctorId: string,
+  fields: { workDone?: string; supervisorComment?: string }
+): Promise<JournalOpResult<IWeeklyJournalEntry>> {
+  if (fields.workDone === undefined && fields.supervisorComment === undefined) {
+    return { ok: false, status: 400, error: 'Provide workDone or supervisorComment to correct' };
+  }
+  const memberIds = group.members.filter((m) => !m.removedAt).map((m) => String(m.studentAccountId));
+  const set: Record<string, unknown> = { correctedAt: new Date(), correctedBy: correctorId };
+  if (fields.workDone !== undefined) set.workDone = fields.workDone.trim();
+  if (fields.supervisorComment !== undefined) set.supervisorComment = fields.supervisorComment.trim();
+
+  const entry = await WeeklyJournalEntry.findOneAndUpdate(
+    {
+      _id: entryId,
+      sessionId: group.sessionId,
+      studentAccountId: { $in: memberIds },
+      supervisorReviewedAt: { $ne: null }, // must already be closed
+    },
+    { $set: set },
+    { new: true }
+  );
+  if (!entry) {
+    return { ok: false, status: 409, error: 'Entry not found, or it has not been reviewed yet. Only closed entries can be corrected.' };
+  }
+  return { ok: true, value: entry };
+}
+
+/**
+ * Supervisor (or coordinator) deletes a journal entry that was written by mistake.
+ * Only works if the entry has NOT been reviewed yet (still in "submitted" state).
+ * For correcting a reviewed entry, use correctEntry instead.
+ */
+export async function deleteEntry(
+  group: ICapstoneGroup,
+  entryId: string
+): Promise<JournalOpResult<{ weekNumber: number; studentAccountId: string }>> {
+  const memberIds = group.members.filter((m) => !m.removedAt).map((m) => String(m.studentAccountId));
+  const existing = await WeeklyJournalEntry.findOne({
+    _id: entryId,
+    sessionId: group.sessionId,
+    studentAccountId: { $in: memberIds },
+  }).lean();
+  if (!existing) return { ok: false, status: 404, error: 'Entry not found' };
+  if (existing.supervisorReviewedAt) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'This entry has already been reviewed. Use "Correct entry" to edit it, or reopen it first.',
+    };
+  }
+  await WeeklyJournalEntry.deleteOne({ _id: entryId });
+  return { ok: true, value: { weekNumber: existing.weekNumber, studentAccountId: String(existing.studentAccountId) } };
+}
+
 // ── Student feedback emails, as one digest per student ──────────────────────────────────
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

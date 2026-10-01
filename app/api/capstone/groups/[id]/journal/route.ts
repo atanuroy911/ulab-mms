@@ -9,6 +9,8 @@ import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
 import { getCapstoneActor, canManageDepartment, isGroupGrader, isGroupSupervisor } from '@/lib/capstoneAuth';
 import {
   closeMissedWeek,
+  correctEntry,
+  deleteEntry,
   flushStudentFeedbackEmails,
   journalMarksQuery,
   journalStatusFrom,
@@ -89,8 +91,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json().catch(() => ({}));
     const action = body?.action;
     const feedback = typeof body?.feedback === 'string' ? body.feedback.trim() : '';
-    if (!['review', 'reviewMany', 'missed', 'reopen', 'notify'].includes(action)) {
-      return NextResponse.json({ error: 'action must be review, reviewMany, missed, reopen or notify' }, { status: 400 });
+    if (!['review', 'reviewMany', 'missed', 'reopen', 'notify', 'correct', 'delete'].includes(action)) {
+      return NextResponse.json({ error: 'action must be review, reviewMany, missed, reopen, notify, correct or delete' }, { status: 400 });
     }
     if (feedback.length > 5000) {
       return NextResponse.json({ error: 'Please keep feedback under 5,000 characters' }, { status: 400 });
@@ -107,9 +109,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
     const manager = canManageDepartment(actor, session.department);
-    if (action === 'reopen' ? !manager : !isGroupSupervisor(actor, group) && !manager) {
+    const needsSupervisorOrManager = ['review', 'reviewMany', 'missed', 'correct', 'delete'];
+    if (action === 'reopen' ? !manager : needsSupervisorOrManager.includes(action) && !isGroupSupervisor(actor, group) && !manager) {
       return NextResponse.json(
-        { error: action === 'reopen' ? 'Only a coordinator can reopen a reviewed week' : 'Only the supervisor reviews journals' },
+        { error: action === 'reopen' ? 'Only a coordinator can reopen a reviewed week' : 'Only the supervisor or a coordinator can do that' },
         { status: 403 }
       );
     }
@@ -171,6 +174,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       after(() => flushStudentFeedbackEmails(group, actorName));
       const status = await syncJournalCompletion(group._id, { schedule: after, session, group });
       return NextResponse.json({ entry: result.value, status });
+    }
+
+    if (action === 'correct') {
+      const entryId = typeof body?.entryId === 'string' ? body.entryId : '';
+      if (!mongoose.Types.ObjectId.isValid(entryId)) return NextResponse.json({ error: 'entryId is required' }, { status: 400 });
+      const workDone = typeof body?.workDone === 'string' ? body.workDone : undefined;
+      const supervisorComment = typeof body?.supervisorComment === 'string' ? body.supervisorComment : undefined;
+      if (workDone !== undefined && workDone.length > 20000) return NextResponse.json({ error: 'Please keep the entry under 20,000 characters' }, { status: 400 });
+      if (supervisorComment !== undefined && supervisorComment.length > 5000) return NextResponse.json({ error: 'Please keep the feedback under 5,000 characters' }, { status: 400 });
+      const result = await correctEntry(group, entryId, actor.userId, { workDone, supervisorComment });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      const status = await syncJournalCompletion(group._id, { schedule: after, session, group });
+      return NextResponse.json({ entry: result.value, status });
+    }
+
+    if (action === 'delete') {
+      const entryId = typeof body?.entryId === 'string' ? body.entryId : '';
+      if (!mongoose.Types.ObjectId.isValid(entryId)) return NextResponse.json({ error: 'entryId is required' }, { status: 400 });
+      const result = await deleteEntry(group, entryId);
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      const status = await syncJournalCompletion(group._id, { schedule: after, session, group });
+      return NextResponse.json({ deleted: true, weekNumber: result.value.weekNumber, status });
     }
 
     // reopen

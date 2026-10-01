@@ -189,6 +189,7 @@ export function SessionSimpleView(props: {
                 ['Report rubric', 'report-sheet'],
                 ['Grade sheet', 'transcript?scope=roster'],
                 ['Group results', 'transcript?scope=groups'],
+                ['Weekly journal PDF', 'journal-report'],
               ] as const
             ).map(([label, path]) => (
               <div key={path} className="flex flex-wrap items-center gap-2 rounded-lg border p-3">

@@ -23,6 +23,9 @@ export interface IWeeklyJournalEntry extends Document {
   /** Set when a coordinator unlocked a reviewed entry (lib/capstoneJournalWorkflow.ts). */
   reopenedAt?: Date | null;
   reopenedBy?: mongoose.Types.ObjectId | null;
+  /** Last correction by the supervisor or a coordinator (entry text or their response). */
+  correctedAt?: Date | null;
+  correctedBy?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +94,15 @@ const WeeklyJournalEntrySchema: Schema = new Schema(
       default: null,
     },
     reopenedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    correctedAt: {
+      type: Date,
+      default: null,
+    },
+    correctedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       default: null,

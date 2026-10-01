@@ -8,11 +8,14 @@ import {
   CircleDashed,
   Clock,
   Download,
+  FileText,
   Loader2,
   Lock,
   MailCheck,
   MessageSquare,
+  Pencil,
   RotateCcw,
+  Trash2,
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -120,12 +123,15 @@ interface OpenWeek {
  */
 export function JournalReviewPanel({
   groupId,
+  sessionId,
   canReview,
   initialData,
   onStatus,
   onGoToMarks,
 }: {
   groupId: string;
+  /** The session this group belongs to – used for the full-session PDF export. */
+  sessionId?: string;
   /** The group's supervisor, or a coordinator/admin acting for them. */
   canReview: boolean;
   /** A request the page started early, so the journal loads alongside the page. */
@@ -145,6 +151,9 @@ export function JournalReviewPanel({
   const [openWeek, setOpenWeek] = useState<OpenWeek | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  // Correction state: 'entry' = editing workDone, 'response' = editing supervisorComment
+  const [correctMode, setCorrectMode] = useState<{ field: 'entry' | 'response'; value: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   // Only once the data is here: the review queue is taken at the moment it opens.
   const reviewOpen = !!data && reviewing;
@@ -327,6 +336,56 @@ export function JournalReviewPanel({
     }
   };
 
+  // Correct (edit) a closed journal entry or supervisor response in-place.
+  const saveCorrection = async () => {
+    if (!openWeek?.entry || !correctMode) return;
+    setBusy(true);
+    try {
+      const body =
+        correctMode.field === 'entry'
+          ? { action: 'correct', entryId: openWeek.entry._id, workDone: correctMode.value }
+          : { action: 'correct', entryId: openWeek.entry._id, supervisorComment: correctMode.value };
+      const res = await fetch(`/api/capstone/groups/${groupId}/journal`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save correction');
+      toast.success(correctMode.field === 'entry' ? 'Journal entry corrected' : 'Response corrected');
+      setCorrectMode(null);
+      if (!applyResponse(json)) await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Delete an unreviewed entry (supervisor mistakenly reviewed or student wrote wrong week).
+  const confirmDelete = async () => {
+    if (!openWeek?.entry) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/capstone/groups/${groupId}/journal`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', entryId: openWeek.entry._id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to delete');
+      toast.success(`Week ${openWeek.weekNumber} entry deleted`);
+      setDeleteConfirm(false);
+      setOpenWeek(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      setDeleteConfirm(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Everything waiting for review, student by student, oldest week first.
   const reviewQueue: ReviewItem[] = useMemo(() => (data ? members : []).flatMap((m) => {
     const sid = idOf(m);
@@ -409,6 +468,18 @@ export function JournalReviewPanel({
                 >
                   {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 </Button>
+                {sessionId && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground"
+                    onClick={() => window.open(`/api/capstone/sessions/${sessionId}/journal-report?groupId=${groupId}`, '_blank')}
+                    aria-label="Export journal as PDF"
+                    title="Export journal as PDF (printable)"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {status?.complete && data.group.journalCompletedAt
@@ -596,7 +667,16 @@ export function JournalReviewPanel({
       )}
 
       {/* One week that isn't waiting for review: read it, close it, or reopen it. */}
-      <Dialog open={openWeek !== null} onOpenChange={(o) => !o && !busy && setOpenWeek(null)}>
+      <Dialog
+        open={openWeek !== null}
+        onOpenChange={(o) => {
+          if (!o && !busy) {
+            setOpenWeek(null);
+            setCorrectMode(null);
+            setDeleteConfirm(false);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
@@ -611,7 +691,17 @@ export function JournalReviewPanel({
           </DialogHeader>
 
           <div className="max-h-[55dvh] space-y-3 overflow-y-auto">
-            {openWeek?.entry?.workDone ? (
+            {/* Journal entry text */}
+            {correctMode?.field === 'entry' ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-amber-600">Editing journal entry text</p>
+                <Textarea
+                  rows={6}
+                  value={correctMode.value}
+                  onChange={(e) => setCorrectMode({ ...correctMode, value: e.target.value })}
+                />
+              </div>
+            ) : openWeek?.entry?.workDone ? (
               <div className="rounded-xl border p-4">
                 <JournalText text={openWeek.entry.workDone} />
               </div>
@@ -620,13 +710,25 @@ export function JournalReviewPanel({
                 {openWeekState === 'missed' ? 'Closed without a submission.' : "The student hasn't written this week yet."}
               </p>
             )}
+            {/* Supervisor response */}
             {(openWeekState === 'reviewed' || openWeekState === 'missed') && (
-              <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-                <p className="text-xs font-semibold text-primary">Feedback · closed {fmtDate(openWeek?.entry?.supervisorReviewedAt)}</p>
-                <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm">
-                  {openWeek?.entry?.supervisorComment?.trim() || (openWeekState === 'reviewed' ? 'Acknowledged without comment.' : 'No note.')}
-                </p>
-              </div>
+              correctMode?.field === 'response' ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-amber-600">Editing supervisor response</p>
+                  <Textarea
+                    rows={3}
+                    value={correctMode.value}
+                    onChange={(e) => setCorrectMode({ ...correctMode, value: e.target.value })}
+                  />
+                </div>
+              ) : (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+                  <p className="text-xs font-semibold text-primary">Feedback · closed {fmtDate(openWeek?.entry?.supervisorReviewedAt)}</p>
+                  <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm">
+                    {openWeek?.entry?.supervisorComment?.trim() || (openWeekState === 'reviewed' ? 'Acknowledged without comment.' : 'No note.')}
+                  </p>
+                </div>
+              )
             )}
             {openWeekState === 'not-started' && reviewAllowed && (
               <div className="space-y-2">
@@ -636,23 +738,84 @@ export function JournalReviewPanel({
                 <Textarea rows={2} placeholder="Note for the student (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
               </div>
             )}
+            {/* Delete confirmation */}
+            {deleteConfirm && (
+              <p className="rounded-xl border border-rose-400/50 bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
+                Delete this entry permanently? The student will be able to write Week {openWeek?.weekNumber} again. This cannot be undone.
+              </p>
+            )}
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setOpenWeek(null)} disabled={busy}>
-              Close
-            </Button>
-            {openWeekState === 'not-started' && reviewAllowed && (
-              <Button variant="destructive" onClick={() => actOnWeek('missed')} disabled={busy}>
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                Close as not submitted
-              </Button>
-            )}
-            {(openWeekState === 'reviewed' || openWeekState === 'missed') && data.canReopen && !locked && (
-              <Button variant="outline" onClick={() => actOnWeek('reopen')} disabled={busy}>
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-                Reopen for the student
-              </Button>
+          <DialogFooter className="flex-wrap gap-2 sm:gap-2">
+            {/* Correction mode save/cancel */}
+            {correctMode ? (
+              <>
+                <Button variant="outline" onClick={() => setCorrectMode(null)} disabled={busy}>Cancel</Button>
+                <Button onClick={saveCorrection} disabled={busy}>
+                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save correction
+                </Button>
+              </>
+            ) : deleteConfirm ? (
+              <>
+                <Button variant="outline" onClick={() => setDeleteConfirm(false)} disabled={busy}>Cancel</Button>
+                <Button variant="destructive" onClick={confirmDelete} disabled={busy}>
+                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Yes, delete entry
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setOpenWeek(null)} disabled={busy}>
+                  Close
+                </Button>
+                {/* Supervisor / coordinator corrections on a closed entry */}
+                {(openWeekState === 'reviewed' || openWeekState === 'missed') && canReview && openWeek?.entry && (
+                  <>
+                    {openWeek.entry.workDone?.trim() && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCorrectMode({ field: 'entry', value: openWeek.entry!.workDone || '' })}
+                        title="Fix a typo or mistake in the student's text"
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Correct entry
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCorrectMode({ field: 'response', value: openWeek.entry!.supervisorComment || '' })}
+                      title="Edit your own feedback"
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" /> Correct response
+                    </Button>
+                  </>
+                )}
+                {/* Delete an unreviewed entry (submitted but not yet closed) */}
+                {openWeekState === 'submitted' && canReview && openWeek?.entry && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/30"
+                    onClick={() => setDeleteConfirm(true)}
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete entry
+                  </Button>
+                )}
+                {openWeekState === 'not-started' && reviewAllowed && (
+                  <Button variant="destructive" onClick={() => actOnWeek('missed')} disabled={busy}>
+                    {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                    Close as not submitted
+                  </Button>
+                )}
+                {(openWeekState === 'reviewed' || openWeekState === 'missed') && data.canReopen && !locked && (
+                  <Button variant="outline" onClick={() => actOnWeek('reopen')} disabled={busy}>
+                    {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                    Reopen for the student
+                  </Button>
+                )}
+              </>
             )}
           </DialogFooter>
         </DialogContent>

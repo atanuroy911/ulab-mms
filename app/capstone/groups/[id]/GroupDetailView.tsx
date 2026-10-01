@@ -44,6 +44,7 @@ interface Member { studentAccountId: StudentAccountRef | string; studentIdText: 
 
 interface GroupDetail {
   _id: string;
+  sessionId: string;
   track: 'A' | 'B' | 'C';
   projectTitle: string;
   projectAbstract?: string;
@@ -849,6 +850,7 @@ export function GroupDetailView({ id, embedded = false, initialTab }: { id: stri
           <TabsContent value="journal" className="space-y-4 mt-4">
             <JournalReviewPanel
               groupId={id}
+              sessionId={group?.sessionId}
               canReview={isSupervisor || canManage}
               initialData={journalPrefetch}
               onStatus={(status) => {

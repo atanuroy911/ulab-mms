@@ -1153,6 +1153,7 @@ Marks they already submitted are kept.`)) return;
                         <DropdownMenuLabel className="text-xs text-muted-foreground">Results</DropdownMenuLabel>
                         {perTrack('Grade sheet', 'transcript?scope=roster')}
                         {perTrack('Group results', 'transcript?scope=groups')}
+                        {perTrack('Weekly journal PDF', 'journal-report')}
                         <DropdownMenuItem onSelect={() => setShowCourseFile(true)}>Course file (CO-PO)…</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuLabel className="text-xs text-muted-foreground">Downloads</DropdownMenuLabel>
