@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Loader2,
-  ArrowLeft,
   Pencil,
   CheckCircle2,
   Clock,
@@ -23,7 +22,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { AppHeader } from '@/app/components/AppHeader';
+import { useSession } from 'next-auth/react';
+import { StudentShell } from '../../components/StudentShell';
 import { cn } from '@/lib/utils';
 import { entryState, type JournalEntryState } from '@/lib/capstoneJournalStatus';
 import { isPastSession, isRunning, statusLabel } from '@/lib/capstoneStatus';
@@ -88,6 +88,8 @@ export default function StudentCapstonePage() {
   const [showTitleEdit, setShowTitleEdit] = useState<Group | null>(null);
   const [titleInput, setTitleInput] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
+  const { data: authSession } = useSession();
+  const myId = ((authSession?.user as { studentIdText?: string | null } | undefined)?.studentIdText || '').toLowerCase();
 
   const fetchData = async () => {
     try {
@@ -127,26 +129,26 @@ export default function StudentCapstonePage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader
-        title="Capstone"
-        subtitle="Your group and weekly journal"
-        logoHref="/student/dashboard"
-        beforeTheme={<CapstoneGuide audience="student" />}
-        actions={[{ key: 'back', label: 'Back', icon: ArrowLeft, href: '/student/dashboard', variant: 'outline', alwaysShowLabel: true }]}
-      />
+    <StudentShell>
+      <div className="mx-auto max-w-3xl space-y-8">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Capstone</h1>
+            <p className="text-sm text-muted-foreground">Your group and weekly journal</p>
+          </div>
+          <CapstoneGuide audience="student" />
+        </div>
 
-      <main className="mx-auto max-w-3xl space-y-10 px-4 py-6 sm:py-8">
-        {results.length === 0 && (
+        {loading && (
+          <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading">
+            <div className="h-36 rounded-xl bg-muted" />
+            <div className="h-44 rounded-2xl bg-muted" />
+            <div className="h-28 rounded-xl bg-muted" />
+          </div>
+        )}
+
+        {!loading && results.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center">
               <Users className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -164,6 +166,7 @@ export default function StudentCapstonePage() {
               group={group}
               session={session}
               entries={journalEntries}
+              myId={myId}
               onWrite={(target) => setWizard(target)}
               onEditTitle={() => {
                 setTitleInput(group.projectTitle);
@@ -188,6 +191,7 @@ export default function StudentCapstonePage() {
                     group={group}
                     session={session}
                     entries={journalEntries}
+                    myId={myId}
                     onWrite={() => {}}
                     onEditTitle={() => {}}
                   />
@@ -195,7 +199,7 @@ export default function StudentCapstonePage() {
             </div>
           </details>
         )}
-      </main>
+      </div>
 
       {wizard && (
         <JournalWizard
@@ -228,20 +232,30 @@ export default function StudentCapstonePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StudentShell>
   );
 }
+
+const WEEK_STYLE: Record<JournalEntryState, { cell: string; label: string }> = {
+  reviewed: { cell: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300', label: 'Reviewed' },
+  submitted: { cell: 'border-amber-500/60 bg-amber-500/15 text-amber-800 dark:text-amber-300', label: 'Waiting for review' },
+  missed: { cell: 'border-rose-500/60 bg-rose-500/15 text-rose-800 dark:text-rose-300', label: 'Missed' },
+  'not-started': { cell: 'border-dashed bg-background text-muted-foreground', label: 'Not written' },
+};
 
 function GroupJournal({
   group,
   session,
   entries,
+  myId,
   onWrite,
   onEditTitle,
 }: {
   group: Group;
   session: CapstoneSessionInfo;
   entries: JournalEntry[];
+  /** The signed-in student's ID (lower-case), to mark "(you)". */
+  myId: string;
   onWrite: (target: WizardTarget) => void;
   onEditTitle: () => void;
 }) {
@@ -287,14 +301,21 @@ function GroupJournal({
               <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Supervisor</p>
-                <p className="truncate font-medium">{group.supervisorId?.name || '—'}</p>
+                <p className={cn('truncate', group.supervisorId?.name ? 'font-medium' : 'text-muted-foreground')}>{group.supervisorId?.name || 'Not assigned yet'}</p>
               </div>
             </div>
             <div className="flex min-w-0 items-start gap-2">
               <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Members ({activeMembers.length})</p>
-                <p>{activeMembers.map((m) => (typeof m.studentAccountId === 'object' ? m.studentAccountId.name : m.studentIdText)).join(', ')}</p>
+                <p>
+                  {activeMembers
+                    .map((m) => {
+                      const name = (typeof m.studentAccountId === 'object' ? m.studentAccountId.name : m.studentIdText).replace(/\s*\(\d{6,}\)\s*$/, '');
+                      return m.studentIdText.toLowerCase() === myId ? `${name} (you)` : name;
+                    })
+                    .join(', ')}
+                </p>
               </div>
             </div>
           </div>
@@ -330,12 +351,58 @@ function GroupJournal({
             </p>
           )}
         </div>
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-background/60">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${total ? (written.length / total) * 100 : 0}%` }} />
-        </div>
+        {/* A finished semester with no entries here (e.g. imported from a workbook): say so, rather than show empty weeks. */}
+        {isPastSession(session.status) && written.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">This semester&apos;s journal entries aren&apos;t in the system - only the final journal mark was recorded.</p>
+        ) : (
+        <>
+        {/* Every week at a glance - tap one to write, edit or read it. */}
+        <ol className="mt-5 grid grid-cols-6 gap-1.5 sm:grid-cols-12" aria-label="Weeks">
+          {Array.from({ length: total }, (_, i) => i + 1).map((w) => {
+            const e = byWeek.get(w);
+            const st = entryState(e);
+            const canWrite = isOpen && st === 'not-started';
+            const canEdit = isOpen && st === 'submitted';
+            const open = () => {
+              if (canWrite) onWrite({ groupId: group._id, week: w, weekChoices: unwritten, existingText: null, totalWeeks: total });
+              else if (canEdit && e) onWrite({ groupId: group._id, week: w, weekChoices: [], existingText: e.workDone, totalWeeks: total });
+              else document.getElementById(`week-${group._id}-${w}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            };
+            const clickable = canWrite || canEdit || st !== 'not-started';
+            return (
+              <li key={w}>
+                <button
+                  type="button"
+                  onClick={open}
+                  disabled={!clickable}
+                  title={`Week ${w}: ${WEEK_STYLE[st].label}${canWrite ? ' - tap to write' : canEdit ? ' - tap to edit' : ''}`}
+                  aria-label={`Week ${w}, ${WEEK_STYLE[st].label}`}
+                  className={cn(
+                    'flex h-10 w-full items-center justify-center rounded-lg border text-sm font-semibold tabular-nums transition-transform',
+                    WEEK_STYLE[st].cell,
+                    clickable && 'cursor-pointer hover:scale-105',
+                    w === nextWeek && isOpen && 'ring-2 ring-primary ring-offset-1 ring-offset-background'
+                  )}
+                >
+                  {w}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {(['reviewed', 'submitted', 'missed', 'not-started'] as const).map((k) => (
+            <span key={k} className="flex items-center gap-1.5">
+              <span className={cn('h-3 w-3 rounded border', WEEK_STYLE[k].cell)} /> {WEEK_STYLE[k].label}
+            </span>
+          ))}
+        </p>
+        </>
+        )}
       </div>
 
-      {/* How it works - three plain steps */}
+      {/* How it works - three plain steps, until the first week is written */}
+      {written.length === 0 && (
       <ol className="grid gap-2 sm:grid-cols-3">
         {[
           { icon: PenLine, title: 'Write your week', text: 'Answer a few short questions about what you did.' },
@@ -353,6 +420,7 @@ function GroupJournal({
           </li>
         ))}
       </ol>
+      )}
 
       {/* Entries */}
       <div className="space-y-3">
@@ -371,6 +439,7 @@ function GroupJournal({
           newestFirst.map((entry) => (
             <EntryCard
               key={entry._id}
+              anchor={`week-${group._id}-${entry.weekNumber}`}
               entry={entry}
               total={total}
               supervisorName={group.supervisorId?.name}
@@ -392,12 +461,14 @@ function GroupJournal({
 }
 
 function EntryCard({
+  anchor,
   entry,
   total,
   supervisorName,
   canEdit,
   onEdit,
 }: {
+  anchor: string;
   entry: JournalEntry;
   total: number;
   supervisorName?: string;
@@ -410,7 +481,7 @@ function EntryCard({
   const long = entry.workDone.length > 400;
 
   return (
-    <Card className={cn(state === 'submitted' && 'border-amber-500/40')}>
+    <Card id={anchor} className={cn('scroll-mt-24', state === 'submitted' && 'border-amber-500/40')}>
       <CardContent className="space-y-3 pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
