@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   CircleDashed,
   Clock,
-  Download,
   FileText,
   Loader2,
   Lock,
@@ -144,7 +143,6 @@ export function JournalReviewPanel({
   const [data, setData] = useState<JournalPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [reviewStart, setReviewStart] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -317,26 +315,6 @@ export function JournalReviewPanel({
     }
   };
 
-  const exportCsv = async () => {
-    setExporting(true);
-    try {
-      const res = await fetch(`/api/capstone/groups/${groupId}/journal/export`);
-      if (!res.ok) throw new Error('Export failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `journal-${groupId}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Correct (edit) a closed journal entry or supervisor response in-place.
   const saveCorrection = async () => {
     if (!openWeek?.entry || !correctMode) return;
     setBusy(true);
@@ -457,17 +435,6 @@ export function JournalReviewPanel({
                     {status?.weeksClosed ?? 0} of {status?.weeksTotal ?? 0} student-weeks closed
                   </p>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-muted-foreground"
-                  onClick={exportCsv}
-                  disabled={exporting}
-                  aria-label="Download all journals as CSV"
-                  title="Download all journals as CSV"
-                >
-                  {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                </Button>
                 {sessionId && (
                   <Button
                     variant="outline"
