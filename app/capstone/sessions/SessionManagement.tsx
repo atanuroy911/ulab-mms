@@ -30,6 +30,7 @@ import { isPastSession, isRunning } from '@/lib/capstoneStatus';
 import { cn } from '@/lib/utils';
 import { MemberEntry, type MemberRow } from './MemberEntry';
 import { SetupChecklist } from './SetupChecklist';
+import { CourseFileDialog } from './CourseFileDialog';
 import { DeleteSessionDialog } from './DeleteSessionDialog';
 import { InvitePersonForm, PendingInviteNote, type InvitedUser } from './InvitePersonForm';
 import { EvaluatorPickerDialog } from './EvaluatorPickerDialog';
@@ -191,6 +192,7 @@ export default function CapstoneSessionManagement() {
   const [deleteTarget, setDeleteTarget] = useState<CapstoneSessionRow | null>(null);
   const [groups, setGroups] = useState<GroupRow[]>([]);
   const [showSchemes, setShowSchemes] = useState(false);
+  const [showCourseFile, setShowCourseFile] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1075,7 +1077,7 @@ Marks they already submitted are kept.`)) return;
                         <DropdownMenuLabel className="text-xs text-muted-foreground">Results</DropdownMenuLabel>
                         {perTrack('Grade sheet', 'transcript?scope=roster')}
                         {perTrack('Group results', 'transcript?scope=groups')}
-                        {perTrack('Course file (CO-PO)', 'course-file')}
+                        <DropdownMenuItem onSelect={() => setShowCourseFile(true)}>Course file (CO-PO)…</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuLabel className="text-xs text-muted-foreground">Downloads</DropdownMenuLabel>
                         <DropdownMenuItem onSelect={() => open('groups-export')}>
@@ -1160,6 +1162,14 @@ Marks they already submitted are kept.`)) return;
             )}
           </CardContent>
         </Card>
+
+        <CourseFileDialog
+          sessionId={selectedSession._id}
+          tracks={selectedSession.tracks.map((t) => t.track)}
+          groups={groups}
+          open={showCourseFile}
+          onOpenChange={setShowCourseFile}
+        />
 
         {/* Grading schemes per track - behind the header's button, in a modal. */}
         <Dialog open={showSchemes} onOpenChange={setShowSchemes}>

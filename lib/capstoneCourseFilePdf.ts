@@ -1,4 +1,4 @@
-// Renders a capstone track's course file (lib/capstoneCourseFile.ts) as one print-ready HTML
+// Renders a capstone track's course file (or one sheet of it, for one group or student) (lib/capstoneCourseFile.ts) as one print-ready HTML
 // document, the capstone counterpart of lib/coPoPdfReport.ts: styled HTML with @page rules
 // that the browser prints to PDF, no server-side PDF dependency.
 //
@@ -22,6 +22,8 @@ export interface CourseFileMeta {
   coordinatorName: string;
   logoDataUri: string;
   generatedAt: Date;
+  /** Set when the file covers part of the track: "Group 13", or a student's ID and name. */
+  scopeLabel?: string | null;
 }
 
 const fmt = (v: number | null | undefined, digits = 2) =>
@@ -41,10 +43,10 @@ function byGroup(rows: StudentCourseFileRow[]) {
 
 function header(meta: CourseFileMeta, title: string) {
   return `<div class="head">
-    <img src="${meta.logoDataUri}" alt="ULAB" />
+    <span class="logo" role="img" aria-label="ULAB"></span>
     <div class="head-text">
       <div class="dept">Department of ${esc(meta.departmentName)}</div>
-      <div class="title">${esc(title)}</div>
+      <div class="title">${esc(title)}${meta.scopeLabel ? ` <span class="scope">· ${esc(meta.scopeLabel)}</span>` : ''}</div>
     </div>
     <div class="head-right">${esc(meta.courseCode)}<br />${esc(meta.semesterName)}</div>
   </div>`;
@@ -61,6 +63,40 @@ function signature(meta: CourseFileMeta, role = 'Course Coordinator') {
 function warningsBox(data: CourseFileData) {
   if (!data.warnings.length) return '';
   return `<div class="warn">${data.warnings.map((w) => `<div>${esc(w)}</div>`).join('')}</div>`;
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────────────────
+
+/** A vertical bar chart, like the workbooks' "Grade Summary" chart. Values above each bar. */
+function barChart(opts: { title: string; labels: string[]; values: number[]; yLabel: string; format?: (v: number) => string; max?: number; target?: { value: number; label: string } }) {
+  const W = 360;
+  const H = 190;
+  // Room on the right for the target's label, so it never sits on a bar.
+  const pad = { l: 34, r: opts.target ? 52 : 8, t: 22, b: 30 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+  const max = Math.max(opts.max ?? 0, ...opts.values, opts.target?.value ?? 0, 1);
+  const step = iw / Math.max(1, opts.labels.length);
+  const bw = Math.min(28, step * 0.62);
+  const y = (v: number) => pad.t + ih - (v / max) * ih;
+  const f = opts.format || ((v: number) => String(v));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((k) => k * max);
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(opts.title)}">
+    <text x="${W / 2}" y="13" text-anchor="middle" font-size="10" font-weight="700">${esc(opts.title)}</text>
+    ${ticks.map((v) => `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="#ddd" stroke-width="0.6" /><text x="${pad.l - 4}" y="${y(v) + 3}" text-anchor="end" font-size="7" fill="#555">${esc(f(Math.round(v * 100) / 100))}</text>`).join('')}
+    <line x1="${pad.l}" x2="${pad.l}" y1="${pad.t}" y2="${pad.t + ih}" stroke="#555" stroke-width="0.8" />
+    <line x1="${pad.l}" x2="${W - pad.r}" y1="${pad.t + ih}" y2="${pad.t + ih}" stroke="#555" stroke-width="0.8" />
+    ${opts.values
+      .map((v, i) => {
+        const x = pad.l + step * i + (step - bw) / 2;
+        return `<rect x="${x}" y="${y(v)}" width="${bw}" height="${pad.t + ih - y(v)}" fill="#4472c4" />
+        <text x="${x + bw / 2}" y="${y(v) - 2}" text-anchor="middle" font-size="7.5">${esc(f(v))}</text>
+        <text x="${x + bw / 2}" y="${pad.t + ih + 10}" text-anchor="middle" font-size="8">${esc(opts.labels[i])}</text>`;
+      })
+      .join('')}
+    ${opts.target ? `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(opts.target.value)}" y2="${y(opts.target.value)}" stroke="#c00000" stroke-width="1" stroke-dasharray="4 3" /><text x="${W - pad.r + 4}" y="${y(opts.target.value) + 3}" text-anchor="start" font-size="7.5" fill="#c00000">${esc(opts.target.label)}</text>` : ''}
+    <text x="10" y="${pad.t + ih / 2}" transform="rotate(-90 10 ${pad.t + ih / 2})" text-anchor="middle" font-size="8" fill="#333">${esc(opts.yLabel)}</text>
+  </svg>`;
 }
 
 // ── Grade sheet ───────────────────────────────────────────────────────────────────────────
@@ -114,6 +150,7 @@ function gradeSheet(data: CourseFileData, meta: CourseFileMeta) {
           <tr class="strong"><td>Total</td><td></td><td>${graded}</td><td></td></tr>
         </tbody>
       </table>
+      ${barChart({ title: `${meta.courseCode} Grade Summary`, labels: data.gradeDistribution.map((g) => g.letter), values: data.gradeDistribution.map((g) => g.count), yLabel: 'Number of grades' })}
       ${signature(meta)}
     </div>
     ${footer(meta)}
@@ -314,6 +351,15 @@ function cqiSheet(data: CourseFileData, meta: CourseFileMeta) {
           .join('')}
       </tbody>
     </table>
+    ${barChart({
+      title: 'CO attainment',
+      labels: data.coSummary.map((c) => c.key),
+      values: data.coSummary.map((c) => Math.round(c.ratio * 1000) / 10),
+      yLabel: '% of students attaining',
+      format: (v) => `${v}%`,
+      max: 100,
+      target: { value: data.thresholds.classTarget * 100, label: `target ${pct(data.thresholds.classTarget, 0)}` },
+    })}
     <div class="caption">Plan for course improvement (based on the course outcome analysis above, results and other sources)</div>
     <div class="write-lines">${'<div></div>'.repeat(7)}</div>
     ${signature(meta)}
@@ -370,24 +416,42 @@ function schemeSheet(data: CourseFileData, meta: CourseFileMeta) {
   </section>`;
 }
 
-export function buildCourseFileHtml(data: CourseFileData, meta: CourseFileMeta): string {
+/**
+ * The sheets this course file has, in workbook order - they follow the grading scheme: one
+ * marking sheet per component evaluators mark, one CO evaluation per rubric that measures a CO.
+ */
+export function courseFileSheets(data: CourseFileData): Array<{ key: string; label: string }> {
+  return [
+    { key: 'grade', label: 'Grade sheet' },
+    ...data.detailSheets.map((s) => ({ key: `marking-${s.component}`, label: `${s.label} marking` })),
+    ...data.coRubricComponents.map((c) => ({ key: `co-${c}`, label: `CO ${COMPONENT_LABELS[c] || c} evaluation` })),
+    { key: 'copo', label: 'CO-PO attainment' },
+    { key: 'cqi', label: 'Continuous quality improvement' },
+    { key: 'scheme', label: 'Assessment scheme' },
+  ];
+}
+
+export function buildCourseFileHtml(data: CourseFileData, meta: CourseFileMeta, only?: string | null): string {
+  const all: Array<[string, () => string]> = [
+    ['grade', () => gradeSheet(data, meta)],
+    ...data.detailSheets.map((s) => [`marking-${s.component}`, () => detailSheet(data, meta, s)] as [string, () => string]),
+    ...data.coRubricComponents.map((c) => [`co-${c}`, () => coEvaluationSheet(data, meta, c)] as [string, () => string]),
+    ['copo', () => attainmentSheet(data, meta)],
+    ['cqi', () => cqiSheet(data, meta)],
+    ['scheme', () => schemeSheet(data, meta)],
+  ];
+  const chosen = only ? all.filter(([key]) => key === only) : all;
   const sheets = data.rows.length
-    ? [
-        gradeSheet(data, meta),
-        ...data.detailSheets.map((s) => detailSheet(data, meta, s)),
-        ...data.coRubricComponents.map((c) => coEvaluationSheet(data, meta, c)),
-        attainmentSheet(data, meta),
-        cqiSheet(data, meta),
-        schemeSheet(data, meta),
-      ]
-    : [`<section class="sheet">${header(meta, `Course File — ${meta.courseCode}`)}<p class="note">This track has no students yet.</p></section>`];
+    ? chosen.map(([, render]) => render())
+    : [`<section class="sheet">${header(meta, `Course File — ${meta.courseCode}`)}<p class="note">No students in this course file.</p></section>`];
+  const sheetName = only ? courseFileSheets(data).find((x) => x.key === only)?.label : null;
 
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(meta.courseCode)} Course File - ${esc(meta.semesterName)}</title>
+  <title>${esc(meta.courseCode)} ${esc(sheetName || 'Course File')}${meta.scopeLabel ? ` - ${esc(meta.scopeLabel)}` : ''} - ${esc(meta.semesterName)}</title>
   <style>
     @page { size: A4 landscape; margin: 9mm; }
     * { box-sizing: border-box; }
@@ -395,7 +459,9 @@ export function buildCourseFileHtml(data: CourseFileData, meta: CourseFileMeta):
     .sheet { page-break-after: always; break-after: page; }
     .sheet:last-child { page-break-after: auto; break-after: auto; }
     .head { display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #1f5aa6; padding-bottom: 5px; margin-bottom: 8px; }
-    .head img { height: 34px; }
+    .logo { display: inline-block; height: 34px; width: 92px; flex: none; background: url("${meta.logoDataUri}") left center / contain no-repeat; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .scope { font-weight: 400; color: #333; }
+    .chart { flex: none; }
     .head-text { flex: 1; }
     .dept { color: #1f5aa6; font-size: 13px; font-weight: 700; }
     .title { font-size: 12px; font-weight: 700; margin-top: 2px; }
@@ -459,7 +525,7 @@ export function buildCourseFileHtml(data: CourseFileData, meta: CourseFileMeta):
   </style>
 </head>
 <body>
-  <div class="toolbar"><span class="beta">BETA</span><span>${esc(meta.courseCode)} course file · ${esc(meta.semesterName)}</span><button onclick="window.print()">Print / Save as PDF</button></div>
+  <div class="toolbar"><span>${esc(meta.courseCode)} ${esc(sheetName || 'course file')}${meta.scopeLabel ? ` · ${esc(meta.scopeLabel)}` : ''} · ${esc(meta.semesterName)}</span><button onclick="window.print()">Print / Save as PDF</button></div>
   ${sheets.join('\n')}
 </body>
 </html>`;

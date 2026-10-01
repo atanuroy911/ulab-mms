@@ -10,12 +10,18 @@ import { computeSessionGrades } from '@/lib/capstoneGrades';
 import { validateScheme, type SchemeGraph } from '@/lib/gradingEngine';
 import { defaultOutcomes, validateOutcomes, type CapstoneOutcomesConfig } from '@/lib/capstoneOutcomes';
 import { buildCourseFileData } from '@/lib/capstoneCourseFile';
-import { buildCourseFileHtml } from '@/lib/capstoneCourseFilePdf';
+import { buildCourseFileHtml, courseFileSheets } from '@/lib/capstoneCourseFilePdf';
+import CapstoneGroup from '@/models/CapstoneGroup';
+import mongoose from 'mongoose';
 import { esc, getLogoDataUri } from '@/lib/capstonePrint';
 
 export const runtime = 'nodejs';
 
-// GET /api/capstone/sessions/[id]/course-file?track=A   (beta)
+// GET /api/capstone/sessions/[id]/course-file?track=A[&sheet=cqi][&groupId=...|&studentAccountId=...][&list=1]
+//
+// sheet: one sheet as its own printable page (keys from courseFileSheets); omitted, every sheet.
+// groupId / studentAccountId: the file for one group or one student instead of the track.
+// list=1: JSON of the sheets this track's scheme produces, for the export menu.
 //
 // The track's course file - grade sheet, marking detail, CO evaluation, CO-PO attainment and
 // CQI - per student, built from the live marks and the track's pinned grading scheme (its
@@ -84,8 +90,41 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const outcomes = outcomesNote ? defaultOutcomes(track) : stored!;
 
-    const grades = await computeSessionGrades(session, { track });
-    const data = buildCourseFileData({ track, graph, outcomes, groups: grades.groups.filter((g) => g.track === track) });
+    const sp = request.nextUrl.searchParams;
+    const groupId = sp.get('groupId') || '';
+    const studentAccountId = sp.get('studentAccountId') || '';
+    for (const id of [groupId, studentAccountId]) {
+      if (id && !mongoose.Types.ObjectId.isValid(id)) return page('Not found', 'That group or student is not in this session.', 404);
+    }
+    const grades = await computeSessionGrades(session, { track, ...(groupId ? { _id: groupId } : {}) });
+    // Imported groups without a supervisor yet: the workbook's initials.
+    const labels = new Map(
+      (await CapstoneGroup.find({ sessionId: session._id, track }).select('supervisorLabel').lean()).map((g) => [String(g._id), g.supervisorLabel || null])
+    );
+    const cleanName = (n: string | null) => (n || '').replace(/\s*\(\d{6,}\)\s*$/, '');
+    let groups = grades.groups
+      .filter((g) => g.track === track)
+      .map((g) => ({
+        ...g,
+        supervisorName: g.supervisorName || labels.get(g.groupId) || null,
+        members: g.members.map((m) => ({ ...m, name: cleanName(m.name) })),
+      }));
+    let scopeLabel: string | null = null;
+    if (groupId) {
+      if (!groups.length) return page('Not found', 'That group is not in this track.', 404);
+      scopeLabel = `Group ${groups[0].groupNumber}`;
+    }
+    if (studentAccountId) {
+      groups = groups.map((g) => ({ ...g, members: g.members.filter((m) => m.studentAccountId === studentAccountId) })).filter((g) => g.members.length);
+      if (!groups.length) return page('Not found', 'That student is not in this track.', 404);
+      const m = groups[0].members[0];
+      scopeLabel = `${m.studentId} ${m.name || ''}`.trim();
+    }
+    const data = buildCourseFileData({ track, graph, outcomes, groups });
+    const sheets = courseFileSheets(data);
+    if (sp.get('list') === '1') return NextResponse.json({ track, sheets });
+    const sheet = sp.get('sheet');
+    if (sheet && !sheets.some((x) => x.key === sheet)) return page('No such sheet', `This track's grading scheme has no "${sheet}" sheet.`, 404);
 
     const [department, coordinator, logoDataUri] = await Promise.all([
       Department.findOne({ code: session.department }).select('name').lean(),
@@ -98,14 +137,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const html = buildCourseFileHtml(data, {
       courseCode,
       semesterName,
-      departmentName: (department as { name?: string } | null)?.name || session.department,
+      // Stored names vary ("BSc in Computer Science & Engineering"); the header wants the subject.
+      departmentName: ((department as { name?: string } | null)?.name || session.department).replace(/^(department of|b\.?\s?sc\.?\s+in|bachelor of science in)\s+/i, ''),
       schemeName: scheme.name,
       schemeVersion: pinned ? pinned.version : null,
       outcomesNote,
       coordinatorName: (coordinator as { name?: string } | null)?.name || '',
       logoDataUri,
       generatedAt: new Date(),
-    });
+      scopeLabel,
+    }, sheet);
 
     return new NextResponse(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   } catch (error) {
