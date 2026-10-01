@@ -11,13 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive, FileSpreadsheet, ScrollText } from 'lucide-react';
+import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive, FileSpreadsheet, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { TrackSchemePanel } from './TrackSchemePanel';
 import { GroupsBrowser } from './GroupsBrowser';
@@ -1001,11 +1003,14 @@ Marks they already submitted are kept.`)) return;
           Back to Sessions
         </Button>
 
-        <SetupChecklist
-          sessionId={selectedSession._id}
-          refreshKey={setupKey}
-          onAction={handleSetupAction}
-        />
+        {/* Setup only matters until the session is finished. */}
+        {!isPastSession(selectedSession.status) && (
+          <SetupChecklist
+            sessionId={selectedSession._id}
+            refreshKey={setupKey}
+            onAction={handleSetupAction}
+          />
+        )}
 
         <Card>
           <CardHeader>
@@ -1019,149 +1024,118 @@ Marks they already submitted are kept.`)) return;
                   {STATUS_MEANING[selectedSession.status]} · {selectedSession.journalWeekCount} week journal
                 </CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {/* One menu instead of a Presentation + Report button per track. Each item opens a
-                    print-ready page in a new tab. */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" title="Blank marking sheets, and the course file with CO-PO attainment">
-                      <Printer className="h-4 w-4 mr-1.5" />
-                      Print Sheets
-                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-60">
-                    {([
-                      { kind: 'presentation-sheet', label: 'Presentation marking sheet', hint: 'one sheet per track' },
-                      { kind: 'report-sheet', label: 'Report rubric', hint: 'one page per group' },
-                      { kind: 'course-file', label: 'Course file (CO-PO)', hint: 'beta · per student' },
-                    ] as const).map((sheet, i) => (
-                      <DropdownMenuGroup key={sheet.kind}>
-                        {i > 0 && <DropdownMenuSeparator />}
-                        <DropdownMenuLabel className="text-xs">
-                          {sheet.label}
-                          <span className="ml-1 font-normal text-muted-foreground">· {sheet.hint}</span>
-                        </DropdownMenuLabel>
-                        {selectedSession.tracks.map((t) => (
-                          <DropdownMenuItem
-                            key={`${sheet.kind}-${t.track}`}
-                            onSelect={() =>
-                              window.open(
-                                `/api/capstone/sessions/${selectedSession._id}/${sheet.kind}?track=${t.track}`,
-                                '_blank'
-                              )
-                            }
-                          >
-                            Capstone {t.track}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {/* Group list and grade reports: what leaves the system for the department's records. */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" title="Group list, grade sheets and group results">
-                      <ScrollText className="h-4 w-4 mr-1.5" />
-                      Reports
-                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuItem onSelect={() => window.open(`/api/capstone/sessions/${selectedSession._id}/groups-export`, '_blank')}>
-                      <FileSpreadsheet className="h-4 w-4 mr-2" />
-                      Group list (.xlsx)
-                    </DropdownMenuItem>
-                    {([
-                      { scope: 'roster', label: 'Grade sheet', hint: 'every student' },
-                      { scope: 'groups', label: 'Group results', hint: 'group by group' },
-                    ] as const).map((report) => (
-                      <DropdownMenuGroup key={report.scope}>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel className="text-xs">
-                          {report.label}
-                          <span className="ml-1 font-normal text-muted-foreground">· {report.hint}</span>
-                        </DropdownMenuLabel>
-                        <DropdownMenuItem onSelect={() => window.open(`/api/capstone/sessions/${selectedSession._id}/transcript?scope=${report.scope}`, '_blank')}>
-                          All tracks
+              {(() => {
+                const sid = selectedSession._id;
+                const status = selectedSession.status;
+                const closed = status === 'closed';
+                const missingScheme = selectedSession.tracks.some((t) => !t.gradingSchemeId);
+                const open = (path: string) => window.open(`/api/capstone/sessions/${sid}/${path}`, '_blank');
+                // What people do most at each stage gets the one filled button.
+                const primary = status === 'draft' ? 'new-group' : closed ? 'grades' : 'marks';
+                const perTrack = (label: string, path: string) => (
+                  <DropdownMenuSub key={path}>
+                    <DropdownMenuSubTrigger>{label}</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {selectedSession.tracks.map((t) => (
+                        <DropdownMenuItem key={t.track} onSelect={() => open(`${path}${path.includes('?') ? '&' : '?'}track=${t.track}`)}>
+                          Capstone {t.track}
                         </DropdownMenuItem>
-                        {selectedSession.tracks.map((t) => (
-                          <DropdownMenuItem
-                            key={`${report.scope}-${t.track}`}
-                            onSelect={() => window.open(`/api/capstone/sessions/${selectedSession._id}/transcript?scope=${report.scope}&track=${t.track}`, '_blank')}
-                          >
-                            Capstone {t.track}
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant={primary === 'marks' ? 'default' : 'outline'} size="sm" asChild>
+                      <a href={`/capstone/sessions/${sid}/marks`}>
+                        <ClipboardEdit className="h-4 w-4 mr-1.5" />
+                        Enter marks
+                      </a>
+                    </Button>
+                    <Button variant={primary === 'grades' ? 'default' : 'outline'} size="sm" asChild>
+                      <a href={`/capstone/sessions/${sid}/grades`}>
+                        <FileText className="h-4 w-4 mr-1.5" />
+                        Grades{closed ? ' & move on' : ''}
+                      </a>
+                    </Button>
+                    {/* Everything that leaves the system - printed sheets, reports, downloads - in one place. */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Printer className="h-4 w-4 mr-1.5" />
+                          Print &amp; export
+                          <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-60">
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Marking sheets</DropdownMenuLabel>
+                        {perTrack('Presentation marking sheet', 'presentation-sheet')}
+                        {perTrack('Report rubric', 'report-sheet')}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Results</DropdownMenuLabel>
+                        {perTrack('Grade sheet', 'transcript?scope=roster')}
+                        {perTrack('Group results', 'transcript?scope=groups')}
+                        {perTrack('Course file (CO-PO)', 'course-file')}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Downloads</DropdownMenuLabel>
+                        <DropdownMenuItem onSelect={() => open('groups-export')}>
+                          <FileSpreadsheet className="h-4 w-4 mr-2" />
+                          Group list (.xlsx)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={handleExportMarks} disabled={exportingMarks}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Every mark (.csv)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* Occasional actions, out of the way until needed. */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="relative px-2.5" aria-label="More actions">
+                          <MoreHorizontal className="h-4 w-4" />
+                          {missingScheme && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-500" aria-label="A track has no grading scheme" />}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        <DropdownMenuItem
+                          disabled={emailingGraders || !isRunning(status)}
+                          onSelect={() => confirm('Email every supervisor and evaluator in this session asking them to submit their marks?') && handleRequestMarks()}
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          <span className="flex-1">Email graders for marks</span>
+                          {!isRunning(status) && <span className="text-[11px] text-muted-foreground">when running</span>}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setShowSchemes(true)}>
+                          <SlidersHorizontal className="h-4 w-4 mr-2" />
+                          <span className="flex-1">Grading schemes</span>
+                          {missingScheme && <span className="h-2 w-2 rounded-full bg-amber-500" aria-label="A track has no scheme" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setShowBulkReports(true)} disabled={groups.length === 0}>
+                          <Link2 className="h-4 w-4 mr-2" />
+                          Paste report links
+                        </DropdownMenuItem>
+                        {primary !== 'new-group' && !closed && (
+                          <DropdownMenuItem onSelect={() => setShowCreateGroup(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            New group
                           </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Tip label={isRunning(selectedSession.status) ? 'Email every supervisor and evaluator asking them to submit their marks' : 'Only while the session is running'}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={emailingGraders || !isRunning(selectedSession.status)}
-                    onClick={() => confirm('Email every supervisor and evaluator in this session asking them to submit their marks?') && handleRequestMarks()}
-                  >
-                    {emailingGraders ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-                    Email graders
-                  </Button>
-                </Tip>
-                <Tip label="Download every mark in this session as a CSV">
-                  <Button variant="outline" size="sm" disabled={exportingMarks} onClick={handleExportMarks}>
-                    {exportingMarks ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
-                    Export marks
-                  </Button>
-                </Tip>
-                <Tip label="Every group's marks in one table - type any grader's marks in, as coordinator">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={`/capstone/sessions/${selectedSession._id}/marks`}>
-                      <ClipboardEdit className="h-4 w-4 mr-1.5" />
-                      Enter marks
-                    </a>
-                  </Button>
-                </Tip>
-                <Tip label="Every student's marks and grade - and, once the session is finished, move groups on to the next session">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={`/capstone/sessions/${selectedSession._id}/grades`}>
-                      <FileText className="h-4 w-4 mr-1.5" />
-                      Grades{selectedSession.status === 'closed' ? ' & move on' : ''}
-                    </a>
-                  </Button>
-                </Tip>
-                <Tip label="Which grading scheme each track is graded under">
-                  <Button variant="outline" size="sm" onClick={() => setShowSchemes(true)}>
-                    <SlidersHorizontal className="h-4 w-4 mr-1.5" />
-                    Grading Schemes
-                    {selectedSession.tracks.some((t) => !t.gradingSchemeId) && (
-                      <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-500" aria-label="A track has no scheme" />
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(selectedSession)}>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete session…
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {primary === 'new-group' && (
+                      <Button size="sm" onClick={() => setShowCreateGroup(true)}>
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        New group
+                      </Button>
                     )}
-                  </Button>
-                </Tip>
-                <Tip label="Paste report links for many groups at once, e.g. at semester end">
-                  <Button variant="outline" size="sm" onClick={() => setShowBulkReports(true)} disabled={groups.length === 0}>
-                    <Link2 className="h-4 w-4 mr-1.5" />
-                    Report Links
-                  </Button>
-                </Tip>
-                <Tip
-                  label="Create a group: project title, supervisor and students"
-                  disabledReason={selectedSession.status === 'closed' ? 'This session is closed - reopen it to add groups.' : undefined}
-                >
-                  <Button size="sm" onClick={() => setShowCreateGroup(true)} disabled={selectedSession.status === 'closed'}>
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    New Group
-                  </Button>
-                </Tip>
-                <Tip label="Permanently delete this session and everything in it - you'll be asked to confirm">
-                  <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(selectedSession)}>
-                    <Trash2 className="h-4 w-4 mr-1.5" />
-                    Delete Session
-                  </Button>
-                </Tip>
-              </div>
+                  </div>
+                );
+              })()}
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
