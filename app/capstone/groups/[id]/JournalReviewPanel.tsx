@@ -447,7 +447,7 @@ export function JournalReviewPanel({
         <CardContent className="space-y-4 pt-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 {status?.complete ? (
                   <p className="flex items-center gap-2 text-lg font-semibold text-emerald-700 dark:text-emerald-400">
                     <MailCheck className="h-5 w-5 shrink-0" /> Journal complete
@@ -470,14 +470,14 @@ export function JournalReviewPanel({
                 </Button>
                 {sessionId && (
                   <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
                     onClick={() => window.open(`/api/capstone/sessions/${sessionId}/journal-report?groupId=${groupId}`, '_blank')}
                     aria-label="Export journal as PDF"
-                    title="Export journal as PDF (printable)"
+                    title="Export journal as PDF – opens ready to print or save as PDF"
                   >
-                    <FileText className="h-4 w-4" />
+                    <FileText className="h-3.5 w-3.5" /> Export PDF
                   </Button>
                 )}
               </div>
