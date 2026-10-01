@@ -1,3 +1,27 @@
+# [1.29.0](https://github.com/atanuroy911/ulab-mms/compare/v1.28.0...v1.29.0) (2026-10-01)
+
+
+### Bug Fixes
+
+* **capstone:** 'Sessions' links show the sessions list - an open session follows ?session= in the address ([17ddb0e](https://github.com/atanuroy911/ulab-mms/commit/17ddb0e22bc7d696dc9b34ad5e6525044b81812d))
+* **capstone:** Back from marks/grades returns to the session; Simple view shows cached status at once with placeholders; new screens start at the top ([4c0ab1e](https://github.com/atanuroy911/ulab-mms/commit/4c0ab1e82b02058e8f9f664e5bdb516c176def87))
+* **capstone:** inline edit/delete buttons on journal week tiles ([8539dc8](https://github.com/atanuroy911/ulab-mms/commit/8539dc8c36278f61118c6dcc969f73ce58b341c3))
+* **capstone:** make journal PDF export button visible + fix JSX nesting ([b7e55ee](https://github.com/atanuroy911/ulab-mms/commit/b7e55ee41841f8731d2fa3f6d45e29507a31c1ad))
+* **capstone:** setting the first supervisor of a group failed ('Cast to ObjectId ... "null"') and never emailed them ([73031e9](https://github.com/atanuroy911/ulab-mms/commit/73031e91e33f20b5e49b0f0121c1acb23e83e863))
+* **student:** quick exams list, intro and results inside the portal layout like every other page ([cb6a959](https://github.com/atanuroy911/ulab-mms/commit/cb6a959652ad1fe2159ded4da60824db673e2268))
+
+
+### Features
+
+* **admin:** act as a student with write access for testing - Developer setting (off by default), 10 minutes, red banner, every change logged, never signs the admin out ([b36258a](https://github.com/atanuroy911/ulab-mms/commit/b36258a21126045cbd5a69e2773d5b11cd344c63))
+* **admin:** view the student portal as any student - read-only, 30 minutes, verified admins only, every student write refused ([802f8f9](https://github.com/atanuroy911/ulab-mms/commit/802f8f96e29cf103fb61b6064473b36a80a12685))
+* **capstone:** Simple mode carries through - simple Groups, step-by-step Enter marks, plain Grades; one Simple/Advanced choice for every session screen ([508011b](https://github.com/atanuroy911/ulab-mms/commit/508011b22d43b4afb4ee8416f1e2265e3cbcea65))
+* **capstone:** Simple mode for sessions - stage, next step and six big buttons for the essentials; Advanced keeps everything ([c9c2391](https://github.com/atanuroy911/ulab-mms/commit/c9c2391329483ff73a3e16d3fbf3755f6d0df893))
+* **capstone:** weekly journal PDF export + supervisor edit/delete of entries ([2ae5514](https://github.com/atanuroy911/ulab-mms/commit/2ae55149a75bed521e4c5b3885fbe2ed7ea35279))
+* help people who get lost - 'Suggested here' in search, 'did you mean' for everyday words and typos, a helpful not-found page; newer features searchable ([c17af34](https://github.com/atanuroy911/ulab-mms/commit/c17af34d400542493cb476a04d7f4a9a938aee37))
+* **student:** capstone journal in the portal - week strip at a glance (tap to write, edit or read), supervisor 'not assigned yet', '(you)' marker, guide only until the first entry ([e3978c6](https://github.com/atanuroy911/ulab-mms/commit/e3978c6478f1fbe511fe240d503d7f39fc0b5fcb))
+* **student:** students can rename their project in any track until the session is finished ([f6184e1](https://github.com/atanuroy911/ulab-mms/commit/f6184e1634a0f83a009dcd07b9ac8e9ab31099eb))
+
 # [1.28.0](https://github.com/atanuroy911/ulab-mms/compare/v1.27.0...v1.28.0) (2026-10-01)
 
 
