@@ -11,6 +11,7 @@ import {
   Wrench,
   Workflow,
   ShieldCheck,
+  Mail,
 } from 'lucide-react';
 import type { SidebarItem } from '@/app/components/AdminSidebar';
 
@@ -29,6 +30,11 @@ export const adminSidebarItems: SidebarItem[] = [
     title: 'Account Manager',
     href: '/admin/dashboard?tab=accounts',
     icon: Users,
+  },
+  {
+    title: 'People & Emails',
+    href: '/admin/dashboard?tab=people',
+    icon: Mail,
   },
   {
     title: 'Departments',

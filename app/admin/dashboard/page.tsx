@@ -22,6 +22,7 @@ import DepartmentManagement from './components/DepartmentManagement';
 import RubricManagement from './components/RubricManagement';
 import BackupManagement from './components/BackupManagement';
 import SecuritySettings from './components/SecuritySettings';
+import PeopleEmails from './components/PeopleEmails';
 import { DeveloperSettingsPanel } from '@/app/components/DeveloperSettingsPanel';
 import { DevModeBanner } from '@/app/components/DevModeBanner';
 
@@ -135,6 +136,7 @@ function AdminDashboardContent() {
         <main className="flex-1 p-6 overflow-auto">
           {activeTab === 'overview' && <OverviewSection />}
           {activeTab === 'accounts' && <AccountManagement />}
+          {activeTab === 'people' && <PeopleEmails />}
           {activeTab === 'departments' && <DepartmentManagement />}
           {activeTab === 'courses' && <CourseManagement />}
           {activeTab === 'resources' && <ResourcesManager />}
