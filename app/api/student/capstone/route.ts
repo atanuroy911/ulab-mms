@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { currentStudent } from '@/lib/studentPortalAuth';
+import StudentAccount from '@/models/StudentAccount';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
@@ -12,17 +12,17 @@ import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
 // app/api/student/marks/route.ts.
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const anyUser = session?.user as any;
-    if (!anyUser?.studentSession) {
+    const me = await currentStudent();
+    if (!me) {
       return NextResponse.json({ error: 'Please sign in with your student Google account' }, { status: 401 });
     }
-    const studentAccountId = anyUser.studentAccountId;
+    await dbConnect();
+    // An admin viewing as the student: find their account by ID.
+    const studentAccountId =
+      me.studentAccountId || (me.viewAs ? String((await StudentAccount.findOne({ studentId: me.studentIdText }).select('_id').lean())?._id || '') : '');
     if (!studentAccountId) {
       return NextResponse.json({ error: 'Could not resolve your student account' }, { status: 404 });
     }
-
-    await dbConnect();
 
     const groups = await CapstoneGroup.find({
       members: { $elemMatch: { studentAccountId, removedAt: null } },

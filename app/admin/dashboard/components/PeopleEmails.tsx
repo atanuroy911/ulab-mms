@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Loader2, MailPlus, Search } from 'lucide-react';
+import { Download, Eye, Loader2, MailPlus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,6 +54,15 @@ export default function PeopleEmails() {
   const [onlyMissing, setOnlyMissing] = useState(true);
   const [paste, setPaste] = useState('');
   const [saving, setSaving] = useState(false);
+  const [viewId, setViewId] = useState('');
+
+  // Read-only look at one student's portal, in a new tab (lib/studentViewAs.ts).
+  const viewPortal = async (studentId: string) => {
+    const r = await fetch('/api/admin/view-as', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return toast.error(d.error || 'Could not open the student portal');
+    window.open(d.href || '/student/dashboard', '_blank');
+  };
 
   const load = () =>
     fetch('/api/admin/people-emails')
@@ -158,6 +167,29 @@ export default function PeopleEmails() {
       </div>
 
       <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Eye className="h-4 w-4" /> View a student&apos;s portal
+          </CardTitle>
+          <CardDescription>See exactly what one student sees - read only, for 30 minutes. Nothing you do there changes their account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (viewId.trim()) viewPortal(viewId.trim());
+            }}
+          >
+            <Input value={viewId} onChange={(e) => setViewId(e.target.value)} placeholder="Student ID, e.g. 233014089" className="h-10 max-w-xs" />
+            <Button type="submit" disabled={!viewId.trim()} className="h-10">
+              <Eye className="mr-2 h-4 w-4" /> View portal
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <MailPlus className="h-4 w-4" /> Add student emails
@@ -216,6 +248,7 @@ export default function PeopleEmails() {
                   <th className="px-3 py-2 font-medium">Name</th>
                   <th className="px-3 py-2 font-medium">Email</th>
                   <th className="px-3 py-2 text-right font-medium">Courses</th>
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -228,11 +261,16 @@ export default function PeopleEmails() {
                       {p.courses}
                       {p.capstone ? ' + capstone' : ''}
                     </td>
+                    <td className="px-2 py-1 text-right">
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => viewPortal(p.studentId)} title="See this student's portal, read only">
+                        <Eye className="mr-1 h-3.5 w-3.5" /> View
+                      </Button>
+                    </td>
                   </tr>
                 ))}
                 {list.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
                       {onlyMissing && !q ? 'Every student has an email.' : 'No one matches.'}
                     </td>
                   </tr>

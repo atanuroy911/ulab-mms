@@ -22,7 +22,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useSession } from 'next-auth/react';
+import { useStudentMe } from '../../components/useStudentMe';
 import { StudentShell } from '../../components/StudentShell';
 import { cn } from '@/lib/utils';
 import { entryState, type JournalEntryState } from '@/lib/capstoneJournalStatus';
@@ -88,8 +88,8 @@ export default function StudentCapstonePage() {
   const [showTitleEdit, setShowTitleEdit] = useState<Group | null>(null);
   const [titleInput, setTitleInput] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
-  const { data: authSession } = useSession();
-  const myId = ((authSession?.user as { studentIdText?: string | null } | undefined)?.studentIdText || '').toLowerCase();
+  const me = useStudentMe();
+  const myId = (me?.studentId || '').toLowerCase();
 
   const fetchData = async () => {
     try {
@@ -167,8 +167,9 @@ export default function StudentCapstonePage() {
               session={session}
               entries={journalEntries}
               myId={myId}
-              onWrite={(target) => setWizard(target)}
+              onWrite={(target) => (me?.viewAs ? toast.info('Viewing as a student is read-only') : setWizard(target))}
               onEditTitle={() => {
+                if (me?.viewAs) return toast.info('Viewing as a student is read-only');
                 setTitleInput(group.projectTitle);
                 setShowTitleEdit(group);
               }}

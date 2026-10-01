@@ -24,8 +24,8 @@ const fail = (err: unknown) => {
 };
 
 /** The exam and the signed-in student's enrolment in its course - or a 404 for anyone else. */
-async function load(qid: string) {
-  const { studentIdText } = await sessionStudent();
+async function load(qid: string, write = false) {
+  const { studentIdText } = await sessionStudent({ write });
   if (!mongoose.Types.ObjectId.isValid(qid)) throw new QuickExamError('Exam not found', 404);
   const qe = await QuickExam.findById(qid);
   if (!qe || qe.status === 'draft') throw new QuickExamError('Exam not found', 404);
@@ -71,7 +71,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ qid: string }> }) {
   try {
     const { qid } = await params;
-    const { qe, student } = await load(qid);
+    const { qe, student } = await load(qid, true);
     const body = await request.json().catch(() => ({}));
     const now = new Date();
 

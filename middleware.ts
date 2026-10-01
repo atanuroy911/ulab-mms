@@ -1,6 +1,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { jwtVerify } from 'jose';
+
+/** Signature and expiry only - the admin check happens in the APIs. */
+async function validViewAsCookie(token: string | undefined): Promise<boolean> {
+  if (!token || !process.env.NEXTAUTH_SECRET) return false;
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(process.env.NEXTAUTH_SECRET));
+    return payload.type === 'student-view-as';
+  } catch {
+    return false;
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const token = await getToken({
@@ -37,7 +49,10 @@ export async function middleware(request: NextRequest) {
   // not the scoped checkin/marks/project tokens (which prove identity for one action only)
   // and not a teacher/admin session either.
   if (pathname.startsWith('/student/dashboard')) {
-    if (!token || !token.studentSession) {
+    // An admin viewing as a student (lib/studentViewAs.ts): the page may load; every API it
+    // calls re-checks that the viewer is still a verified admin.
+    const viewingAs = await validViewAsCookie(request.cookies.get('student-view-as')?.value);
+    if ((!token || !token.studentSession) && !viewingAs) {
       const signInUrl = new URL('/student/signin', request.url);
       signInUrl.searchParams.set('callbackUrl', pathname);
       return NextResponse.redirect(signInUrl);

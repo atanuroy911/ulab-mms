@@ -1,6 +1,7 @@
 // Quick exams on the server: who may do what, the exam window, starting a paper, saving
 // answers against the deadline, marking, and writing the mark into the course.
 import mongoose from 'mongoose';
+import { currentStudent } from '@/lib/studentPortalAuth';
 import { getServerSession } from 'next-auth';
 import { authOptions, isStudentOnlySessionUser } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
@@ -38,15 +39,15 @@ export async function teacherCourse(courseId: string) {
   return { course, userId: user.id };
 }
 
-/** The signed-in student (student Google login), by the ID in their ULAB display name. */
-export async function sessionStudent() {
-  const session = await getServerSession(authOptions);
-  const user = session?.user as { studentSession?: boolean; studentIdText?: string | null; name?: string | null } | undefined;
-  if (!user?.studentSession || !user.studentIdText) {
-    throw new QuickExamError('Sign in with your ULAB student Google account to take exams', 401);
-  }
-  await dbConnect();
-  return { studentIdText: user.studentIdText, name: user.name || user.studentIdText };
+/**
+ * The signed-in student (student Google login), by the ID in their ULAB display name - or an
+ * admin viewing as them, who may look but never start, answer or submit (`write`).
+ */
+export async function sessionStudent(opts: { write?: boolean } = {}) {
+  const me = await currentStudent();
+  if (!me) throw new QuickExamError('Sign in with your ULAB student Google account to take exams', 401);
+  if (opts.write && me.viewAs) throw new QuickExamError('Viewing as a student is read-only - exams can only be taken by the student', 403);
+  return { studentIdText: me.studentIdText, name: me.name };
 }
 
 /** The student's enrolment in a course (not withdrawn), or null. */

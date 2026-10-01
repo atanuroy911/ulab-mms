@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import { useStudentMe } from '../components/useStudentMe';
 import { AlertTriangle, ArrowRight, BookOpen, CalendarCheck, GraduationCap, PlayCircle, Users, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StudentShell } from '../components/StudentShell';
@@ -21,7 +21,7 @@ interface CapstoneItem {
 }
 
 export default function StudentDashboardPage() {
-  const { data: session } = useSession();
+  const me = useStudentMe();
   const [portal, setPortal] = useState<PortalData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exams, setExams] = useState<QuickExamItem[] | null>(null);
@@ -80,7 +80,7 @@ export default function StudentDashboardPage() {
       })),
   ];
 
-  const firstName = (session?.user?.name || '').replace(/\s*\([^)]*\)\s*$/, '').split(' ')[0];
+  const firstName = (me?.name || '').split(' ')[0];
 
   return (
     <StudentShell>
