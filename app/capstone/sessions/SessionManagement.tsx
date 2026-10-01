@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { MemberEntry, type MemberRow } from './MemberEntry';
 import { SetupChecklist } from './SetupChecklist';
 import { CourseFileDialog } from './CourseFileDialog';
+import { SessionSimpleView } from './SessionSimpleView';
 import { DeleteSessionDialog } from './DeleteSessionDialog';
 import { InvitePersonForm, PendingInviteNote, type InvitedUser } from './InvitePersonForm';
 import { EvaluatorPickerDialog } from './EvaluatorPickerDialog';
@@ -193,6 +194,22 @@ export default function CapstoneSessionManagement() {
   const [groups, setGroups] = useState<GroupRow[]>([]);
   const [showSchemes, setShowSchemes] = useState(false);
   const [showCourseFile, setShowCourseFile] = useState(false);
+  // Simple (big buttons, the essentials) or Advanced (everything) - remembered on this device.
+  const [sessionMode, setSessionMode] = useState<'simple' | 'advanced'>(() => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage.getItem('capstone-session-mode') === 'advanced' ? 'advanced' : 'simple';
+    } catch {
+      return 'simple';
+    }
+  });
+  const changeSessionMode = (m: 'simple' | 'advanced') => {
+    setSessionMode(m);
+    try {
+      window.localStorage.setItem('capstone-session-mode', m);
+    } catch {
+      /* not remembered */
+    }
+  };
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1000,11 +1017,74 @@ Marks they already submitted are kept.`)) return;
     return (
       <div className="space-y-4">
         {deleteDialog}
-        <Button variant="ghost" size="sm" onClick={() => setSelectedSession(null)} className="gap-1.5">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Sessions
-        </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedSession(null)} className="gap-1.5">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Sessions
+          </Button>
+          <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="View">
+            {(
+              [
+                ['simple', 'Simple', 'The essentials, in big buttons'],
+                ['advanced', 'Advanced', 'Every group, every detail and every tool'],
+              ] as const
+            ).map(([m, label, hint]) => (
+              <Tip key={m} label={hint}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sessionMode === m}
+                  onClick={() => changeSessionMode(m)}
+                  className={cn('rounded-md px-3 py-1 text-sm transition-colors', sessionMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                >
+                  {label}
+                </button>
+              </Tip>
+            ))}
+          </div>
+        </div>
 
+        {sessionMode === 'simple' ? (
+          <div className="space-y-4">
+            <div>
+              <h2 className="flex flex-wrap items-center gap-2 text-2xl font-bold">
+                {selectedSession.department} Capstone - {semesterName}
+                <SessionStatusPill status={selectedSession.status} />
+              </h2>
+              <p className="text-sm text-muted-foreground">{STATUS_MEANING[selectedSession.status]}</p>
+            </div>
+            <SessionSimpleView
+              sessionId={selectedSession._id}
+              status={selectedSession.status}
+              tracks={selectedSession.tracks.map((t) => t.track)}
+              groups={groups}
+              refreshKey={setupKey}
+              emailing={emailingGraders}
+              stageBar={
+                <SessionStageBar
+                  status={selectedSession.status as SessionStatus}
+                  actionLabel={(from, to) => STATUS_ACTIONS[`${from}->${to}`]?.label || `Move to ${to}`}
+                  onMove={(to) => handleTransition(selectedSession, to)}
+                  canGoBackFromClosed
+                />
+              }
+              onNewGroup={() => setShowCreateGroup(true)}
+              onManageGroups={() => changeSessionMode('advanced')}
+              onEmailGraders={handleRequestMarks}
+              onSetupAction={handleSetupAction}
+              onCourseFile={() => setShowCourseFile(true)}
+              onSchemes={() => setShowSchemes(true)}
+            />
+            <p className="text-center text-sm text-muted-foreground">
+              Looking for something else?{' '}
+              <button type="button" className="font-medium text-primary hover:underline" onClick={() => changeSessionMode('advanced')}>
+                Show everything
+              </button>{' '}
+              or press <kbd className="rounded border px-1 text-xs">Ctrl</kbd> + <kbd className="rounded border px-1 text-xs">K</kbd> to search.
+            </p>
+          </div>
+        ) : (
+        <>
         {/* Setup only matters until the session is finished. */}
         {!isPastSession(selectedSession.status) && (
           <SetupChecklist
@@ -1162,6 +1242,8 @@ Marks they already submitted are kept.`)) return;
             )}
           </CardContent>
         </Card>
+        </>
+        )}
 
         <CourseFileDialog
           sessionId={selectedSession._id}
