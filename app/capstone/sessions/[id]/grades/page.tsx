@@ -32,6 +32,7 @@ import {
   ArrowRightCircle,
   ArrowUpDown,
   ClipboardEdit,
+  ScrollText,
 } from 'lucide-react';
 import { ProgressionWizard } from './ProgressionWizard';
 import { cn } from '@/lib/utils';
@@ -420,9 +421,18 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
                         )}
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm" asChild title="Open this group's journals and marks">
-                      <Link href={`/capstone/groups/${group.groupId}`}>Open group</Link>
-                    </Button>
+                    <div className="flex gap-2">
+                      {data?.canSeeWholeSession && (
+                        <Button variant="outline" size="sm" asChild title="This group's results, ready to print or save as PDF">
+                          <a href={`/api/capstone/sessions/${id}/transcript?scope=groups&groupId=${group.groupId}`} target="_blank" rel="noopener noreferrer">
+                            <ScrollText className="mr-1.5 h-4 w-4" /> Results
+                          </a>
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" asChild title="Open this group's journals and marks">
+                        <Link href={`/capstone/groups/${group.groupId}`}>Open group</Link>
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
 
@@ -526,6 +536,13 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
                   {detailFor.member.studentId}
                   {detailFor.member.email ? ` · ${detailFor.member.email}` : ''}
                 </DialogDescription>
+                {data?.canSeeWholeSession && (
+                  <Button variant="outline" size="sm" className="mt-2 w-fit" asChild>
+                    <a href={`/api/capstone/students/${detailFor.member.studentAccountId}/transcript`} target="_blank" rel="noopener noreferrer">
+                      <ScrollText className="mr-1.5 h-4 w-4" /> Grade report (every capstone term)
+                    </a>
+                  </Button>
+                )}
               </DialogHeader>
 
               <div className="space-y-4">
