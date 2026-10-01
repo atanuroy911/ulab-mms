@@ -1,3 +1,13 @@
+# [1.28.0](https://github.com/atanuroy911/ulab-mms/compare/v1.27.0...v1.28.0) (2026-10-01)
+
+
+### Features
+
+* capstone course file - each sheet as its own PDF, for the whole track, one group or one student; grade and CO-attainment charts; follows the grading scheme ([71df9eb](https://github.com/atanuroy911/ulab-mms/commit/71df9ebe2a787b878e2c687ef5575110571a60f5))
+* **capstone:** calmer session screen - 4 controls instead of 10: the stage's main action, Grades, one Print & export menu, and a More menu ([dc26aef](https://github.com/atanuroy911/ulab-mms/commit/dc26aef7dd3edd6d1928555742ecd6786f18d707))
+* People & Emails - email coverage, everyone as CSV, paste ID/email lists to fill gaps ([8d76960](https://github.com/atanuroy911/ulab-mms/commit/8d76960094e82f393e053425bed196045ab8bbca))
+* student notifications - every message in the portal bell, emailed when an address is known; quick exam, capstone start and project-group announcements ([b7b4d39](https://github.com/atanuroy911/ulab-mms/commit/b7b4d39a850c764fc079ac8b559dc2c15a5e3727))
+
 # [1.27.0](https://github.com/atanuroy911/ulab-mms/compare/v1.26.0...v1.27.0) (2026-10-01)
 
 
