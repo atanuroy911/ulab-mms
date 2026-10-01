@@ -4,6 +4,7 @@ import { use as usePromise, useCallback, useEffect, useRef, useState, useSyncExt
 import Link from 'next/link';
 import { StudentShell } from '../../../components/StudentShell';
 import { signOut } from 'next-auth/react';
+import { useStudentMe } from '../../../components/useStudentMe';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -79,6 +80,14 @@ const violatedKey = (qid: string) => `quick-exam-left:${qid}`;
 
 export default function TakeQuickExamPage({ params }: { params: Promise<{ qid: string }> }) {
   const { qid } = usePromise(params);
+  // An admin acting as the student: leaving full screen still clears the answers, but signing
+  // out would end the admin's own session - send them back to the list instead.
+  const me = useStudentMe();
+  const acting = !!me?.viewAs;
+  const leaveExam = useCallback(() => {
+    if (acting) window.location.href = '/student/dashboard/quick-exams';
+    else signOut({ callbackUrl: `/student/signin?callbackUrl=${encodeURIComponent(`/student/dashboard/quick-exams/${qid}`)}` });
+  }, [acting, qid]);
   const [exam, setExam] = useState<ExamInfo | null>(null);
   const [paper, setPaper] = useState<Paper | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,8 +159,8 @@ export default function TakeQuickExamPage({ params }: { params: Promise<{ qid: s
     setLeft(true);
     fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'violation' }), keepalive: true })
       .catch(() => undefined)
-      .finally(() => window.setTimeout(() => signOut({ callbackUrl: `/student/signin?callbackUrl=${encodeURIComponent(`/student/dashboard/quick-exams/${qid}`)}` }), 3500));
-  }, [url, qid]);
+      .finally(() => window.setTimeout(leaveExam, 3500));
+  }, [url, leaveExam]);
 
   useEffect(() => {
     const update = () => {
@@ -186,9 +195,9 @@ export default function TakeQuickExamPage({ params }: { params: Promise<{ qid: s
   useEffect(() => {
     if (!left) return;
     exitFullscreen();
-    const t = window.setTimeout(() => signOut({ callbackUrl: `/student/signin?callbackUrl=${encodeURIComponent(`/student/dashboard/quick-exams/${qid}`)}` }), 4000);
+    const t = window.setTimeout(leaveExam, 4000);
     return () => window.clearTimeout(t);
-  }, [left, qid]);
+  }, [left, leaveExam]);
 
   const start = async () => {
     setBusy(true);

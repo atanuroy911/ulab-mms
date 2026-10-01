@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { writingStudent } from '@/lib/studentPortalAuth';
 import dbConnect from '@/lib/mongodb';
 import { isRunning } from '@/lib/capstoneStatus';
 import CapstoneGroup from '@/models/CapstoneGroup';
@@ -11,12 +10,10 @@ import { notifySupervisorOfEntry, saveStudentEntry } from '@/lib/capstoneJournal
 // periodStart?, periodEnd?, workDone }
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const anyUser = session?.user as any;
-    if (!anyUser?.studentSession || !anyUser.studentAccountId) {
-      return NextResponse.json({ error: 'Please sign in with your student Google account' }, { status: 401 });
-    }
-    const studentAccountId = anyUser.studentAccountId;
+    // The student, or an admin acting as them (never one only viewing).
+    const who = await writingStudent('weekly journal');
+    if ('error' in who) return NextResponse.json({ error: who.error }, { status: who.status });
+    const studentAccountId = who.student.studentAccountId;
 
     const body = await request.json().catch(() => ({}));
     const groupId = typeof body?.groupId === 'string' ? body.groupId : '';

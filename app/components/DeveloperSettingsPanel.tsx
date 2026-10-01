@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 interface DevSettings {
   devAllowAnyEmailDomain: boolean;
   devStudentTestEmails: string[];
+  devAllowActAsStudent?: boolean;
   updatedAt: string | null;
   /** null when changed from the /admin panel's shared login, which has no user identity. */
   updatedBy: { name?: string; email?: string } | null;
@@ -61,6 +62,33 @@ export function DeveloperSettingsPanel() {
       toast.error(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSavingStudentEmails(false);
+    }
+  };
+
+  const setActAs = async (value: boolean) => {
+    if (
+      value &&
+      !confirm(
+        'Allow acting as students?\n\nVerified admins will be able to act as any student with WRITE access: journal entries, project titles and quick exam attempts are saved as that student - for real, on this database. Each act-as session lasts 10 minutes and every change is logged. Use it for testing only.'
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/dev-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ devAllowActAsStudent: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      setSettings(data);
+      toast.success(value ? 'Acting as students is allowed' : 'Acting as students is off - viewing stays read-only');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -208,6 +236,39 @@ export function DeveloperSettingsPanel() {
                 <span className="text-xs text-muted-foreground">One address per line, up to 20.</span>
               </div>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">Act as students (write access)</CardTitle>
+            {settings && (
+              <Badge variant={settings.devAllowActAsStudent ? 'destructive' : 'secondary'}>
+                {settings.devAllowActAsStudent ? 'On - admins can act as students' : 'Off - viewing is read-only'}
+              </Badge>
+            )}
+          </div>
+          <CardDescription>
+            From People &amp; Emails, verified admins can always <em>view</em> a student&apos;s portal read-only. With this on, they can
+            also <em>act</em> as the student - write journal entries, rename the project, take quick exams - saved as that student.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>Changes are real: supervisors see the journal entries, quick exam scores go into the student&apos;s marks.</li>
+            <li>Each act-as session lasts 10 minutes; every change is logged with the admin who made it.</li>
+            <li>Turning this off stops write access at once, even in a session already open.</li>
+            <li>For a clean test, prefer a test student (see &quot;Student test accounts&quot; above).</li>
+          </ul>
+          {!settings ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : (
+            <Button variant={settings.devAllowActAsStudent ? 'default' : 'destructive'} onClick={() => setActAs(!settings.devAllowActAsStudent)} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {settings.devAllowActAsStudent ? 'Turn off acting as students' : 'Allow acting as students'}
+            </Button>
           )}
         </CardContent>
       </Card>

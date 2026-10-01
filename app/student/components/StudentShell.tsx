@@ -31,12 +31,21 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-muted/30">
       {me?.viewAs && (
-        <div className="sticky top-0 z-40 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
+        <div
+          className={
+            me.canWrite
+              ? 'sticky top-0 z-40 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-red-600 px-4 py-2 text-sm font-medium text-white'
+              : 'sticky top-0 z-40 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950'
+          }
+        >
           <Eye className="h-4 w-4" aria-hidden />
           <span>
-            Viewing the portal as {me.name} ({me.studentId}) - read only{me.viewedBy ? ` · ${me.viewedBy}` : ''}
+            {me.canWrite
+              ? `Acting as ${me.name} (${me.studentId}) - changes are saved as this student`
+              : `Viewing the portal as ${me.name} (${me.studentId}) - read only`}
+            {me.viewedBy ? ` · ${me.viewedBy}` : ''}
           </span>
-          <button type="button" onClick={stopViewing} className="rounded-md bg-amber-950/10 px-2.5 py-0.5 font-semibold hover:bg-amber-950/20">
+          <button type="button" onClick={stopViewing} className="rounded-md bg-black/10 px-2.5 py-0.5 font-semibold hover:bg-black/20">
             Stop viewing
           </button>
         </div>

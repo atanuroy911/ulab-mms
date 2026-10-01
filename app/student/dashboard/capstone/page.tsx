@@ -167,9 +167,9 @@ export default function StudentCapstonePage() {
               session={session}
               entries={journalEntries}
               myId={myId}
-              onWrite={(target) => (me?.viewAs ? toast.info('Viewing as a student is read-only') : setWizard(target))}
+              onWrite={(target) => (me?.viewAs && !me.canWrite ? toast.info('Viewing as a student is read-only') : setWizard(target))}
               onEditTitle={() => {
-                if (me?.viewAs) return toast.info('Viewing as a student is read-only');
+                if (me?.viewAs && !me.canWrite) return toast.info('Viewing as a student is read-only');
                 setTitleInput(group.projectTitle);
                 setShowTitleEdit(group);
               }}

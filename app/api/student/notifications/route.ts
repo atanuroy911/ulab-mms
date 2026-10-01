@@ -23,8 +23,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const me = await portalStudent();
   if (!me) return NextResponse.json({ error: 'Sign in with your ULAB student Google account' }, { status: 401 });
-  // Viewing as a student never changes their state - not even "read".
-  if (me.viewAs) return NextResponse.json({ error: 'Viewing as a student is read-only' }, { status: 403 });
+  // Only viewing as a student never changes their state - not even "read".
+  if (!me.canWrite) return NextResponse.json({ error: 'Viewing as a student is read-only' }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const studentId = me.studentIdText.toLowerCase();
   if (body?.all === true) {

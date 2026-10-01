@@ -13,6 +13,8 @@ export interface IAdminSettings extends Document {
    *  domain", because students are identified by the ID in their Google display name - which
    *  any outside account can set. See lib/authSettings.ts isAllowedStudentEmail. */
   devStudentTestEmails: string[];
+  /** Developer setting: verified admins may act as a student with write access (lib/studentViewAs.ts). */
+  devAllowActAsStudent: boolean;
   devSettingsUpdatedBy?: mongoose.Types.ObjectId | null;
   devSettingsUpdatedAt?: Date | null;
   /** Authenticator-app 2FA for the shared admin login (lib/adminTotp.ts). Secrets are stored
@@ -56,6 +58,7 @@ const AdminSettingsSchema: Schema = new Schema(
       type: [String],
       default: [],
     },
+    devAllowActAsStudent: { type: Boolean, default: false },
     devSettingsUpdatedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

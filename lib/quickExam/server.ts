@@ -46,7 +46,8 @@ export async function teacherCourse(courseId: string) {
 export async function sessionStudent(opts: { write?: boolean } = {}) {
   const me = await currentStudent();
   if (!me) throw new QuickExamError('Sign in with your ULAB student Google account to take exams', 401);
-  if (opts.write && me.viewAs) throw new QuickExamError('Viewing as a student is read-only - exams can only be taken by the student', 403);
+  if (opts.write && !me.canWrite) throw new QuickExamError('Viewing as a student is read-only - exams can only be taken by the student', 403);
+  if (opts.write && me.viewAs) console.warn(`[act-as] ${me.viewedBy} as student ${me.studentIdText}: quick exam`);
   return { studentIdText: me.studentIdText, name: me.name };
 }
 

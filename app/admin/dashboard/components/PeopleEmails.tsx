@@ -20,6 +20,8 @@ interface Data {
   students: Person[];
   staff: Array<{ name: string; email: string; roles: string[] }>;
   summary: { students: number; studentsWithEmail: number; staff: number };
+  /** Developer setting: admins may act as students (write access). */
+  actAsEnabled?: boolean;
 }
 
 const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -57,8 +59,9 @@ export default function PeopleEmails() {
   const [viewId, setViewId] = useState('');
 
   // Read-only look at one student's portal, in a new tab (lib/studentViewAs.ts).
-  const viewPortal = async (studentId: string) => {
-    const r = await fetch('/api/admin/view-as', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+  const viewPortal = async (studentId: string, write = false) => {
+    if (write && !confirm(`Act as ${studentId} with write access?\n\nAnything you do - journal entries, project title, quick exams - is saved as this student, for real. Lasts 10 minutes.`)) return;
+    const r = await fetch('/api/admin/view-as', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, write }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return toast.error(d.error || 'Could not open the student portal');
     window.open(d.href || '/student/dashboard', '_blank');
@@ -171,7 +174,10 @@ export default function PeopleEmails() {
           <CardTitle className="flex items-center gap-2 text-base">
             <Eye className="h-4 w-4" /> View a student&apos;s portal
           </CardTitle>
-          <CardDescription>See exactly what one student sees - read only, for 30 minutes. Nothing you do there changes their account.</CardDescription>
+          <CardDescription>
+            See exactly what one student sees - read only, for 30 minutes.
+            {data.actAsEnabled ? ' Acting as a student (write access) is on in Developer settings.' : ' To test actions as a student, turn on "Act as students" in Developer settings.'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -185,6 +191,11 @@ export default function PeopleEmails() {
             <Button type="submit" disabled={!viewId.trim()} className="h-10">
               <Eye className="mr-2 h-4 w-4" /> View portal
             </Button>
+            {data.actAsEnabled && (
+              <Button type="button" variant="destructive" disabled={!viewId.trim()} className="h-10" onClick={() => viewPortal(viewId.trim(), true)}>
+                Act as (write)
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>

@@ -22,10 +22,11 @@ const MAX_STUDENT_TEST_EMAILS = 20;
 
 async function describe() {
   const settings = await AdminSettings.findOne()
-    .select('devAllowAnyEmailDomain devStudentTestEmails devSettingsUpdatedBy devSettingsUpdatedAt')
+    .select('devAllowAnyEmailDomain devStudentTestEmails devAllowActAsStudent devSettingsUpdatedBy devSettingsUpdatedAt')
     .lean<{
       devAllowAnyEmailDomain?: boolean;
       devStudentTestEmails?: string[];
+      devAllowActAsStudent?: boolean;
       devSettingsUpdatedBy?: unknown;
       devSettingsUpdatedAt?: Date | null;
     }>();
@@ -35,6 +36,7 @@ async function describe() {
   return {
     devAllowAnyEmailDomain: settings?.devAllowAnyEmailDomain === true,
     devStudentTestEmails: settings?.devStudentTestEmails || [],
+    devAllowActAsStudent: settings?.devAllowActAsStudent === true,
     updatedAt: settings?.devSettingsUpdatedAt ?? null,
     updatedBy: updatedBy ? { name: updatedBy.name, email: updatedBy.email } : null,
   };
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT { devAllowAnyEmailDomain?: boolean, devStudentTestEmails?: string[] } - either or both.
+// PUT { devAllowAnyEmailDomain?: boolean, devStudentTestEmails?: string[], devAllowActAsStudent?: boolean } - any of them.
 export async function PUT(request: NextRequest) {
   try {
     const { userId, error } = await requireAdmin(request);
@@ -66,6 +68,13 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'devAllowAnyEmailDomain must be a boolean' }, { status: 400 });
       }
       update.devAllowAnyEmailDomain = body.devAllowAnyEmailDomain;
+    }
+
+    if (body?.devAllowActAsStudent !== undefined) {
+      if (typeof body.devAllowActAsStudent !== 'boolean') {
+        return NextResponse.json({ error: 'devAllowActAsStudent must be a boolean' }, { status: 400 });
+      }
+      update.devAllowActAsStudent = body.devAllowActAsStudent;
     }
 
     if (body?.devStudentTestEmails !== undefined) {

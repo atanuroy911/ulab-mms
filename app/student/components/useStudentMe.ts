@@ -8,6 +8,8 @@ export interface StudentMe {
   /** An admin viewing the portal as this student - read only. */
   viewAs: boolean;
   viewedBy: string | null;
+  /** The student, or an admin acting (not just viewing) as them. */
+  canWrite: boolean;
 }
 
 // Fetched once per page load and shared by every portal component.

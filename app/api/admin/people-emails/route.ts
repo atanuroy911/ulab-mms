@@ -4,6 +4,7 @@ import Student from '@/models/Student';
 import StudentAccount from '@/models/StudentAccount';
 import User from '@/models/User';
 import { verifyAdminAccess } from '@/lib/adminAuth';
+import { actAsAllowed } from '@/lib/studentViewAs';
 
 // Everyone the system can email, and who it can't yet.
 //   GET   every student (by ID, across course rosters and capstone accounts) and staff member,
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
       studentsWithEmail: students.filter((s) => s.email).length,
       staff: staff.length,
     },
+    actAsEnabled: await actAsAllowed(),
   });
 }
 

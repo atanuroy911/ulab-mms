@@ -10,5 +10,6 @@ export async function GET() {
     name: me.name.replace(/\s*\([^)]*\)\s*$/, ''),
     viewAs: me.viewAs,
     viewedBy: me.viewedBy ?? null,
+    canWrite: me.canWrite,
   });
 }
