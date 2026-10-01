@@ -1,6 +1,6 @@
 {
   "name": "ulab-marks-system",
-  "version": "1.27.0",
+  "version": "1.28.0",
   "private": true,
   "scripts": {
     "dev": "npx next dev",
