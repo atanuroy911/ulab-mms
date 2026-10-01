@@ -101,6 +101,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     let previousSupervisorId: string | null = null;
+    let supervisorChanged = false;
     if (typeof body?.supervisorId === 'string') {
       if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       // A group's supervisor must not also be an active evaluator of the same group - see
@@ -117,7 +118,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
       const supervisorError = await assignableUserError(body.supervisorId);
       if (supervisorError) return NextResponse.json({ error: supervisorError }, { status: 400 });
-      if (String(group.supervisorId) !== body.supervisorId) previousSupervisorId = String(group.supervisorId);
+      // A group imported without a supervisor has none to hand over from (String(null) is "null", not an id).
+      if (String(group.supervisorId) !== body.supervisorId) {
+        supervisorChanged = true;
+        if (group.supervisorId) previousSupervisorId = String(group.supervisorId);
+      }
       group.supervisorId = body.supervisorId;
     }
 
@@ -261,11 +266,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     await group.save();
-    // A new supervisor is told they have the group (after the response; never fails it).
-    if (previousSupervisorId) {
+    // A new supervisor is told they have the group - including a group's first supervisor
+    // (after the response; never fails it).
+    if (supervisorChanged) {
       const [actorUser, previous] = await Promise.all([
         User.findById(actor.userId).select('name').lean<{ name?: string }>(),
-        User.findById(previousSupervisorId).select('name').lean<{ name?: string }>(),
+        previousSupervisorId ? User.findById(previousSupervisorId).select('name').lean<{ name?: string }>() : null,
       ]);
       after(() => notifyNewSupervisor(group, actorUser?.name || 'The capstone coordinator', previous?.name));
     }
