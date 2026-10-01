@@ -290,7 +290,7 @@ function GroupJournal({
               </div>
               <h2 className="text-lg font-semibold leading-snug wrap-break-word">{group.projectTitle || 'Untitled project'}</h2>
             </div>
-            {group.track === 'A' && isOpen && (
+            {!isPastSession(session.status) && (
               <Button variant="outline" size="sm" onClick={onEditTitle} className="self-start">
                 <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit title
               </Button>

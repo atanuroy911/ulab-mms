@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
-import { isRunning } from '@/lib/capstoneStatus';
+import { isPastSession } from '@/lib/capstoneStatus';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import CapstoneSession from '@/models/CapstoneSession';
 
-// Students settle on their project title during track A (per the stated capstone flow -
-// by B/C the title carries forward and is coordinator/supervisor-editable only).
+// Students may rename their project in any track, until the session is finished.
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -36,13 +35,10 @@ export async function POST(request: NextRequest) {
     if (!isActiveMember) {
       return NextResponse.json({ error: 'You are not an active member of this group' }, { status: 403 });
     }
-    if (group.track !== 'A') {
-      return NextResponse.json({ error: 'The project title can only be set by students during track A' }, { status: 403 });
-    }
-
+    // Any track, until the session is finished (setting up or running).
     const capstoneSession = await CapstoneSession.findById(group.sessionId).select('status');
-    if (!isRunning(capstoneSession?.status)) {
-      return NextResponse.json({ error: 'The project title can only be changed while the session is running' }, { status: 409 });
+    if (!capstoneSession || isPastSession(capstoneSession.status)) {
+      return NextResponse.json({ error: 'The project title can no longer be changed - this session is finished' }, { status: 409 });
     }
 
     group.projectTitle = projectTitle;
