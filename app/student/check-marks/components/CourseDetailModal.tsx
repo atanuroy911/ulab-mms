@@ -1,14 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
-import { BookOpen, FlaskConical, Info, Inbox, ClipboardList, CalendarCheck } from 'lucide-react';
+import { BookOpen, FlaskConical } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { GradeSummaryCard } from './GradeSummaryCard';
-import { GradeBreakdownList } from './GradeBreakdownList';
-import { ExamCard } from './ExamCard';
-import { calculateFinalGrade, calculateGradeProjections } from '../lib/grade-calculations';
+import { CourseReportBody } from './CourseReportBody';
 import type { CourseData } from '../types';
 
 interface CourseDetailModalProps {
@@ -18,16 +12,9 @@ interface CourseDetailModalProps {
 }
 
 export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDetailModalProps) {
-  const gradeData = useMemo(() => (courseData ? calculateFinalGrade(courseData) : null), [courseData]);
-  const projections = useMemo(
-    () => (courseData && gradeData ? calculateGradeProjections(courseData, gradeData) : null),
-    [courseData, gradeData]
-  );
-
-  if (!courseData || !gradeData) return null;
+  if (!courseData) return null;
 
   const Icon = courseData.course.courseType === 'Theory' ? BookOpen : FlaskConical;
-  const hasGradeSummary = courseData.marks.length > 0 && gradeData.breakdown.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,118 +35,7 @@ export function CourseDetailModal({ courseData, open, onOpenChange }: CourseDeta
           </div>
         </DialogHeader>
 
-        {hasGradeSummary && (
-          <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 lg:order-2">
-              <GradeSummaryCard courseData={courseData} gradeData={gradeData} projections={projections} />
-            </div>
-            <div className="lg:col-span-2 lg:order-1 space-y-4">
-              <GradeBreakdownList gradeData={gradeData} />
-            </div>
-          </div>
-        )}
-
-        {courseData.attendance.totalSessions > 0 && (
-          <Card className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <CalendarCheck className="h-5 w-5 text-primary" />
-                Attendance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
-                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
-                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                    {courseData.attendance.presentSessions}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Present</div>
-                </div>
-                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {courseData.attendance.absentSessions}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Absent</div>
-                </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <div className="text-2xl font-bold text-muted-foreground">
-                    {courseData.attendance.totalSessions}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Total</div>
-                </div>
-                <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {courseData.attendance.percentage.toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-muted-foreground">Rate</div>
-                </div>
-              </div>
-              <Progress value={courseData.attendance.percentage} className="h-2" />
-              {courseData.attendance.percentage < 75 && (
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  ⚠️ Your attendance is below 75%.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-backwards">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-primary" />
-            Exam Details
-          </h3>
-
-          {courseData.exams.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Inbox className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No exams configured for this course yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {courseData.exams.map((exam) => (
-                <ExamCard
-                  key={exam._id}
-                  exam={exam}
-                  marks={courseData.marks}
-                  stats={courseData.classStats.find(s => s.examId === exam._id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {courseData.course.showFinalGrade && courseData.marks.length > 0 && (
-          <Card className="mt-6 bg-primary/5 border-primary/20">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Info className="h-4 w-4 text-primary" />
-                Additional Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-2">
-              <p>
-                <strong>Note:</strong> Your estimated grade is calculated based on completed exams using weighted scoring.
-              </p>
-              {(courseData.exams.some(e => e.examCategory === 'Quiz') || courseData.exams.some(e => e.examCategory === 'Assignment')) && (
-                <p>
-                  Quiz and {courseData.course.courseType === 'Lab' ? 'Assessment' : 'Assignment'} marks are aggregated using the{' '}
-                  <strong>{courseData.course.quizAggregation === 'best' ? 'Best' : 'Average'}</strong> method for quizzes
-                  and <strong>
-                    {courseData.course.assignmentAggregation === 'best' ? 'Best' : courseData.course.assignmentAggregation === 'sum' ? 'Sum' : 'Average'}
-                  </strong> method for {courseData.course.courseType === 'Lab' ? 'assessments' : 'assignments'}.
-                </p>
-              )}
-              {courseData.exams.some(e => e.examCategory === 'Project') && (
-                <p>
-                  Project section marks are combined by summing all scored sections together (out of their combined total), then scaled to the project&apos;s overall weightage.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        <CourseReportBody courseData={courseData} />
       </DialogContent>
     </Dialog>
   );
