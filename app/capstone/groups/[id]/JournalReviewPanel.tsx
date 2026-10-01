@@ -602,25 +602,85 @@ export function JournalReviewPanel({
                   const meta = STATE_META[state];
                   const Icon = meta.icon;
                   const line = entry?.workDone ? parseJournal(entry.workDone).answers.worked.replace(/\s+/g, ' ') : '';
+                  // Supervisors/coordinators can edit a reviewed/missed entry, delete a submitted one.
+                  const canEdit = canReview && entry && (state === 'reviewed' || state === 'missed') && !locked;
+                  const canDelete = canReview && entry && state === 'submitted' && !locked;
                   return (
-                    <button
+                    <div
                       key={week}
-                      type="button"
-                      onClick={() => openTile(week)}
-                      className={cn('flex min-h-24 flex-col rounded-xl border p-3 text-left transition-colors', meta.tile)}
+                      className={cn('group/tile relative flex min-h-24 flex-col rounded-xl border transition-colors', meta.tile)}
                     >
-                      <span className="flex items-center justify-between gap-1">
-                        <span className="text-sm font-bold">Week {week}</span>
-                        <Icon className="h-4 w-4 shrink-0" />
-                      </span>
-                      <span className="mt-0.5 text-[11px] font-medium opacity-80">{meta.label}</span>
-                      {line && <span className="mt-1.5 line-clamp-2 text-xs text-foreground/80">{line}</span>}
-                    </button>
+                      {/* Main clickable body */}
+                      <button
+                        type="button"
+                        onClick={() => openTile(week)}
+                        className="flex flex-1 flex-col p-3 text-left"
+                      >
+                        <span className="flex items-center justify-between gap-1">
+                          <span className="text-sm font-bold">Week {week}</span>
+                          <Icon className="h-4 w-4 shrink-0" />
+                        </span>
+                        <span className="mt-0.5 text-[11px] font-medium opacity-80">{meta.label}</span>
+                        {line && <span className="mt-1.5 line-clamp-2 text-xs text-foreground/80">{line}</span>}
+                      </button>
+                      {/* Inline action buttons — visible on hover or always on touch devices */}
+                      {(canEdit || canDelete) && (
+                        <div className="flex items-center gap-0.5 border-t border-current/10 px-2 py-1 opacity-0 transition-opacity group-hover/tile:opacity-100">
+                          {canEdit && (
+                            <>
+                              {entry!.workDone?.trim() && (
+                                <button
+                                  type="button"
+                                  title="Edit student's entry text"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!currentMember) return;
+                                    setOpenWeek({ studentAccountId: current!, studentName: nameOf(currentMember), weekNumber: week, entry });
+                                    setCorrectMode({ field: 'entry', value: entry!.workDone || '' });
+                                  }}
+                                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10"
+                                >
+                                  <Pencil className="h-3 w-3" /> Edit entry
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                title="Edit supervisor response"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!currentMember) return;
+                                  setOpenWeek({ studentAccountId: current!, studentName: nameOf(currentMember), weekNumber: week, entry });
+                                  setCorrectMode({ field: 'response', value: entry!.supervisorComment || '' });
+                                }}
+                                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10"
+                              >
+                                <Pencil className="h-3 w-3" /> Edit response
+                              </button>
+                            </>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              title="Delete this entry (before review)"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!currentMember) return;
+                                setOpenWeek({ studentAccountId: current!, studentName: nameOf(currentMember), weekNumber: week, entry });
+                                setDeleteConfirm(true);
+                              }}
+                              className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                            >
+                              <Trash2 className="h-3 w-3" /> Delete
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
               <p className="text-xs text-muted-foreground">
-                Tap a week to open it. Waiting weeks open in the review screen.
+                Click a week to read it. Hover a closed week to edit or correct it.
               </p>
             </CardContent>
           </Card>
