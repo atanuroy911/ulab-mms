@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { isRunning, isPastSession } from '@/lib/capstoneStatus';
+import { SimpleGroupsView, type SimpleGroup } from './SimpleGroupsView';
 
 interface SetupStep {
   key: string;
@@ -17,12 +18,6 @@ interface SetupStep {
   href?: string;
 }
 
-interface Group {
-  _id: string;
-  supervisorId: unknown;
-  members: Array<{ removedAt?: string | null }>;
-  evaluators: Array<{ unassignedAt?: string | null }>;
-}
 
 /**
  * The session in big buttons - only what running a capstone semester needs. Everything else
@@ -33,12 +28,14 @@ export function SessionSimpleView(props: {
   sessionId: string;
   status: string;
   tracks: string[];
-  groups: Group[];
+  groups: SimpleGroup[];
   refreshKey: number;
   stageBar: React.ReactNode;
   emailing: boolean;
   onNewGroup: () => void;
-  onManageGroups: () => void;
+  onOpenGroup: (g: SimpleGroup) => void;
+  onSetSupervisor: (g: SimpleGroup) => void;
+  onAddEvaluator: (g: SimpleGroup) => void;
   onEmailGraders: () => void;
   onSetupAction: (key: string) => void;
   onCourseFile: () => void;
@@ -47,6 +44,8 @@ export function SessionSimpleView(props: {
   const { sessionId, status, tracks, groups } = props;
   const [steps, setSteps] = useState<{ steps: SetupStep[]; nextStepKey: string | null } | null>(null);
   const [exportsOpen, setExportsOpen] = useState(false);
+  // Simple mode's own screens: the overview, or the groups list.
+  const [screen, setScreen] = useState<'home' | 'groups'>('home');
 
   useEffect(() => {
     fetch(`/api/capstone/sessions/${sessionId}/setup-status`)
@@ -68,6 +67,20 @@ export function SessionSimpleView(props: {
         .filter(Boolean)
         .join(' · ')
     : 'No groups yet';
+
+  if (screen === 'groups') {
+    return (
+      <SimpleGroupsView
+        groups={groups}
+        tracks={tracks}
+        readOnly={finished}
+        onBack={() => setScreen('home')}
+        onOpen={props.onOpenGroup}
+        onSetSupervisor={props.onSetSupervisor}
+        onAddEvaluator={props.onAddEvaluator}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -96,7 +109,7 @@ export function SessionSimpleView(props: {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Tile icon={Users} title="Groups" line={groupsLine} attention={noSupervisor > 0 && !finished} onClick={props.onManageGroups} />
+        <Tile icon={Users} title="Groups" line={groupsLine} attention={noSupervisor > 0 && !finished} onClick={() => setScreen('groups')} />
         <Tile
           icon={UserPlus}
           title="Add a group"

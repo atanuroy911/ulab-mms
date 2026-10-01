@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, use as usePromise } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, Lock, Save, Search, Undo2, UserCheck, UserMinus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, Loader2, Lock, Save, Search, Undo2, UserCheck, UserMinus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TeacherShell } from '@/app/components/TeacherShell';
+import { SessionModeToggle, useSessionMode } from '@/app/capstone/components/useSessionMode';
 import { Tip } from '@/app/components/Tip';
 import { cn } from '@/lib/utils';
 import { GroupModal } from '../../../components/GroupModal';
@@ -81,6 +82,10 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  // Simple mode: choose the part, then a group, then enter just that group's marks.
+  const [mode, setMode] = useSessionMode();
+  const [simpleStep, setSimpleStep] = useState<'part' | 'group' | 'enter'>('part');
+  const [focusId, setFocusId] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -128,19 +133,20 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
 
   /** Who gives this component in a group, and the scale. */
   const columnsFor = useCallback(
-    (g: Group) => {
+    (g: Group, comp: string = component) => {
       const plan = data?.plans[g.track];
       if (!plan) return [];
       return g.graders
-        .map((gr) => ({ grader: gr, req: plan[gr.role].find((r) => r.component === component) }))
+        .map((gr) => ({ grader: gr, req: plan[gr.role].find((r) => r.component === comp) }))
         .filter((c): c is { grader: Grader; req: Requirement } => !!c.req)
         // Former graders only when they actually left marks for this component.
-        .filter((c) => c.grader.current || g.students.some((s) => markByKey.has(cellKey(g.id, c.grader.id, s.id, component))));
+        .filter((c) => c.grader.current || g.students.some((s) => markByKey.has(cellKey(g.id, c.grader.id, s.id, comp))));
     },
     [data, component, markByKey]
   );
 
-  const counts = (g: Group, gr: Grader) => {
+  const counts = (g: Group, gr: Grader, component_: string = component) => {
+    const component = component_;
     if (!gr.current && !gr.nameOnly) return false;
     // An imported supervisor mark counts until the group's own supervisor marks this part.
     if (gr.role === 'supervisor')
@@ -153,10 +159,10 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
   };
 
   const missingIn = useCallback(
-    (g: Group) =>
-      columnsFor(g)
-        .filter((c) => c.grader.current && counts(g, c.grader))
-        .reduce((n, c) => n + g.students.filter((s) => !markByKey.has(cellKey(g.id, c.grader.id, s.id, component))).length, 0),
+    (g: Group, comp: string = component) =>
+      columnsFor(g, comp)
+        .filter((c) => c.grader.current && counts(g, c.grader, comp))
+        .reduce((n, c) => n + g.students.filter((s) => !markByKey.has(cellKey(g.id, c.grader.id, s.id, comp))).length, 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [columnsFor, markByKey, component]
   );
@@ -174,6 +180,17 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
         .includes(q);
     });
   }, [data, track, query, onlyMissing, columnsFor, missingIn]);
+
+  // Simple mode shows one group at a time; Advanced shows every group that matches.
+  const shownGroups = mode === 'simple' ? (simpleStep === 'enter' ? visibleGroups.filter((g) => g.id === focusId) : []) : visibleGroups;
+  const simpleList = useMemo(
+    () => [...visibleGroups].sort((a, b) => Number(missingIn(b) > 0) - Number(missingIn(a) > 0) || a.groupNumber - b.groupNumber),
+    [visibleGroups, missingIn]
+  );
+  const nextMissing = (() => {
+    const order = simpleList.filter((g) => missingIn(g) > 0 && g.id !== focusId);
+    return order[0] || null;
+  })();
 
   const totalMissing = useMemo(() => (data?.groups || []).reduce((n, g) => n + missingIn(g), 0), [data, missingIn]);
 
@@ -265,6 +282,7 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
       subtitle={data?.session.label}
       actions={
         <>
+          <SessionModeToggle mode={mode} onChange={setMode} />
           <Button asChild variant="outline" size="sm">
             <Link href="/capstone/sessions">
               <ArrowLeft className="h-4 w-4 sm:mr-2" />
@@ -300,6 +318,100 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
               </div>
             )}
 
+            {mode === 'simple' && simpleStep === 'part' && (
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold">Which marks are you entering?</h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {components.map((c) => {
+                    const missing = (data.groups || []).reduce((n, g) => n + missingIn(g, c), 0);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          setPicked(c);
+                          setSimpleStep('group');
+                        }}
+                        className="flex min-h-24 cursor-pointer flex-col justify-center rounded-2xl border-2 bg-card p-5 text-left shadow-sm transition-[border-color,box-shadow] hover:border-primary hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+                      >
+                        <span className="text-xl font-semibold">{LABEL[c] || c}</span>
+                        <span className={cn('mt-1 text-sm', missing ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400')}>
+                          {missing ? `${missing} marks missing` : 'All marks in'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {mode === 'simple' && simpleStep === 'group' && (
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="outline" size="lg" className="h-11" onClick={() => setSimpleStep('part')}>
+                    <ArrowLeft className="mr-2 h-5 w-5" /> Back
+                  </Button>
+                  <h2 className="text-2xl font-bold">{LABEL[component] || component}: choose a group</h2>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a group, student or grader" className="h-11 pl-9" />
+                </div>
+                <ul className="space-y-2">
+                  {simpleList.map((g) => {
+                    const missing = missingIn(g);
+                    return (
+                      <li key={g.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFocusId(g.id);
+                            setSimpleStep('enter');
+                          }}
+                          className="flex w-full cursor-pointer items-center gap-4 rounded-2xl border-2 bg-card p-4 text-left transition-colors hover:border-primary"
+                        >
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-lg font-bold">{g.groupNumber}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs text-muted-foreground">Capstone {g.track}</span>
+                            <span className="block truncate font-semibold">{g.projectTitle}</span>
+                          </span>
+                          <span className={cn('shrink-0 text-sm font-medium', missing ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400')}>
+                            {missing ? `${missing} missing` : 'All in'}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {simpleList.length === 0 && <li className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">No group matches.</li>}
+                </ul>
+              </section>
+            )}
+
+            {mode === 'simple' && simpleStep === 'enter' && (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="outline" size="lg" className="h-11" onClick={() => setSimpleStep('group')}>
+                  <ArrowLeft className="mr-2 h-5 w-5" /> All groups
+                </Button>
+                <p className="flex-1 text-sm text-muted-foreground">
+                  {LABEL[component] || component} marks - type each grader&apos;s total; press Enter to go down. Save when done.
+                </p>
+                {nextMissing && (
+                  <Button
+                    size="lg"
+                    className="h-11"
+                    onClick={() => {
+                      setFocusId(nextMissing.id);
+                      window.scrollTo({ top: 0 });
+                    }}
+                  >
+                    Next group with missing marks <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {mode === 'advanced' && (
+            <>
             {/* What to enter */}
             <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 lg:flex-row lg:items-center">
               <div className="flex flex-wrap rounded-lg border p-0.5 text-sm" role="tablist" aria-label="Component">
@@ -352,9 +464,11 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
               Type each grader&apos;s total straight in; press Enter to go down. Marks are saved as that grader&apos;s,
               noted as entered by you. Only counted graders&apos; blanks count as missing.
             </p>
+            </>
+            )}
 
             <div ref={tableRef} className="space-y-4">
-              {visibleGroups.length === 0 && (
+              {mode === 'advanced' && visibleGroups.length === 0 && (
                 <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
                   {onlyMissing ? (
                     <span className="inline-flex items-center gap-2">
@@ -365,7 +479,7 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
                   )}
                 </p>
               )}
-              {visibleGroups.map((g) => {
+              {shownGroups.map((g) => {
                 const cols = columnsFor(g);
                 const missing = missingIn(g);
                 return (

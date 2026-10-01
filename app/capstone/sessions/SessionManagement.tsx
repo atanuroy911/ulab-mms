@@ -32,6 +32,7 @@ import { MemberEntry, type MemberRow } from './MemberEntry';
 import { SetupChecklist } from './SetupChecklist';
 import { CourseFileDialog } from './CourseFileDialog';
 import { SessionSimpleView } from './SessionSimpleView';
+import { SessionModeToggle, useSessionMode } from '../components/useSessionMode';
 import { DeleteSessionDialog } from './DeleteSessionDialog';
 import { InvitePersonForm, PendingInviteNote, type InvitedUser } from './InvitePersonForm';
 import { EvaluatorPickerDialog } from './EvaluatorPickerDialog';
@@ -194,22 +195,8 @@ export default function CapstoneSessionManagement() {
   const [groups, setGroups] = useState<GroupRow[]>([]);
   const [showSchemes, setShowSchemes] = useState(false);
   const [showCourseFile, setShowCourseFile] = useState(false);
-  // Simple (big buttons, the essentials) or Advanced (everything) - remembered on this device.
-  const [sessionMode, setSessionMode] = useState<'simple' | 'advanced'>(() => {
-    try {
-      return typeof window !== 'undefined' && window.localStorage.getItem('capstone-session-mode') === 'advanced' ? 'advanced' : 'simple';
-    } catch {
-      return 'simple';
-    }
-  });
-  const changeSessionMode = (m: 'simple' | 'advanced') => {
-    setSessionMode(m);
-    try {
-      window.localStorage.setItem('capstone-session-mode', m);
-    } catch {
-      /* not remembered */
-    }
-  };
+  // Simple (the essentials) or Advanced (everything) - shared with Enter marks and Grades.
+  const [sessionMode, changeSessionMode] = useSessionMode();
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1022,26 +1009,7 @@ Marks they already submitted are kept.`)) return;
             <ArrowLeft className="h-4 w-4" />
             Back to Sessions
           </Button>
-          <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="View">
-            {(
-              [
-                ['simple', 'Simple', 'The essentials, in big buttons'],
-                ['advanced', 'Advanced', 'Every group, every detail and every tool'],
-              ] as const
-            ).map(([m, label, hint]) => (
-              <Tip key={m} label={hint}>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={sessionMode === m}
-                  onClick={() => changeSessionMode(m)}
-                  className={cn('rounded-md px-3 py-1 text-sm transition-colors', sessionMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-                >
-                  {label}
-                </button>
-              </Tip>
-            ))}
-          </div>
+          <SessionModeToggle mode={sessionMode} onChange={changeSessionMode} />
         </div>
 
         {sessionMode === 'simple' ? (
@@ -1069,7 +1037,9 @@ Marks they already submitted are kept.`)) return;
                 />
               }
               onNewGroup={() => setShowCreateGroup(true)}
-              onManageGroups={() => changeSessionMode('advanced')}
+              onOpenGroup={(g) => setOpenGroup({ id: g._id, tab: 'manage' })}
+              onSetSupervisor={(g) => setSupervisorPickerFor(groups.find((x) => x._id === g._id) || null)}
+              onAddEvaluator={(g) => setEvaluatorPickerFor(groups.find((x) => x._id === g._id) || null)}
               onEmailGraders={handleRequestMarks}
               onSetupAction={handleSetupAction}
               onCourseFile={() => setShowCourseFile(true)}

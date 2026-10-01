@@ -25,6 +25,7 @@ import {
 import {
   Loader2,
   FileSpreadsheet,
+  FileText,
   AlertTriangle,
   ArrowLeft,
   Search,
@@ -35,6 +36,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { ProgressionWizard } from './ProgressionWizard';
+import { SessionModeToggle, useSessionMode } from '@/app/capstone/components/useSessionMode';
 import { cn } from '@/lib/utils';
 import { TeacherShell } from '@/app/components/TeacherShell';
 import { toast } from 'sonner';
@@ -132,6 +134,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
   const [sort, setSort] = useState<{ key: 'name' | 'group' | 'total'; dir: 1 | -1 }>({ key: 'group', dir: 1 });
   const [moveOpen, setMoveOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [mode, setMode] = useSessionMode();
 
   useEffect(() => {
     (async () => {
@@ -233,6 +236,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
       subtitle={data ? `${data.department} · computed from submitted marks` : undefined}
       actions={
         <>
+          <SessionModeToggle mode={mode} onChange={setMode} />
           <Button variant="outline" size="sm" onClick={() => router.push('/capstone/sessions')} title="Back to capstone sessions">
             <ArrowLeft className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Sessions</span>
@@ -298,6 +302,19 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
           </Card>
         )}
 
+        {mode === 'simple' && data ? (
+          <SimpleGrades
+            sessionId={id}
+            groups={data.groups}
+            canManage={!!data.canSeeWholeSession}
+            canMoveOn={canMoveOn}
+            exporting={exporting}
+            onExport={exportXlsx}
+            onMoveOn={() => setMoveOpen(true)}
+            onOpen={(member, group) => setDetailFor({ member, group })}
+          />
+        ) : (
+        <>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-56 flex-1 sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -519,6 +536,8 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
             );
           })
         )}
+        </>
+        )}
       </div>
 
       {data?.canSeeWholeSession && (
@@ -625,5 +644,127 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
         </DialogContent>
       </Dialog>
     </TeacherShell>
+  );
+}
+
+const GRADE_ORDER = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'D', 'F'];
+
+/**
+ * Grades, Simple mode: where the session stands, the few things people do here (print, export,
+ * move on) as big buttons, and every student in one plain list. A student opens the same
+ * breakdown as in Advanced.
+ */
+function SimpleGrades({
+  sessionId,
+  groups,
+  canManage,
+  canMoveOn,
+  exporting,
+  onExport,
+  onMoveOn,
+  onOpen,
+}: {
+  sessionId: string;
+  groups: Group[];
+  canManage: boolean;
+  canMoveOn: boolean;
+  exporting: boolean;
+  onExport: () => void;
+  onMoveOn: () => void;
+  onOpen: (member: Member, group: Group) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const tracks = [...new Set(groups.map((g) => g.track))].sort();
+  const [track, setTrack] = useState(tracks[0] || 'A');
+  const inTrack = groups.filter((g) => g.track === track);
+  const rows = inTrack.flatMap((g) => g.members.map((m) => ({ g, m })));
+  const graded = rows.filter((r) => r.m.letter);
+  const missing = rows.filter((r) => r.m.missingComponents.length > 0);
+  const dist = GRADE_ORDER.map((l) => [l, graded.filter((r) => r.m.letter === l).length] as const).filter(([, n]) => n > 0);
+  const q = query.trim().toLowerCase();
+  const shown = rows
+    .filter((r) => !q || `${r.m.studentId} ${r.m.name || ''} ${r.g.projectTitle} group ${r.g.groupNumber}`.toLowerCase().includes(q))
+    .sort((a, b) => a.g.groupNumber - b.g.groupNumber);
+
+  return (
+    <div className="space-y-5">
+      {tracks.length > 1 && (
+        <div className="flex w-fit rounded-lg border p-0.5" role="tablist" aria-label="Track">
+          {tracks.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={track === t}
+              onClick={() => setTrack(t)}
+              className={cn('rounded-md px-4 py-1.5 text-sm font-medium', track === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+            >
+              Capstone {t}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border bg-card p-5">
+          <p className="text-3xl font-bold tabular-nums">
+            {graded.length} <span className="text-lg font-normal text-muted-foreground">/ {rows.length}</span>
+          </p>
+          <p className="text-sm text-muted-foreground">students graded</p>
+        </div>
+        <div className={cn('rounded-2xl border bg-card p-5', missing.length && 'border-amber-500/50')}>
+          <p className={cn('text-3xl font-bold tabular-nums', missing.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>{missing.length}</p>
+          <p className="text-sm text-muted-foreground">{missing.length ? 'still missing a mark' : 'nobody is missing a mark'}</p>
+        </div>
+        <div className="rounded-2xl border bg-card p-5">
+          <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold tabular-nums">
+            {dist.length ? dist.map(([l, n]) => <span key={l}>{l}: {n}</span>) : <span className="font-normal text-muted-foreground">No grades yet</span>}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">grade spread</p>
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Button size="lg" variant="outline" className="h-14 text-base" asChild>
+            <a href={`/api/capstone/sessions/${sessionId}/transcript?scope=roster&track=${track}`} target="_blank" rel="noopener noreferrer">
+              <FileText className="mr-2 h-5 w-5" /> Print grade sheet
+            </a>
+          </Button>
+          <Button size="lg" variant="outline" className="h-14 text-base" onClick={onExport} disabled={exporting}>
+            {exporting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileSpreadsheet className="mr-2 h-5 w-5" />} Download Excel
+          </Button>
+          <Button size="lg" className="h-14 text-base" onClick={onMoveOn} disabled={!canMoveOn} title={canMoveOn ? '' : 'After you finish the session (publish results)'}>
+            <ArrowRightCircle className="mr-2 h-5 w-5" /> {canMoveOn ? 'Move groups on' : 'Move on - after finishing'}
+          </Button>
+        </div>
+      )}
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input className="h-11 pl-9" placeholder="Find a student, ID or project" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+
+      <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+        {shown.map(({ g, m }) => (
+          <li key={`${g.groupId}:${m.studentAccountId}`}>
+            <button type="button" onClick={() => onOpen(m, g)} className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/50">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{(m.name || m.studentId).replace(/\s*\(\d{6,}\)\s*$/, '')}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {m.studentId} · Group {g.groupNumber}
+                  {m.missingComponents.length > 0 && <span className="text-amber-700 dark:text-amber-400"> · missing: {m.missingComponents.join(', ')}</span>}
+                </span>
+              </span>
+              <span className="w-16 shrink-0 text-right text-sm tabular-nums">{m.score === null ? '-' : m.score.toFixed(2)}</span>
+              <span className={cn('w-10 shrink-0 rounded-md py-1 text-center text-sm font-bold', m.letter === 'F' ? 'bg-destructive/10 text-destructive' : m.letter ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')}>
+                {m.letter || '-'}
+              </span>
+            </button>
+          </li>
+        ))}
+        {shown.length === 0 && <li className="p-8 text-center text-muted-foreground">No student matches.</li>}
+      </ul>
+    </div>
   );
 }
