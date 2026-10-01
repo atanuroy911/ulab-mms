@@ -22,7 +22,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useStaffViewer } from '@/app/components/useStaffViewer';
-import { SEARCH_FEATURES, canSee, scoreFeature, type SearchFeature } from '@/lib/searchFeatures';
+import { SEARCH_FEATURES, canSee, didYouMean, scoreFeature, suggestedFor, type SearchFeature } from '@/lib/searchFeatures';
 
 /**
  * System-wide search (Ctrl/Cmd+K, or the "Search" button in the sidebar/header).
@@ -105,8 +105,9 @@ function rememberRecent(item: Recent) {
 }
 
 /** Opens the search from anywhere, e.g. a "Search" button: `openGlobalSearch()`. */
-export function openGlobalSearch() {
-  window.dispatchEvent(new Event('open-global-search'));
+/** Opens the search - optionally already holding a query (e.g. from a page that wasn't found). */
+export function openGlobalSearch(query?: string) {
+  window.dispatchEvent(new CustomEvent('open-global-search', { detail: { query } }));
 }
 
 export function GlobalSearch() {
@@ -118,6 +119,8 @@ export function GlobalSearch() {
   const [records, setRecords] = useState<RecordResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [recent, setRecent] = useState<Recent[]>([]);
+  // The page the search was opened from, for "Suggested here".
+  const [here, setHere] = useState('');
 
   // Students (student portal / check-in sessions) and signed-out visitors get no search.
   const sessionUser = session?.user as
@@ -141,10 +144,18 @@ export function GlobalSearch() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        setHere(window.location.pathname + window.location.search);
+        setRecent(readRecent());
         setOpen((o) => !o);
       }
     };
-    const onOpen = () => setOpen(true);
+    const onOpen = (e: Event) => {
+      setHere(window.location.pathname + window.location.search);
+      setRecent(readRecent());
+      const q = (e as CustomEvent<{ query?: string }>).detail?.query;
+      if (q) setQuery(q);
+      setOpen(true);
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('open-global-search', onOpen);
     return () => {
@@ -203,6 +214,12 @@ export function GlobalSearch() {
       .map((x) => x.f);
   }, [query, searchViewer]);
 
+  // Opened on a page: its likely next steps, before anything is typed.
+  const suggestedHere = useMemo(
+    () => (here ? suggestedFor(SEARCH_FEATURES.filter((f) => canSee(f, searchViewer)), here) : []),
+    [here, searchViewer]
+  );
+
   // With nothing typed, offer the most useful places for this viewer.
   const suggestions = useMemo(() => {
     const ids = ['my-courses', 'capstone-mine', 'capstone-sessions', 'grading-schemes', 'add-course', 'settings', 'admin-accounts', 'report-bug'];
@@ -257,6 +274,8 @@ export function GlobalSearch() {
   const hasQuery = query.trim().length > 0;
   const showSpinner = searching && recordQuery.length >= 2;
   const nothing = hasQuery && !showSpinner && features.length === 0 && shownRecords.length === 0;
+  // Nothing matched exactly: the closest features by everyday words or with a typo forgiven.
+  const closest = nothing ? didYouMean(SEARCH_FEATURES.filter((f) => canSee(f, searchViewer)), query) : [];
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -273,13 +292,17 @@ export function GlobalSearch() {
         >
           <CommandInput value={query} onValueChange={setQuery} placeholder="Search pages, courses, students, groups…" />
           <CommandList className="max-h-[min(60vh,28rem)] pb-2">
-            {nothing && (
+            {nothing && closest.length > 0 && (
+              <CommandGroup heading={`No exact match for “${query.trim()}” - did you mean`}>{closest.map(renderFeature)}</CommandGroup>
+            )}
+            {nothing && closest.length === 0 && (
               <CommandEmpty className="px-6 py-10 text-center">
                 <p className="text-sm font-medium">No results for &ldquo;{query.trim()}&rdquo;</p>
                 <p className="mt-1 text-xs text-muted-foreground">Try a course code, a student ID or a page name.</p>
               </CommandEmpty>
             )}
 
+            {!hasQuery && suggestedHere.length > 0 && <CommandGroup heading="Suggested here">{suggestedHere.map(renderFeature)}</CommandGroup>}
             {!hasQuery && recent.length > 0 && (
               <CommandGroup heading="Recent">
                 {recent.map((r, i) => (
