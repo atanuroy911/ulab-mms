@@ -4,6 +4,7 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import User from '@/models/User';
 import { requireAuth, type GraphQLContext } from '../auth';
+import { ownsCourse, resolveStudentForUser } from '../access';
 import type { Loaders } from '../dataloaders';
 
 interface AttendanceSessionsArgs {
@@ -48,34 +49,6 @@ function generateSessionCode(): string {
 // Mirror the same resolution the QR check-in flow uses (app/api/attendance/checkin/route.ts):
 // parse the student ID out of a "Name (2021-1-60-123)"-style display name, falling
 // back to a unique name match.
-async function resolveStudentForUser(userId: string, courseId: string) {
-  const user = await User.findById(userId);
-  if (!user) return null;
-
-  const displayName = (user.name || '').trim();
-  const match = displayName.match(/\(([^)]+)\)/);
-  const parsedId = match ? match[1].trim() : null;
-
-  if (parsedId) {
-    const candidate = await Student.findOne({ studentId: parsedId, courseId });
-    if (candidate) return candidate;
-  }
-
-  if (!displayName) return null;
-
-  const normalizedName = displayName.toLowerCase();
-  const students = await Student.find({ courseId }).lean();
-  const exactMatches = students.filter((item) => item.name.trim().toLowerCase() === normalizedName);
-  const matches = exactMatches.length === 1
-    ? exactMatches
-    : students.filter((item) => {
-        const studentName = item.name.trim().toLowerCase();
-        return studentName.includes(normalizedName) || normalizedName.includes(studentName);
-      });
-
-  return matches.length === 1 ? matches[0] : null;
-}
-
 async function getAttendanceStats(courseId: string, studentObjectId: string, loaders: any) {
   const course = await loaders.courseLoader.load(courseId);
 
@@ -144,7 +117,7 @@ export const attendanceResolvers = {
     },
 
     attendanceSession: async (_: any, { sessionCode }: AttendanceSessionArgs, context: GraphQLContext & { loaders: Loaders }) => {
-      requireAuth(context);
+      const user = requireAuth(context);
       await dbConnect();
 
       const session = await AttendanceSession.findOne({ sessionCode });
@@ -159,7 +132,8 @@ export const attendanceResolvers = {
         sessionCode: session.sessionCode,
         date: session.date.toISOString(),
         open: session.open,
-        records: session.records || [],
+        // Who attended is the course teacher's to see; anyone checking in only needs the session.
+        records: (await ownsCourse(user.userId, String(session.courseId))) ? session.records || [] : [],
       };
     },
 
@@ -176,8 +150,12 @@ export const attendanceResolvers = {
     },
 
     studentAttendanceStats: async (_: any, { courseId, studentId }: StudentAttendanceStatsArgs, context: GraphQLContext & { loaders: Loaders }) => {
-      requireAuth(context);
+      const user = requireAuth(context);
       await dbConnect();
+      // Another student's attendance is for the course's teacher only.
+      if (!(await ownsCourse(user.userId, courseId))) {
+        throw new Error('Course not found or access denied');
+      }
 
       const student = await Student.findOne({ studentId, courseId });
       if (!student) {

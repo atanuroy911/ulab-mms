@@ -3,6 +3,7 @@ import Course from '@/models/Course';
 import Exam from '@/models/Exam';
 import Student from '@/models/Student';
 import { requireAuth, type GraphQLContext } from '../auth';
+import { canViewCourse, resolveStudentForUser } from '../access';
 import type { Loaders } from '../dataloaders';
 import { escapeRegExp } from '@/lib/utils';
 
@@ -78,7 +79,9 @@ export const courseResolvers = {
     },
 
     course: async (_: any, { id }: CourseArgs, context: GraphQLContext & { loaders: Loaders }) => {
-      requireAuth(context);
+      const user = requireAuth(context);
+      await dbConnect();
+      if (!(await canViewCourse(user.userId, id))) throw new Error('Course not found');
 
       const course = await context.loaders.courseLoader.load(id);
 
@@ -102,7 +105,7 @@ export const courseResolvers = {
     },
 
     studentCourses: async (_: any, { studentId }: StudentCoursesArgs, context: GraphQLContext) => {
-      requireAuth(context);
+      const user = requireAuth(context);
       await dbConnect();
 
       const studentRecords = await Student.find({
@@ -113,8 +116,20 @@ export const courseResolvers = {
         return [];
       }
 
-      const courseIds = studentRecords.map(record => record.courseId);
-      const courses = await Course.find({ _id: { $in: courseIds } }).sort({ createdAt: -1 });
+      // Only courses the caller teaches, or the caller's own enrolments - never anyone's list.
+      const visible = await Promise.all(
+        studentRecords.map(async (record) => {
+          const courseId = String(record.courseId);
+          const own = await resolveStudentForUser(user.userId, courseId);
+          return own && String(own._id) === String(record._id) ? courseId : null;
+        })
+      );
+      const courses = await Course.find({
+        $or: [
+          { _id: { $in: studentRecords.map((r) => r.courseId) }, userId: user.userId },
+          { _id: { $in: visible.filter(Boolean) } },
+        ],
+      }).sort({ createdAt: -1 });
 
       return courses.map(course => ({
         id: course._id.toString(),
@@ -132,7 +147,9 @@ export const courseResolvers = {
     },
 
     courseDetails: async (_: any, { courseId }: { courseId: string }, context: GraphQLContext & { loaders: Loaders }) => {
-      requireAuth(context);
+      const user = requireAuth(context);
+      await dbConnect();
+      if (!(await canViewCourse(user.userId, courseId))) return null;
 
       const course = await context.loaders.courseLoader.load(courseId);
 

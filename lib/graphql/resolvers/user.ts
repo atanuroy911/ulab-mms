@@ -3,6 +3,7 @@ import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 import { generateToken, requireAuth, type GraphQLContext } from '../auth';
+import { checkRateLimit } from '@/lib/rateLimit';
 import type { Loaders } from '../dataloaders';
 
 interface LoginArgs {
@@ -34,7 +35,11 @@ export const userResolvers = {
   },
 
   Mutation: {
-    login: async (_: any, { input }: LoginArgs) => {
+    login: async (_: any, { input }: LoginArgs, context: GraphQLContext) => {
+      // Same throttle as the admin login: 5 tries per 15 minutes per IP.
+      if (!checkRateLimit(`graphql-login:${context?.ip || 'unknown'}`, 5, 15 * 60 * 1000).allowed) {
+        throw new Error('Too many sign-in attempts. Please try again later.');
+      }
       await dbConnect();
 
       const { email, password } = input;
