@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive } from 'lucide-react';
+import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive, FileSpreadsheet, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
 import { TrackSchemePanel } from './TrackSchemePanel';
 import { GroupsBrowser } from './GroupsBrowser';
@@ -1051,6 +1051,45 @@ Marks they already submitted are kept.`)) return;
                                 '_blank'
                               )
                             }
+                          >
+                            Capstone {t.track}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {/* Group list and grade reports: what leaves the system for the department's records. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" title="Group list, grade sheets and group results">
+                      <ScrollText className="h-4 w-4 mr-1.5" />
+                      Reports
+                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem onSelect={() => window.open(`/api/capstone/sessions/${selectedSession._id}/groups-export`, '_blank')}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      Group list (.xlsx)
+                    </DropdownMenuItem>
+                    {([
+                      { scope: 'roster', label: 'Grade sheet', hint: 'every student' },
+                      { scope: 'groups', label: 'Group results', hint: 'group by group' },
+                    ] as const).map((report) => (
+                      <DropdownMenuGroup key={report.scope}>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs">
+                          {report.label}
+                          <span className="ml-1 font-normal text-muted-foreground">· {report.hint}</span>
+                        </DropdownMenuLabel>
+                        <DropdownMenuItem onSelect={() => window.open(`/api/capstone/sessions/${selectedSession._id}/transcript?scope=${report.scope}`, '_blank')}>
+                          All tracks
+                        </DropdownMenuItem>
+                        {selectedSession.tracks.map((t) => (
+                          <DropdownMenuItem
+                            key={`${report.scope}-${t.track}`}
+                            onSelect={() => window.open(`/api/capstone/sessions/${selectedSession._id}/transcript?scope=${report.scope}&track=${t.track}`, '_blank')}
                           >
                             Capstone {t.track}
                           </DropdownMenuItem>
