@@ -42,3 +42,8 @@ next-env.d.ts
 
 # Database backups written by scripts/ (may contain real records - never commit)
 backups/
+
+public/templates/capstone/*
+
+# Course workbooks and marking sheets with student IDs and marks - never commit
+public/templates/other-files/
