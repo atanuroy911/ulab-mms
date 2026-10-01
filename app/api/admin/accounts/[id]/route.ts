@@ -86,16 +86,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const departmentId = body?.departmentId !== undefined ? body.departmentId || null : undefined;
     const coordinatorDepartments = Array.isArray(body?.coordinatorDepartments) ? body.coordinatorDepartments : undefined;
 
-    // Granting/revoking roles or department authority is a privilege change - it must be
-    // traceable to a real, identity-bearing admin account, not just "whoever knows the
-    // shared admin password" (which carries no userId at all - see lib/adminAuth.ts).
-    // Renaming an account (name only) stays available to the shared-password login.
+    // Granting/revoking roles or department authority is a privilege change - it needs a
+    // strongly authenticated admin: an admin-role account, or the shared admin login completed
+    // with its authenticator code (lib/adminTotp.ts). The password alone isn't enough.
+    // Renaming an account (name only) stays available to any admin session.
     const isPrivilegeChange = roles !== undefined || departmentId !== undefined || coordinatorDepartments !== undefined;
-    if (isPrivilegeChange && !access.userId) {
+    if (isPrivilegeChange && !access.verified) {
       return NextResponse.json(
-        { error: 'Changing roles/department requires signing in with an admin-role account, not the shared admin password' },
+        {
+          error:
+            access.via === 'shared'
+              ? 'Changing roles or departments needs two-factor sign-in. Set up the authenticator in Admin > Security, then sign in again with the code.'
+              : 'Changing roles or departments needs an admin sign-in',
+          needsTwoFactor: access.via === 'shared',
+        },
         { status: 403 }
       );
+    }
+    if (isPrivilegeChange) {
+      console.info(`[admin-roles] Account ${id} roles/department changed by ${access.via === 'role' ? `admin ${access.userId}` : 'the shared admin login (2FA)'}`);
     }
 
     if (name !== undefined && !name) {

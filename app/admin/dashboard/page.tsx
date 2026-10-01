@@ -21,6 +21,7 @@ import AccountManagement from './components/AccountManagement';
 import DepartmentManagement from './components/DepartmentManagement';
 import RubricManagement from './components/RubricManagement';
 import BackupManagement from './components/BackupManagement';
+import SecuritySettings from './components/SecuritySettings';
 import { DeveloperSettingsPanel } from '@/app/components/DeveloperSettingsPanel';
 import { DevModeBanner } from '@/app/components/DevModeBanner';
 
@@ -142,6 +143,7 @@ function AdminDashboardContent() {
           {activeTab === 'grading-schemes' && <GradingSchemesList canCreate />}
           {activeTab === 'rubrics' && <RubricManagement />}
           {activeTab === 'backup' && <BackupManagement />}
+          {activeTab === 'security' && <SecuritySettings />}
           {activeTab === 'developer' && (
             <div className="max-w-3xl">
               <DeveloperSettingsPanel />

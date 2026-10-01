@@ -23,6 +23,40 @@ export default function AdminSignIn() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [requireSetup, setRequireSetup] = useState(false);
+  // Second step when the authenticator is on: a 6-digit code, or a backup code.
+  const [totpStep, setTotpStep] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
+  const [useBackup, setUseBackup] = useState(false);
+
+  const handleTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const response = await fetch('/api/admin/signin/totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: totpCode }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        if (data.usedBackup) notify.success(`Signed in with a backup code - ${data.backupCodesLeft} left. Make new ones in Security.`);
+        else notify.success('Welcome Admin! Signed in successfully');
+        router.push('/admin/dashboard');
+        router.refresh();
+        return;
+      }
+      if (data.restart) {
+        setTotpStep(false);
+        setTotpCode('');
+      }
+      setError(data.error || 'Wrong code');
+    } catch {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +75,11 @@ export default function AdminSignIn() {
 
       const data = await response.json();
 
-      if (data.requireSetup) {
+      if (data.requireTotp) {
+        setTotpStep(true);
+        setPassword('');
+        setError('');
+      } else if (data.requireSetup) {
         // Need to set up password first
         setRequireSetup(true);
         setError('');
@@ -157,7 +195,7 @@ export default function AdminSignIn() {
         <Card className="border-border/60 shadow-xl shadow-purple-500/5 dark:shadow-black/40">
           <CardHeader>
             <CardTitle>
-              {requireSetup ? 'Set Up Admin Password' : 'Admin Sign In'}
+              {totpStep ? 'Two-factor sign-in' : requireSetup ? 'Set Up Admin Password' : 'Admin Sign In'}
             </CardTitle>
             <CardDescription>
               {requireSetup 
@@ -181,6 +219,40 @@ export default function AdminSignIn() {
               </div>
             )}
 
+            {totpStep ? (
+              <form onSubmit={handleTotp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="totp">{useBackup ? 'Backup code' : 'Code from your authenticator app'}</Label>
+                  <Input
+                    id="totp"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(useBackup ? e.target.value.trim().slice(0, 11) : e.target.value.replace(/[^\d]/g, '').slice(0, 6))}
+                    inputMode={useBackup ? 'text' : 'numeric'}
+                    autoComplete="one-time-code"
+                    placeholder={useBackup ? 'xxxxx-xxxxx' : '123456'}
+                    autoFocus
+                    required
+                    disabled={loading}
+                    className="h-12 text-center font-mono text-xl tracking-[0.3em]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {useBackup ? 'Each backup code works once.' : 'Open Google Authenticator (or your app) and enter the 6-digit code for ULAB MMS.'}
+                  </p>
+                </div>
+                <Button type="submit" className="w-full" disabled={loading || (!useBackup && totpCode.length !== 6)}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Verify and sign in
+                </Button>
+                <div className="flex justify-between text-sm">
+                  <button type="button" className="text-muted-foreground hover:text-primary" onClick={() => { setUseBackup(!useBackup); setTotpCode(''); setError(''); }}>
+                    {useBackup ? 'Use the authenticator code' : 'Lost your phone? Use a backup code'}
+                  </button>
+                  <button type="button" className="text-muted-foreground hover:text-primary" onClick={() => { setTotpStep(false); setTotpCode(''); setError(''); }}>
+                    Start over
+                  </button>
+                </div>
+              </form>
+            ) : (
             <form onSubmit={requireSetup ? handleSetupPassword : handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
@@ -291,6 +363,7 @@ export default function AdminSignIn() {
                 )}
               </Button>
             </form>
+            )}
           </CardContent>
         </Card>
 

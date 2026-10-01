@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setAdminHintCookie } from '@/lib/adminHintCookie';
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
 
-import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
+import { setAdminSession } from '@/lib/adminSession';
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,31 +50,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create JWT token
-    const token = await new SignJWT({ 
-      username: 'admin', 
-      role: 'admin',
-      type: 'admin' 
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('30m')
-      .setIssuedAt()
-      .sign(SECRET);
-
     const response = NextResponse.json(
       { success: true, message: 'Admin password set successfully' },
       { status: 200 }
     );
-
-    // Set HTTP-only cookie
-    response.cookies.set('admin-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 30, // 30 minutes
-      path: '/',
-    });
-    setAdminHintCookie(response);
+    await setAdminSession(response, { mfa: false });
 
     return response;
   } catch (error: any) {

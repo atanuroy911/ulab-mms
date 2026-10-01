@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setAdminHintCookie } from '@/lib/adminHintCookie';
 import dbConnect from '@/lib/mongodb';
 import AdminSettings from '@/models/AdminSettings';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
 
-import { ADMIN_JWT_SECRET as SECRET } from '@/lib/adminAuth';
+import { setAdminSession, setPendingSecondFactor } from '@/lib/adminSession';
 import { checkRateLimit, getRequestIp } from '@/lib/rateLimit';
 
 const MAX_ATTEMPTS = 5;
@@ -53,31 +51,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create JWT token
-    const token = await new SignJWT({ 
-      username: 'admin', 
-      role: 'admin',
-      type: 'admin' 
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('30m')
-      .setIssuedAt()
-      .sign(SECRET);
+    // With 2FA on, the password alone doesn't sign in - the authenticator code comes next
+    // (app/api/admin/signin/totp).
+    if (adminSettings.totpEnabled) {
+      const response = NextResponse.json({ requireTotp: true }, { status: 200 });
+      await setPendingSecondFactor(response);
+      return response;
+    }
 
     const response = NextResponse.json(
-      { success: true, message: 'Admin authenticated successfully' },
+      { success: true, message: 'Admin authenticated successfully', twoFactorEnabled: false },
       { status: 200 }
     );
-
-    // Set HTTP-only cookie
-    response.cookies.set('admin-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 30, // 30 minutes
-      path: '/',
-    });
-    setAdminHintCookie(response);
+    await setAdminSession(response, { mfa: false });
 
     return response;
   } catch (error: any) {

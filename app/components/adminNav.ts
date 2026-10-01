@@ -10,6 +10,7 @@ import {
   Building2,
   Wrench,
   Workflow,
+  ShieldCheck,
 } from 'lucide-react';
 import type { SidebarItem } from '@/app/components/AdminSidebar';
 
@@ -68,6 +69,11 @@ export const adminSidebarItems: SidebarItem[] = [
     title: 'Backup & Restore',
     href: '/admin/dashboard?tab=backup',
     icon: DatabaseBackup,
+  },
+  {
+    title: 'Security',
+    href: '/admin/dashboard?tab=security',
+    icon: ShieldCheck,
   },
   {
     title: 'Developer Settings',

@@ -15,6 +15,16 @@ export interface IAdminSettings extends Document {
   devStudentTestEmails: string[];
   devSettingsUpdatedBy?: mongoose.Types.ObjectId | null;
   devSettingsUpdatedAt?: Date | null;
+  /** Authenticator-app 2FA for the shared admin login (lib/adminTotp.ts). Secrets are stored
+   *  encrypted; `totpPendingEnc` is a secret being set up, not yet confirmed with a code. */
+  totpEnabled: boolean;
+  totpSecretEnc: string | null;
+  totpPendingEnc: string | null;
+  /** The last code step accepted, so the same code can't be used twice. */
+  totpLastStep: number;
+  /** bcrypt hashes of the unused one-time backup codes. */
+  totpBackupHashes: string[];
+  totpEnabledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +65,12 @@ const AdminSettingsSchema: Schema = new Schema(
       type: Date,
       default: null,
     },
+    totpEnabled: { type: Boolean, default: false },
+    totpSecretEnc: { type: String, default: null },
+    totpPendingEnc: { type: String, default: null },
+    totpLastStep: { type: Number, default: -1 },
+    totpBackupHashes: { type: [String], default: [] },
+    totpEnabledAt: { type: Date, default: null },
   },
   {
     timestamps: true,

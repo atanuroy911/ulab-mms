@@ -10,16 +10,17 @@ if (!process.env.NEXTAUTH_SECRET) {
 export const ADMIN_JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
 const SECRET = ADMIN_JWT_SECRET;
 
-async function verifyAdminCookie(request: NextRequest): Promise<boolean> {
+/** The shared admin-password session, and whether it was completed with an authenticator code. */
+async function verifyAdminCookie(request: NextRequest): Promise<{ ok: boolean; mfa: boolean }> {
   try {
     const token = request.cookies.get('admin-token')?.value;
-    if (!token) return false;
+    if (!token) return { ok: false, mfa: false };
 
     const { payload } = await jwtVerify(token, SECRET);
-    return payload.type === 'admin';
+    return { ok: payload.type === 'admin', mfa: payload.type === 'admin' && payload.mfa === true };
   } catch (error) {
     console.error('Error verifying admin token:', error);
-    return false;
+    return { ok: false, mfa: false };
   }
 }
 
@@ -28,6 +29,11 @@ export interface AdminAccess {
   /** The signed-in User's id when access came from a role-based session; null for the
    *  shared admin-password cookie, which carries no user identity. */
   userId: string | null;
+  /** Strongly authenticated: an admin-role account, or the shared login completed with an
+   *  authenticator code. Privilege changes (granting roles) require this. */
+  verified: boolean;
+  /** 'role': a signed-in account with the admin role. 'shared': the shared admin password. */
+  via: 'role' | 'shared' | null;
 }
 
 /**
@@ -43,16 +49,17 @@ export async function verifyAdminAccess(request: NextRequest): Promise<AdminAcce
     sessionUser?.id && !isStudentOnlySessionUser(sessionUser) ? sessionUser.id : null;
 
   if (personId && sessionUser?.roles?.includes('admin')) {
-    return { ok: true, userId: personId };
+    return { ok: true, userId: personId, verified: true, via: 'role' };
   }
 
   // The admin-panel cookie: if a teacher is also signed in in this browser, that person is
   // the one acting, so report them for audit; otherwise the caller records "Web Admin".
-  if (await verifyAdminCookie(request)) {
-    return { ok: true, userId: personId };
+  const cookie = await verifyAdminCookie(request);
+  if (cookie.ok) {
+    return { ok: true, userId: personId, verified: cookie.mfa, via: 'shared' };
   }
 
-  return { ok: false, userId: null };
+  return { ok: false, userId: null, verified: false, via: null };
 }
 
 /**
