@@ -1,3 +1,20 @@
+# [1.27.0](https://github.com/atanuroy911/ulab-mms/compare/v1.26.0...v1.27.0) (2026-10-01)
+
+
+### Bug Fixes
+
+* **security:** GraphQL - owner/enrolment checks on every course and attendance query, audience-bound tokens, login rate limit, no introspection in production ([6f370cc](https://github.com/atanuroy911/ulab-mms/commit/6f370cc74dc564d8ec3372ecced4f13845247e45))
+
+
+### Features
+
+* authenticator 2FA for the shared admin login; 2FA-verified sessions can grant roles ([773b221](https://github.com/atanuroy911/ulab-mms/commit/773b2219999c81b2349edff906ad0f4c2bfd1d0a))
+* capstone grade reports - individual (every term), group results and full grade sheet, printable ([ad0ee1c](https://github.com/atanuroy911/ulab-mms/commit/ad0ee1cd14e0c56d571af76c77b57e79ac4c0d74))
+* group list export (.xlsx) in the department's layout, and a Reports menu for sessions ([3263960](https://github.com/atanuroy911/ulab-mms/commit/3263960cd7dda5226667a2e98010d929772448ea))
+* personal authenticator 2FA for every teacher - asked on password and GraphQL sign-in, admin reset for lost phones ([1aaebf0](https://github.com/atanuroy911/ulab-mms/commit/1aaebf022abdf3f5592a1eb5e65e5054e94afee7))
+* redesigned project group page - next-step panel, teammate search, confirmations, class progress ([7c44407](https://github.com/atanuroy911/ulab-mms/commit/7c444077930326f118fab6d512f72c0eca9d19cf))
+* student portal - home, my courses (current and past), read-only course marks, attendance and project group ([3e490fe](https://github.com/atanuroy911/ulab-mms/commit/3e490feb2c75f0ca870ea9485bff43aae4b9eb8b))
+
 # [1.26.0](https://github.com/atanuroy911/ulab-mms/compare/v1.25.0...v1.26.0) (2026-09-29)
 
 
