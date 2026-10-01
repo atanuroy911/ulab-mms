@@ -227,6 +227,15 @@ export const authOptions: NextAuthOptions = {
           try {
             await dbConnect();
             await Student.updateMany({ studentId }, { email });
+            // The person-level account too, when it has none yet (students imported from a
+            // workbook or URMS) - so notifications can reach them. Never overwrites an email,
+            // and a clash with another account's (unique) email is simply skipped.
+            if (account.provider !== STUDENT_GOOGLE_PROVIDER_ID) {
+              await StudentAccount.updateOne(
+                { studentId, $or: [{ email: { $exists: false } }, { email: null }, { email: '' }] },
+                { $set: { email } }
+              ).catch(() => undefined);
+            }
 
             if (account.provider === STUDENT_GOOGLE_PROVIDER_ID) {
               // Unlike the other three scoped providers, this one is a durable login - upsert

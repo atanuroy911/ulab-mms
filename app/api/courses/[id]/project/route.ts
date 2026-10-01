@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { announceProjectGroupsOpen } from '@/lib/announcements';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import ProjectGroup from '@/models/ProjectGroup';
@@ -81,8 +82,11 @@ export async function POST(
       }
     }
 
+    const opened = projectGroup.isActive && (projectGroup.isNew || projectGroup.isModified('isActive'));
     await projectGroup.save();
     await projectGroup.populate('groups.studentIds', 'name studentId withdrawn');
+    // Students hear that groups are forming, after the response.
+    if (opened) after(() => announceProjectGroupsOpen(String(course._id)));
 
     return NextResponse.json(projectGroup);
   } catch (error: any) {

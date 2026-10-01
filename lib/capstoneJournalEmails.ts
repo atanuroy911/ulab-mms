@@ -5,6 +5,7 @@ import User from '@/models/User';
 import WeeklyJournalEntry from '@/models/WeeklyJournalEntry';
 import '@/models/Semester';
 import { sendMail, mailShell, esc } from '@/lib/mail';
+import { recordStudentNotifications, studentEmails } from '@/lib/studentNotify';
 
 /**
  * Weekly-journal emails to capstone students.
@@ -70,8 +71,12 @@ export async function sendGroupJournalEmails(
   const journalUrl = `${baseUrl}/student/dashboard/capstone`;
 
   const result: JournalEmailResult = { sent: 0, failed: 0, noEmail: [] };
+  // An address from a course roster when the account has none (URMS imports, manual adds).
+  const rosterEmails = await studentEmails(students.filter((s) => !s.email).map((s) => s.studentId));
+  const emailedIds = new Set<string>();
   for (const student of students) {
-    if (!student.email) {
+    const to = student.email || rosterEmails.get(student.studentId.toLowerCase());
+    if (!to) {
       result.noEmail.push({ studentId: student.studentId, name: student.name });
       continue;
     }
@@ -89,12 +94,29 @@ export async function sendGroupJournalEmails(
       totalWeeks,
       journalUrl,
     });
-    const sent = await sendMail({ to: student.email, subject, html });
-    if (sent.ok) result.sent += 1;
-    else result.failed += 1;
+    const sent = await sendMail({ to, subject, html });
+    if (sent.ok) {
+      result.sent += 1;
+      emailedIds.add(student.studentId.toLowerCase());
+    } else result.failed += 1;
   }
 
-  if (kind === 'reminder' && result.sent > 0) {
+  // Everyone gets the portal copy - for those without email it's the only one.
+  await recordStudentNotifications(
+    kind === 'added' ? 'capstone' : 'journal',
+    students.map((st) => ({
+      studentId: st.studentId,
+      title: kind === 'added' ? `You're in a capstone group: Track ${group.track} #${group.groupNumber}` : 'Reminder: keep your weekly journal up to date',
+      body:
+        kind === 'added'
+          ? `${group.projectTitle}${supervisor?.name ? ` - supervised by ${supervisor.name}` : ''}. Write your weekly journal in the portal.`
+          : `${options.senderName || 'Your supervisor'} asked you to bring your journal up to date: ${submittedBy.get(String(st._id)) || 0} of ${totalWeeks} weeks submitted.`,
+      href: '/student/dashboard/capstone',
+    })),
+    emailedIds
+  );
+
+  if (kind === 'reminder' && students.length > 0) {
     group.lastJournalReminderAt = new Date();
     await group.save();
   }

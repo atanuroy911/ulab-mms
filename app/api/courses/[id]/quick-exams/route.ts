@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import Exam from '@/models/Exam';
 import QuickExam from '@/models/QuickExam';
 import { QuickExamError, teacherCourse } from '@/lib/quickExam/server';
-import { applyFields, publish, summary } from '@/lib/quickExam/teacher';
+import { announcePublished, applyFields, publish, summary } from '@/lib/quickExam/teacher';
 
 const fail = (err: unknown) => {
   if (err instanceof QuickExamError) return NextResponse.json({ error: err.message, problems: (err as { problems?: string[] }).problems }, { status: err.status });
@@ -36,6 +36,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     applyFields(qe, body, false);
     if (body.publish === true) await publish(qe, course, userId);
     await qe.save();
+    // Students hear about it once, after the response (emails take a while).
+    if (body.publish === true) after(() => announcePublished(qe, course));
     return NextResponse.json({ _id: String(qe._id), status: qe.status }, { status: 201 });
   } catch (err) {
     return fail(err);

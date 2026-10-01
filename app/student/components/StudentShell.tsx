@@ -8,6 +8,7 @@ import { BookOpen, GraduationCap, Home, LogOut, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { cn } from '@/lib/utils';
+import { NotificationBell } from './NotificationBell';
 
 const NAV = [
   { href: '/student/dashboard', label: 'Home', icon: Home, exact: true },
@@ -54,6 +55,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               <p className="max-w-48 truncate text-sm font-medium">{name}</p>
               {user?.studentIdText && <p className="font-mono text-xs text-muted-foreground">{user.studentIdText}</p>}
             </div>
+            <NotificationBell />
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: '/student/signin' })} aria-label="Sign out">
               <LogOut className="h-4 w-4 sm:mr-1.5" />

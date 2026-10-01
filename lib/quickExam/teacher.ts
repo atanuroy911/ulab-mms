@@ -1,6 +1,8 @@
 // Shared by the teacher's quick exam routes: reading the builder's fields, publishing, and
 // the summary the course view lists.
 import Exam from '@/models/Exam';
+import Student from '@/models/Student';
+import { notifyStudents } from '@/lib/studentNotify';
 import QuickExamAttempt from '@/models/QuickExamAttempt';
 import type { IQuickExam } from '@/models/QuickExam';
 import { QuickExamError, availability, questionCount, setsFromText } from '@/lib/quickExam/server';
@@ -120,4 +122,24 @@ export async function summary(qe: IQuickExam, examNames: Map<string, { name: str
     submitted,
     updatedAt: qe.updatedAt,
   };
+}
+
+const dhaka = (d: Date) => d.toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+/** Tells the course's students a quick exam is out (portal copy for all, email where known). */
+export async function announcePublished(qe: IQuickExam, course: { _id: unknown; code?: string; name?: string }) {
+  const students = await Student.find({ courseId: course._id, withdrawn: { $ne: true } }).select('studentId').lean();
+  const when = [qe.opensAt && qe.opensAt > new Date() ? `Opens ${dhaka(qe.opensAt)}.` : 'Open now.', qe.closesAt ? `Closes ${dhaka(qe.closesAt)}.` : '']
+    .filter(Boolean)
+    .join(' ');
+  await notifyStudents(
+    'quick-exam',
+    students.map((st) => ({
+      studentId: st.studentId,
+      title: `New quick exam: ${qe.title}`,
+      subject: `New quick exam in ${course.code || 'your course'}: ${qe.title}`,
+      body: `${course.code ? `${course.code} - ` : ''}${questionCount(qe)} questions, ${qe.durationMinutes} minutes. ${when}`,
+      href: `/student/dashboard/quick-exams/${qe._id}`,
+    }))
+  );
 }

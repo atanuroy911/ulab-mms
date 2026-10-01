@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import mongoose from 'mongoose';
 import QuickExam from '@/models/QuickExam';
 import QuickExamAttempt from '@/models/QuickExamAttempt';
 import { QuickExamError, availability, teacherCourse } from '@/lib/quickExam/server';
-import { applyFields, publish, publishProblems } from '@/lib/quickExam/teacher';
+import { announcePublished, applyFields, publish, publishProblems } from '@/lib/quickExam/teacher';
 
 const fail = (err: unknown) => {
   if (err instanceof QuickExamError) return NextResponse.json({ error: err.message, problems: (err as { problems?: string[] }).problems }, { status: err.status });
@@ -59,6 +59,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { qe, course, userId } = await load(id, qid);
     const body = await request.json().catch(() => ({}));
     const locked = (await QuickExamAttempt.countDocuments({ quickExamId: qe._id })) > 0;
+    const firstPublish = body.action === 'publish' && !qe.publishedAt;
     applyFields(qe, body, locked);
     if (body.action === 'publish') await publish(qe, course, userId);
     else if (body.action === 'close') qe.status = 'closed';
@@ -72,6 +73,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       qe.status = 'draft';
     }
     await qe.save();
+    // Students hear about it the first time it's published, after the response.
+    if (firstPublish) after(() => announcePublished(qe, course));
     return NextResponse.json({ _id: String(qe._id), status: qe.status, availability: availability(qe) });
   } catch (err) {
     return fail(err);

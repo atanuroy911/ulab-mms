@@ -6,7 +6,8 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
-import { sendMail, mailShell, isMailConfigured, esc } from '@/lib/mail';
+import { esc, isMailConfigured } from '@/lib/mail';
+import { notifyStudents, type StudentMessage } from '@/lib/studentNotify';
 
 export const runtime = 'nodejs';
 
@@ -22,9 +23,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!isMailConfigured()) {
-      return NextResponse.json({ error: 'Email is not configured on this server' }, { status: 503 });
-    }
+    // Without email configured, students still get the portal copy.
+    const mailOn = isMailConfigured();
 
     const { id } = await params;
     await dbConnect();
@@ -39,10 +39,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       Exam.find({ courseId: id }).sort({ createdAt: 1 }),
     ]);
 
-    const studentsWithEmail = students.filter((s) => !!s.email);
-    if (studentsWithEmail.length === 0) {
-      return NextResponse.json({ sent: 0, skipped: students.length, message: 'No students with an email on file yet' });
-    }
 
     const marks = await Mark.find({ courseId: id });
     const marksByStudent = new Map<string, typeof marks>();
@@ -52,18 +48,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       marksByStudent.get(key)!.push(mark);
     }
 
-    let sent = 0;
     let noMarks = 0;
-    let mailFailed = 0;
-    const noEmail = students.length - studentsWithEmail.length;
-
-    for (const student of studentsWithEmail) {
+    const messages: StudentMessage[] = [];
+    for (const student of students) {
       const studentMarks = marksByStudent.get(String(student._id)) || [];
-      if (studentMarks.length === 0) {
-        noMarks += 1;
-        continue;
-      }
-
       const rows = exams
         .map((exam) => {
           const mark = studentMarks.find((m) => String(m.examId) === String(exam._id));
@@ -76,18 +64,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })
         .filter(Boolean)
         .join('');
-
       if (!rows) {
         noMarks += 1;
         continue;
       }
-
       const total = studentMarks.reduce((sum, m) => sum + (m.weightedMark || 0), 0);
-
-      const result = await sendMail({
-        to: student.email!,
+      const link = `${process.env.NEXTAUTH_URL || ''}/student/dashboard/courses/${id}`;
+      messages.push({
+        studentId: student.studentId,
+        title: `Marks updated - ${course.code}`,
         subject: `Marks updated - ${course.code}${course.name ? `: ${course.name}` : ''}`,
-        html: mailShell(`
+        body: `Your marks for ${course.code}${course.name ? ` - ${course.name}` : ''} have been updated. Total so far: ${total.toFixed(2)}.`,
+        href: `/student/dashboard/courses/${id}`,
+        emailHtml: `
           <h2 style="margin-top:0;">Marks Updated: ${esc(course.code)}</h2>
           <p>Hi ${esc(student.name)},</p>
           <p>Your marks for <strong>${esc(course.code)}${course.name ? ` - ${esc(course.name)}` : ''}</strong> have been updated:</p>
@@ -102,13 +91,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             <tbody>${rows}</tbody>
           </table>
           <p style="margin-top:16px;"><strong>Total so far: ${total.toFixed(2)}</strong></p>
-        `),
+          <p style="margin:24px 0;"><a href="${esc(link)}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-weight:600;">See all my marks</a></p>
+        `,
       });
-      if (result.ok) sent += 1;
-      else mailFailed += 1;
     }
+    const r = await notifyStudents('marks', messages, { email: mailOn });
+    const sent = r.emailed;
+    const noEmail = r.noEmail;
+    const mailFailed = r.failed;
 
-    return NextResponse.json({ sent, noEmail, noMarks, mailFailed, skipped: noEmail + noMarks + mailFailed });
+    return NextResponse.json({ sent, notified: r.notified, noEmail, noMarks, mailFailed, skipped: noEmail + noMarks + mailFailed });
   } catch (error: any) {
     console.error('POST /api/courses/[id]/notify-grades error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });

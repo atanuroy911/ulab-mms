@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
+import { announceSessionOpened } from '@/lib/announcements';
 import dbConnect from '@/lib/mongodb';
 import GradingScheme from '@/models/GradingScheme';
 import CapstoneGroup from '@/models/CapstoneGroup';
@@ -138,6 +139,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
       if (nextStatus === 'closed') session.closedAt = new Date();
       else if (session.closedAt) session.closedAt = null;
+      // Opening (not reopening) the session: tell every student their group, after the response.
+      if (nextStatus === 'open' && !session.statusHistory.slice(0, -1).some((h) => h.status === 'open')) {
+        const sessionId = String(session._id);
+        after(() => announceSessionOpened(sessionId));
+      }
     }
 
     const weekCountChanged = session.isModified('journalWeekCount');

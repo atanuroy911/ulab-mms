@@ -8,6 +8,7 @@ import '@/models/Semester';
 import { sendMail, mailShell, esc } from '@/lib/mail';
 import { markingPlanForSession } from '@/lib/capstoneMarkingPlan';
 import { groupJournalStatus, type GroupJournalStatus } from '@/lib/capstoneJournalStatus';
+import { recordStudentNotifications, studentEmails } from '@/lib/studentNotify';
 
 /**
  * The weekly-journal review cycle's server side (states in lib/capstoneJournalStatus.ts):
@@ -105,10 +106,12 @@ export async function notifyStudentOfDecision(
 ) {
   try {
     const [student, course] = await Promise.all([
-      StudentAccount.findById(entry.studentAccountId).select('name email').lean<{ name?: string; email?: string }>(),
+      StudentAccount.findById(entry.studentAccountId).select('studentId name email').lean<{ studentId?: string; name?: string; email?: string }>(),
       courseLabel(group.sessionId, group.track),
     ]);
-    if (!student?.email) return;
+    if (!student?.studentId) return;
+    // An address from a course roster when the account has none (URMS imports, manual adds).
+    const to = student.email || (await studentEmails([student.studentId])).get(student.studentId.toLowerCase());
 
     const link = button(`${baseUrl()}/student/dashboard/capstone`, 'Open my weekly journal');
     const feedback = entry.supervisorComment?.trim() ? `<p>Feedback:</p>${quote(entry.supervisorComment)}` : '';
@@ -134,7 +137,25 @@ export async function notifyStudentOfDecision(
                   your supervisor will be notified.</p>`,
             };
 
-    await safeSend(student.email, content.subject, mailShell(`<p>Dear ${esc(student.name || 'Student')},</p>${content.body}${link}`));
+    const emailed = to ? await safeSend(to, content.subject, mailShell(`<p>Dear ${esc(student.name || 'Student')},</p>${content.body}${link}`)) : false;
+    // The portal copy - the only one for students with no email on file.
+    await recordStudentNotifications(
+      'journal',
+      [
+        {
+          studentId: student.studentId,
+          title: content.subject.replace(/^\[ULAB MMS\]\s*/, ''),
+          body:
+            kind === 'reviewed'
+              ? `${actorName} reviewed it.${entry.supervisorComment?.trim() ? ` Feedback: ${entry.supervisorComment.trim()}` : ''}`
+              : kind === 'missed'
+                ? `${actorName} closed it as not submitted.${entry.supervisorComment?.trim() ? ` ${entry.supervisorComment.trim()}` : ''}`
+                : `${actorName} reopened it - you can edit and save it again.`,
+          href: '/student/dashboard/capstone',
+        },
+      ],
+      emailed ? new Set([student.studentId.toLowerCase()]) : new Set()
+    );
   } catch (err) {
     console.error('notifyStudentOfDecision failed:', err);
   }
@@ -481,14 +502,25 @@ export async function flushStudentFeedbackEmails(group: ICapstoneGroup, reviewer
     byStudent.get(k)!.push(e);
   }
   const [students, course] = await Promise.all([
-    StudentAccount.find({ _id: { $in: [...byStudent.keys()] } }).select('name email').lean(),
+    StudentAccount.find({ _id: { $in: [...byStudent.keys()] } }).select('studentId name email').lean(),
     courseLabel(group.sessionId, group.track),
   ]);
+  const rosterEmails = await studentEmails(students.filter((st) => !st.email).map((st) => st.studentId));
+  const portal: Array<{ studentId: string; title: string; body: string; href: string }> = [];
+  const emailedIds = new Set<string>();
 
   let sent = 0;
   for (const student of students) {
     const weeks = byStudent.get(String(student._id)) || [];
-    if (!student.email || weeks.length === 0) continue;
+    if (weeks.length === 0) continue;
+    portal.push({
+      studentId: student.studentId,
+      title: weeks.length === 1 ? `Feedback on your Week ${weeks[0].weekNumber} journal` : `Feedback on ${weeks.length} weeks of your journal`,
+      body: `${reviewerName} reviewed ${weeks.map((w) => `Week ${w.weekNumber}`).join(', ')}.`,
+      href: '/student/dashboard/capstone',
+    });
+    const to = student.email || rosterEmails.get(student.studentId.toLowerCase());
+    if (!to) continue;
     const rows = weeks
       .map((w) => {
         const status = w.submittedAt ? 'Reviewed' : 'Closed as not submitted';
@@ -502,7 +534,7 @@ export async function flushStudentFeedbackEmails(group: ICapstoneGroup, reviewer
         : `[ULAB MMS] Feedback on ${weeks.length} weeks of your journal`;
     if (sent > 0) await sleep(EMAIL_GAP_MS);
     const ok = await safeSend(
-      student.email,
+      to,
       subject,
       mailShell(`
         <p>Dear ${esc(student.name || 'Student')},</p>
@@ -512,12 +544,15 @@ export async function flushStudentFeedbackEmails(group: ICapstoneGroup, reviewer
         ${button(`${baseUrl()}/student/dashboard/capstone`, 'Open my weekly journal')}
       `)
     );
-    if (ok) sent++;
-    else {
+    if (ok) {
+      sent++;
+      emailedIds.add(student.studentId.toLowerCase());
+    } else {
       // Not delivered: owe it again so the next flush retries.
       await WeeklyJournalEntry.updateMany({ _id: { $in: weeks.map((w) => w._id) }, studentNotifiedAt: claim }, { $set: { studentNotifiedAt: null } });
     }
   }
+  await recordStudentNotifications('journal', portal, emailedIds);
   return { students: sent, weeks: mine.length };
 }
 
