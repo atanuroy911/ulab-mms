@@ -4,12 +4,14 @@ import bcrypt from 'bcryptjs';
 import { isCredentialsLoginEnabled } from '@/lib/authSettings';
 import { generateToken, requireAuth, type GraphQLContext } from '../auth';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { consumeSecondFactor } from '@/lib/userTwoFactor';
 import type { Loaders } from '../dataloaders';
 
 interface LoginArgs {
   input: {
     email: string;
     password: string;
+    totpCode?: string | null;
   };
 }
 
@@ -69,6 +71,13 @@ export const userResolvers = {
 
       if (!isValid) {
         throw new Error('Invalid credentials');
+      }
+
+      // Accounts with authenticator 2FA need the code here too, or this would be a way around it.
+      if (user.totpEnabled) {
+        const code = typeof input.totpCode === 'string' ? input.totpCode.trim() : '';
+        if (!code) throw new Error('Authenticator code required');
+        if (!(await consumeSecondFactor(String(user._id), code))) throw new Error('Invalid credentials');
       }
 
       const token = generateToken({

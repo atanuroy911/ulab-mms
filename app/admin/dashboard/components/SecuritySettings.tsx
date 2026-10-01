@@ -15,15 +15,19 @@ interface Status {
   personal: boolean;
 }
 
-async function call(body: Record<string, unknown>) {
-  const res = await fetch('/api/admin/two-factor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+async function call(endpoint: string, body: Record<string, unknown>) {
+  const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Something went wrong');
   return data;
 }
 
-/** Authenticator-app 2FA for the shared admin login. */
-export default function SecuritySettings() {
+/**
+ * Authenticator-app 2FA: for the shared admin login (the admin panel's Security page), or a
+ * teacher's own account (their Settings page, `personal`).
+ */
+export default function SecuritySettings({ personal = false }: { personal?: boolean } = {}) {
+  const endpoint = personal ? '/api/auth/two-factor' : '/api/admin/two-factor';
   const [status, setStatus] = useState<Status | null>(null);
   const [setup, setSetup] = useState<{ qr: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
@@ -31,18 +35,19 @@ export default function SecuritySettings() {
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
 
   const load = () =>
-    fetch('/api/admin/two-factor')
+    fetch(endpoint)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setStatus(d))
       .catch(() => undefined);
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const run = async (body: Record<string, unknown>, after: (d: Record<string, unknown>) => void) => {
     setBusy(true);
     try {
-      after(await call(body));
+      after(await call(endpoint, body));
       setCode('');
       await load();
     } catch (e) {
@@ -79,10 +84,12 @@ export default function SecuritySettings() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Security</h2>
-        <p className="text-muted-foreground">Two-factor sign-in for the shared admin password.</p>
-      </div>
+      {!personal && (
+        <div>
+          <h2 className="text-2xl font-bold">Security</h2>
+          <p className="text-muted-foreground">Two-factor sign-in for the shared admin password.</p>
+        </div>
+      )}
 
       {backupCodes && (
         <Card className="border-amber-500/50">
@@ -136,8 +143,10 @@ export default function SecuritySettings() {
           </CardTitle>
           <CardDescription>
             {status.enabled
-              ? `Signing in with the shared admin password also asks for a 6-digit code. On since ${status.enabledAt ? new Date(status.enabledAt).toLocaleDateString() : '-'} · ${status.backupCodesLeft} backup codes left.`
-              : 'Anyone who learns the shared password can sign in. Turn this on so the password alone is not enough - and to let the shared login grant admin and coordinator roles.'}
+              ? `Signing in with ${personal ? 'your password' : 'the shared admin password'} also asks for a 6-digit code. On since ${status.enabledAt ? new Date(status.enabledAt).toLocaleDateString() : '-'} · ${status.backupCodesLeft} backup codes left.`
+              : personal
+                ? 'Someone who learns your password can sign in as you. Turn this on so your password alone is not enough. (Signing in with Google uses your Google account’s own security.)'
+                : 'Anyone who learns the shared password can sign in. Turn this on so the password alone is not enough - and to let the shared login grant admin and coordinator roles.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -152,7 +161,7 @@ export default function SecuritySettings() {
             <div className="space-y-5">
               <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
                 <li>Open Google Authenticator, Microsoft Authenticator or Authy on your phone.</li>
-                <li>Add an account and scan this code. Everyone who shares the admin login scans the same code.</li>
+                <li>Add an account and scan this code.{personal ? '' : ' Everyone who shares the admin login scans the same code.'}</li>
                 <li>Enter the 6-digit code it shows.</li>
               </ol>
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -209,7 +218,7 @@ export default function SecuritySettings() {
                   className="text-destructive hover:text-destructive"
                   disabled={busy || (!status.personal && code.length !== 6)}
                   onClick={() => {
-                    if (!confirm('Turn off two-factor sign-in? The shared password alone will sign in again, and it can no longer change roles.')) return;
+                    if (!confirm(personal ? 'Turn off two-factor sign-in? Your password alone will sign in again.' : 'Turn off two-factor sign-in? The shared password alone will sign in again, and it can no longer change roles.')) return;
                     run({ action: 'disable', code }, () => toast.success('Two-factor sign-in is off'));
                   }}
                 >

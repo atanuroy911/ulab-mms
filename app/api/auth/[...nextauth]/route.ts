@@ -1,4 +1,5 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
+import { consumeSecondFactor } from '@/lib/userTwoFactor';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
@@ -54,6 +55,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        totp: { label: 'Authenticator code', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -93,6 +95,16 @@ export const authOptions: NextAuthOptions = {
 
         if (!isPasswordValid) {
           throw new Error('Invalid password');
+        }
+
+        // Personal 2FA (lib/userTwoFactor.ts): the password alone isn't enough. The sign-in page
+        // reads TOTP_REQUIRED and asks for the code, then signs in again with it.
+        if (user.totpEnabled) {
+          const code = typeof credentials.totp === 'string' ? credentials.totp.trim() : '';
+          if (!code) throw new Error('TOTP_REQUIRED');
+          if (!(await consumeSecondFactor(String(user._id), code))) {
+            throw new Error('Wrong authenticator code. Check the time on your phone and try again.');
+          }
         }
 
         return {

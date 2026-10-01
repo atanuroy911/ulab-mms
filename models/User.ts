@@ -28,6 +28,14 @@ export interface IUser extends Document {
    *  audit fields (lib/webAdminAccount.ts). Can't sign in, is hidden from people pickers,
    *  and can never be a supervisor or evaluator. */
   systemAccount?: boolean;
+  /** Personal authenticator 2FA (lib/userTwoFactor.ts): asked for on password sign-in. The
+   *  secret fields are never selected unless asked for explicitly. */
+  totpEnabled?: boolean;
+  totpSecretEnc?: string | null;
+  totpPendingEnc?: string | null;
+  totpLastStep?: number;
+  totpBackupHashes?: string[];
+  totpEnabledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -98,6 +106,12 @@ const UserSchema: Schema = new Schema(
       type: Boolean,
       default: false,
     },
+    totpEnabled: { type: Boolean, default: false },
+    totpSecretEnc: { type: String, default: null, select: false },
+    totpPendingEnc: { type: String, default: null, select: false },
+    totpLastStep: { type: Number, default: -1, select: false },
+    totpBackupHashes: { type: [String], default: [], select: false },
+    totpEnabledAt: { type: Date, default: null },
     role: {
       type: String,
       enum: ['user', 'admin'],

@@ -140,6 +140,8 @@ export const typeDefs = `#graphql
   input LoginInput {
     email: String!
     password: String!
+    # Required when the account has authenticator 2FA on.
+    totpCode: String
   }
 
   input CourseInput {

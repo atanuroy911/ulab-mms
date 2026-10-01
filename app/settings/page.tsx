@@ -9,6 +9,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import SecuritySettings from '@/app/admin/dashboard/components/SecuritySettings';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -336,6 +337,10 @@ export default function SettingsPage() {
         </Card>
 
         {/* Linked Accounts */}
+        <div id="two-factor" className="scroll-mt-20 mb-6">
+          <SecuritySettings personal />
+        </div>
+
         <Card id="linked-accounts" className="scroll-mt-20 mb-6">
           <CardHeader>
             <CardTitle>Linked Accounts</CardTitle>

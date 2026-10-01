@@ -40,6 +40,8 @@ interface Account {
   departmentId: string | null;
   coordinatorDepartments: string[];
   provider: 'google' | 'credentials';
+  /** The account's own authenticator 2FA is on. */
+  twoFactorEnabled?: boolean;
   /** Invited as a capstone supervisor/evaluator but hasn't set up the account yet. */
   invitePending?: boolean;
   inviteExpired?: boolean;
@@ -760,6 +762,39 @@ export default function AccountManagement() {
             <DialogDescription>{editingAccount?.email}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {editingAccount?.twoFactorEnabled && (
+              <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+                <span>Two-factor sign-in is on</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={editSaving}
+                  onClick={async () => {
+                    if (!editingAccount || !confirm(`Reset two-factor sign-in for ${editingAccount.name}? Use this when they've lost their phone - they can sign in with their password alone and set it up again.`)) return;
+                    setEditSaving(true);
+                    try {
+                      const res = await fetch(`/api/admin/accounts/${editingAccount._id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ resetTwoFactor: true }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || 'Failed');
+                      notify.success('Two-factor sign-in reset');
+                      setEditingAccount({ ...editingAccount, twoFactorEnabled: false });
+                      await fetchAccounts();
+                    } catch (e) {
+                      notify.error(e instanceof Error ? e.message : 'Failed to reset');
+                    } finally {
+                      setEditSaving(false);
+                    }
+                  }}
+                >
+                  Reset 2FA
+                </Button>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="account-name">Name</Label>
               <Input id="account-name" value={editName} onChange={(e) => setEditName(e.target.value)} />

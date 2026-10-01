@@ -39,6 +39,9 @@ function SignInForm() {
     () => GOOGLE_AUTH_ERROR_MESSAGES[searchParams.get('reason') || ''] || ''
   );
   const [loading, setLoading] = useState(false);
+  // Accounts with authenticator 2FA: the password was right, now the 6-digit code.
+  const [needCode, setNeedCode] = useState(false);
+  const [totp, setTotp] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [credentialsLoginEnabled, setCredentialsLoginEnabled] = useState(true);
   // Admin developer setting: accept any email domain (shows a full email box, not username@ulab).
@@ -97,10 +100,13 @@ function SignInForm() {
       const result = await signIn('credentials', {
         email: formData.email,
         password: formData.password,
+        ...(needCode ? { totp } : {}),
         redirect: false,
       });
 
-      if (result?.error) {
+      if (result?.error === 'TOTP_REQUIRED') {
+        setNeedCode(true);
+      } else if (result?.error) {
         setError(result.error);
         notify.auth.signInError(result.error);
       } else {
@@ -239,6 +245,27 @@ function SignInForm() {
                       </Button>
                     </div>
                   </div>
+
+                  {needCode && (
+                    <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                      <Label htmlFor="totp">Authenticator code</Label>
+                      <Input
+                        id="totp"
+                        value={totp}
+                        onChange={(e) => setTotp(e.target.value.trim().slice(0, 11))}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        autoFocus
+                        required
+                        disabled={loading}
+                        className="h-11 text-center font-mono text-lg tracking-[0.3em]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Your account has two-factor sign-in. Enter the 6-digit code from your authenticator app, or one of your backup codes.
+                      </p>
+                    </div>
+                  )}
 
                   <Button
                     type="submit"

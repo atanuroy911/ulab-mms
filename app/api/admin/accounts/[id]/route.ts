@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { turnOff } from '@/lib/userTwoFactor';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import Course from '@/models/Course';
@@ -90,14 +91,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // strongly authenticated admin: an admin-role account, or the shared admin login completed
     // with its authenticator code (lib/adminTotp.ts). The password alone isn't enough.
     // Renaming an account (name only) stays available to any admin session.
-    const isPrivilegeChange = roles !== undefined || departmentId !== undefined || coordinatorDepartments !== undefined;
+    const resetTwoFactor = body?.resetTwoFactor === true;
+    const isPrivilegeChange = roles !== undefined || departmentId !== undefined || coordinatorDepartments !== undefined || resetTwoFactor;
     if (isPrivilegeChange && !access.verified) {
       return NextResponse.json(
         {
           error:
             access.via === 'shared'
-              ? 'Changing roles or departments needs two-factor sign-in. Set up the authenticator in Admin > Security, then sign in again with the code.'
-              : 'Changing roles or departments needs an admin sign-in',
+              ? 'Changing roles, departments or two-factor settings needs two-factor sign-in. Set up the authenticator in Admin > Security, then sign in again with the code.'
+              : 'Changing roles, departments or two-factor settings needs an admin sign-in',
           needsTwoFactor: access.via === 'shared',
         },
         { status: 403 }
@@ -151,6 +153,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (departmentId !== undefined) user.departmentId = departmentId as any;
     if (normalizedCoordinatorDepartments !== undefined) user.coordinatorDepartments = normalizedCoordinatorDepartments;
     await user.save();
+    // Lost phone: the account signs in with the password alone until 2FA is set up again.
+    if (resetTwoFactor) await turnOff(String(user._id));
 
     return NextResponse.json({
       account: {
@@ -161,6 +165,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         roles: user.roles?.length ? user.roles : ['teacher'],
         departmentId: user.departmentId ? String(user.departmentId) : null,
         coordinatorDepartments: user.coordinatorDepartments || [],
+        twoFactorEnabled: resetTwoFactor ? false : !!user.totpEnabled,
       },
     });
   } catch (error) {
