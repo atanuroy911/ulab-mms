@@ -1,3 +1,15 @@
+# [1.31.0](https://github.com/atanuroy911/ulab-mms/compare/v1.30.0...v1.31.0) (2026-10-02)
+
+
+### Bug Fixes
+
+* **capstone:** weekly journal - the supervisor is emailed once per group per week, when its last active member submits (one email listing every member), not on every save or edit; a reopened week's resubmission and a late joiner's first entry still go on their own ([0ff76bb](https://github.com/atanuroy911/ulab-mms/commit/0ff76bbddc6418a377d799d48280fce167d8dec0))
+
+
+### Features
+
+* **capstone:** grading schemes in cards or a list - remembered per device ([7b78568](https://github.com/atanuroy911/ulab-mms/commit/7b78568ce3540c3d37359db3fc8c300322dfc29e))
+
 # [1.30.0](https://github.com/atanuroy911/ulab-mms/compare/v1.29.0...v1.30.0) (2026-10-02)
 
 
