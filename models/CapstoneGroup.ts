@@ -134,6 +134,9 @@ export interface ICapstoneGroup extends Document {
   /** When every member's journal was closed and the journal marks were in - the coordinator
    *  was notified then. Cleared if an entry is reopened (lib/capstoneJournalWorkflow.ts). */
   journalCompletedAt?: Date | null;
+  /** Weeks whose journals the supervisor was emailed about - once every active member had
+   *  submitted (lib/capstoneJournalWorkflow.ts). Claimed atomically so it is sent once. */
+  journalWeeksNotified?: number[];
   previousGroupId?: mongoose.Types.ObjectId | null;
   /**
    * Set once this group has been moved on to the next session (lib/capstoneProgression.ts):
@@ -280,6 +283,10 @@ const CapstoneGroupSchema: Schema = new Schema(
     journalCompletedAt: {
       type: Date,
       default: null,
+    },
+    journalWeeksNotified: {
+      type: [Number],
+      default: [],
     },
     previousGroupId: {
       type: Schema.Types.ObjectId,

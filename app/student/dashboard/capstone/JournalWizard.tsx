@@ -209,7 +209,7 @@ export function JournalWizard({
               </div>
               <p className="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
                 <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-                Your supervisor is emailed when you submit. You can still edit it until they review it - after that it&apos;s locked.
+                Your supervisor is emailed once everyone in your group has submitted this week. You can still edit it until they review it - after that it&apos;s locked.
               </p>
             </div>
           )}

@@ -134,7 +134,7 @@ const STUDENT: Slide[] = [
     icon: PenLine,
     title: 'Write a journal entry each week',
     body: 'Press "Add journal entry" and answer a few short questions, one at a time.',
-    steps: ['What you worked on (required).', 'What you finished, any problems, and your plan (optional).', 'Check your answers and submit - your supervisor is emailed.'],
+    steps: ['What you worked on (required).', 'What you finished, any problems, and your plan (optional).', 'Check your answers and submit - your supervisor is emailed once the whole group has submitted the week.'],
   },
   {
     icon: MessageSquareText,

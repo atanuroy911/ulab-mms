@@ -13,9 +13,12 @@ import { recordStudentNotifications, studentEmails } from '@/lib/studentNotify';
 /**
  * The weekly-journal review cycle's server side (states in lib/capstoneJournalStatus.ts):
  *
- *   student saves a week   -> the supervisor is emailed (first save always; later edits at
- *                             most every UPDATE_EMAIL_GAP_MS, so a student fixing typos
- *                             doesn't flood their inbox)
+ *   student saves a week   -> nothing yet. When the LAST active member of the group has
+ *                             submitted that week, the supervisor gets ONE email for the
+ *                             group's week (CapstoneGroup.journalWeeksNotified). Edits send
+ *                             nothing. Emailed on their own: a resubmission of a week a
+ *                             coordinator reopened, and a first entry for a week already
+ *                             announced (a member who joined later).
  *   supervisor reviews     -> one pass: feedback is emailed to the student and the entry locks
  *   supervisor closes a    -> for a week never written, so the group can still finish
  *     missing week
@@ -27,7 +30,6 @@ import { recordStudentNotifications, studentEmails } from '@/lib/studentNotify';
  * Emails never fail the request that triggered them - the action already happened.
  */
 
-export const UPDATE_EMAIL_GAP_MS = 30 * 60 * 1000;
 
 const baseUrl = () => process.env.NEXTAUTH_URL || '';
 
@@ -63,35 +65,110 @@ async function courseLabel(sessionId: unknown, track: string) {
   return `${session?.department || ''} Capstone ${track}${semester ? ` (${semester})` : ''}`;
 }
 
-/** Student saved a week: tell the supervisor, unless they were told about this entry very recently. */
+const excerpt = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
+
+/** One student's week on its own: a reopened week resubmitted, or a late joiner's first entry. */
+async function emailSingleEntry(group: ICapstoneGroup, entry: IWeeklyJournalEntry, verb: string) {
+  const [supervisor, student, course] = await Promise.all([
+    User.findById(group.supervisorId).select('name email').lean<{ name?: string; email?: string }>(),
+    StudentAccount.findById(entry.studentAccountId).select('name studentId').lean<{ name?: string; studentId?: string }>(),
+    courseLabel(group.sessionId, group.track),
+  ]);
+  if (!supervisor?.email) return;
+  const who = `${student?.name || 'A student'}${student?.studentId ? ` (${student.studentId})` : ''}`;
+  const ok = await safeSend(
+    supervisor.email,
+    `[ULAB MMS] Journal ${verb}: ${student?.name || 'Student'} - Week ${entry.weekNumber}`,
+    mailShell(`
+      <p>Dear ${esc(supervisor.name || 'Supervisor')},</p>
+      <p><strong>${esc(who)}</strong> ${verb} their <strong>Week ${entry.weekNumber}</strong> journal for
+        <strong>${esc(group.projectTitle)}</strong> (${esc(course)}, Group ${group.groupNumber}).</p>
+      ${quote(excerpt(entry.workDone, 1200))}
+      <p>Give your feedback once you've read it. Your feedback is final: the student is emailed it and can no
+        longer edit that week.</p>
+      ${button(`${baseUrl()}/capstone/groups/${group._id}?student=${entry.studentAccountId}`, 'Review journal')}
+    `)
+  );
+  if (ok) await WeeklyJournalEntry.updateOne({ _id: entry._id }, { $set: { supervisorNotifiedAt: new Date() } });
+}
+
+/**
+ * A student saved a week. The supervisor hears about a week once, when the group's last
+ * active member has submitted it - one email for the whole group, not one per student.
+ * Members whose week was closed as not submitted count as done. Edits send nothing.
+ */
 export async function notifySupervisorOfEntry(group: ICapstoneGroup, entry: IWeeklyJournalEntry, firstSubmission: boolean) {
   try {
-    const last = entry.supervisorNotifiedAt ? new Date(entry.supervisorNotifiedAt).getTime() : 0;
-    if (!firstSubmission && Date.now() - last < UPDATE_EMAIL_GAP_MS) return;
+    if (!group.supervisorId) return;
+    const week = entry.weekNumber;
 
-    const [supervisor, student, course] = await Promise.all([
+    // A week a coordinator reopened: its resubmission goes to the supervisor on its own.
+    if (entry.reopenedAt && !entry.supervisorNotifiedAt) {
+      await emailSingleEntry(group, entry, 'resubmitted');
+      return;
+    }
+
+    const fresh = await CapstoneGroup.findById(group._id).select('members journalWeeksNotified').lean();
+    if (!fresh) return;
+    if ((fresh.journalWeeksNotified || []).includes(week)) {
+      // Already announced: only a first entry is news (a member who joined after that).
+      if (firstSubmission) await emailSingleEntry(group, entry, 'submitted');
+      return;
+    }
+
+    const memberIds = fresh.members.filter((m) => !m.removedAt).map((m) => String(m.studentAccountId));
+    const entries = await WeeklyJournalEntry.find({ sessionId: group.sessionId, studentAccountId: { $in: memberIds }, weekNumber: week })
+      .select('studentAccountId workDone submittedAt supervisorReviewedAt')
+      .lean();
+    const byStudent = new Map(entries.map((e) => [String(e.studentAccountId), e]));
+    const done = (id: string) => {
+      const e = byStudent.get(id);
+      return !!e && (!!e.submittedAt || !!e.supervisorReviewedAt);
+    };
+    if (memberIds.length === 0 || !memberIds.every(done)) return;
+
+    // Claim the week: one email per group per week, even when the last two save at once.
+    const claimed = await CapstoneGroup.updateOne({ _id: group._id, journalWeeksNotified: { $ne: week } }, { $addToSet: { journalWeeksNotified: week } });
+    if (claimed.modifiedCount !== 1) return;
+
+    const [supervisor, students, course] = await Promise.all([
       User.findById(group.supervisorId).select('name email').lean<{ name?: string; email?: string }>(),
-      StudentAccount.findById(entry.studentAccountId).select('name studentId').lean<{ name?: string; studentId?: string }>(),
+      StudentAccount.find({ _id: { $in: memberIds } }).select('name studentId').lean(),
       courseLabel(group.sessionId, group.track),
     ]);
     if (!supervisor?.email) return;
-
-    const who = `${student?.name || 'A student'}${student?.studentId ? ` (${student.studentId})` : ''}`;
-    const verb = firstSubmission ? 'submitted' : 'updated';
+    const nameOf = new Map(students.map((st) => [String(st._id), st]));
+    const waiting = memberIds.filter((id) => byStudent.get(id)?.submittedAt && !byStudent.get(id)?.supervisorReviewedAt);
+    const rows = memberIds
+      .map((id) => {
+        const e = byStudent.get(id)!;
+        const st = nameOf.get(id);
+        const who = `${esc(st?.name || 'Student')}${st?.studentId ? ` (${esc(st.studentId)})` : ''}`;
+        const state = !e.submittedAt ? 'closed as not submitted' : e.supervisorReviewedAt ? 'already reviewed' : 'waiting for your review';
+        return `<p style="margin:14px 0 4px"><strong>${who}</strong> - ${state}</p>${e.submittedAt && !e.supervisorReviewedAt ? quote(excerpt(e.workDone || '', 600)) : ''}`;
+      })
+      .join('');
     const ok = await safeSend(
       supervisor.email,
-      `[ULAB MMS] Journal ${verb}: ${student?.name || 'Student'} - Week ${entry.weekNumber}`,
+      `[ULAB MMS] Week ${week} journals are in: Group ${group.groupNumber} - ${group.projectTitle}`,
       mailShell(`
         <p>Dear ${esc(supervisor.name || 'Supervisor')},</p>
-        <p><strong>${esc(who)}</strong> ${verb} their <strong>Week ${entry.weekNumber}</strong> journal for
-          <strong>${esc(group.projectTitle)}</strong> (${esc(course)}, Group ${group.groupNumber}).</p>
-        ${quote(entry.workDone.length > 1200 ? `${entry.workDone.slice(0, 1200)}…` : entry.workDone)}
-        <p>Give your feedback once you've read it. Your feedback is final: the student is emailed it and can no
-          longer edit that week.</p>
-        ${button(`${baseUrl()}/capstone/groups/${group._id}?student=${entry.studentAccountId}`, 'Review journal')}
+        <p>Every member of <strong>${esc(group.projectTitle)}</strong> (${esc(course)}, Group ${group.groupNumber}) has
+          submitted their <strong>Week ${week}</strong> journal. ${waiting.length === 1 ? '1 entry is' : `${waiting.length} entries are`} waiting for your review.</p>
+        ${rows}
+        <p>Your feedback is final: each student is emailed it and can no longer edit that week.</p>
+        ${button(`${baseUrl()}/capstone/groups/${group._id}?tab=journal`, 'Review journals')}
       `)
     );
-    if (ok) await WeeklyJournalEntry.updateOne({ _id: entry._id }, { $set: { supervisorNotifiedAt: new Date() } });
+    if (ok) {
+      await WeeklyJournalEntry.updateMany(
+        { sessionId: group.sessionId, studentAccountId: { $in: waiting }, weekNumber: week },
+        { $set: { supervisorNotifiedAt: new Date() } }
+      );
+    } else {
+      // Not sent: release the week so the next save tries again.
+      await CapstoneGroup.updateOne({ _id: group._id }, { $pull: { journalWeeksNotified: week } });
+    }
   } catch (err) {
     console.error('notifySupervisorOfEntry failed:', err);
   }
