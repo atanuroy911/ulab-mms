@@ -40,6 +40,7 @@ interface Course {
   section: string;
   courseType: 'Theory' | 'Lab';
   isArchived: boolean;
+  status?: 'running' | 'finished';
   createdAt: string;
   aliasEnabled?: boolean;
   alternateCode?: string;
@@ -900,6 +901,9 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 flex-wrap mt-1">
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">{course.semester} {course.year}</Badge>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sec {course.section}</Badge>
+                    {course.status === 'finished' && (
+                      <Badge className="text-[10px] px-1.5 py-0 bg-emerald-600 text-white hover:bg-emerald-600">Finished</Badge>
+                    )}
                     {course.classTime && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
@@ -1036,6 +1040,7 @@ export default function Dashboard() {
                     <Badge variant="outline">{course.semester}</Badge>
                     <Badge variant="outline">{course.year}</Badge>
                     <Badge variant="outline">Section {course.section}</Badge>
+                    {course.status === 'finished' && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Finished</Badge>}
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground border-t pt-3">
                     <span className="flex items-center gap-1.5">

@@ -29,6 +29,15 @@ export interface ICourse extends Document {
     projectCoMode?: 'marks' | 'weightage'; // what maxMarks['Project'] sums to: raw total marks across Project exams (default), or projectWeightage %
   };
   coPoMappingEnabled?: boolean; // Whether this course tracks CO-PO mapping at all; when false, missing-CO-PO warnings are suppressed
+  /**
+   * running: grades still being worked on. finished: the teacher declared the grades final;
+   * `finalGrades` holds them, and later changes become grade changes (lib/gradeChange.ts).
+   * Marks stay editable either way.
+   */
+  status?: 'running' | 'finished';
+  finishedAt?: Date | null;
+  /** The official grades: taken when the course was finished, updated as grade change forms are sent. */
+  finalGrades?: Array<{ studentRecordId: mongoose.Types.ObjectId; studentId: string; grade: string; total: number }>;
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived
   aliasEnabled?: boolean; // Whether some students are grouped under an alternate course code
@@ -146,6 +155,27 @@ const CourseSchema: Schema = new Schema(
     coPoMappingEnabled: {
       type: Boolean,
       default: true,
+    },
+    status: {
+      type: String,
+      enum: ['running', 'finished'],
+      default: 'running',
+    },
+    finishedAt: {
+      type: Date,
+      default: null,
+    },
+    finalGrades: {
+      type: [
+        {
+          _id: false,
+          studentRecordId: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
+          studentId: { type: String, required: true },
+          grade: { type: String, required: true },
+          total: { type: Number, default: 0 },
+        },
+      ],
+      default: [],
     },
     isArchived: {
       type: Boolean,

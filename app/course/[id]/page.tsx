@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
@@ -11,6 +11,7 @@ import { AppHeader } from '@/app/components/AppHeader';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
+import { CourseStatusCard } from './components/CourseStatusCard';
 import ExamsView from './components/ExamsView';
 import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
@@ -138,6 +139,7 @@ interface Course {
   _id: string;
   name: string;
   code: string;
+  status?: 'running' | 'finished';
   classTime?: string;
   classRoom?: string;
   classDays?: string[];
@@ -174,6 +176,26 @@ export default function CoursePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
+  // Changes whenever anything a grade depends on changes - the course status card then
+  // re-checks for grade changes on a finished course.
+  const gradeInputsKey = useMemo(() => {
+    const markSum = marks.reduce((sum, m, i) => sum + (Number(m.rawMark) || 0) * ((i % 97) + 1) + (Number(m.weightedMark) || 0), 0);
+    const examSum = exams.reduce((sum, e) => sum + (Number(e.totalMarks) || 0) + (Number(e.weightage) || 0) * 3, 0);
+    return [
+      marks.length,
+      markSum.toFixed(4),
+      exams.length,
+      examSum,
+      students.length,
+      students.filter((st) => st.withdrawn).length,
+      course?.gradingScale,
+      course?.quizWeightage,
+      course?.quizAggregation,
+      course?.assignmentWeightage,
+      course?.assignmentAggregation,
+      course?.projectWeightage,
+    ].join('|');
+  }, [marks, exams, students, course]);
   const [loading, setLoading] = useState(true);
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionSummary[]>([]);
 
@@ -2078,6 +2100,11 @@ export default function CoursePage() {
             <Badge variant="secondary" className="ml-1">
               {course.courseType}
             </Badge>
+            {course.status === 'finished' && (
+              <Badge className="ml-1 bg-emerald-600 text-white hover:bg-emerald-600" title="Grades are final; later changes need a grade change form">
+                Finished
+              </Badge>
+            )}
           </>
         }
         actions={[
@@ -2363,6 +2390,16 @@ export default function CoursePage() {
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto p-6">
+            {/* Running / finished, and grade change forms once finished */}
+            <CourseStatusCard
+              key={activeView === 'overview' ? 'full' : 'compact'}
+              courseId={course._id}
+              studentCount={students.length}
+              marksKey={gradeInputsKey}
+              compact={activeView !== 'overview'}
+              onStatus={(status) => setCourse((c) => (c && c.status !== status ? { ...c, status } : c))}
+              onOpenOverview={() => setActiveView('overview')}
+            />
             {/* Overview View */}
             {activeView === 'overview' && (
               <OverviewView

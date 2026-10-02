@@ -55,7 +55,10 @@ export async function GET(request: NextRequest) {
     const combinedCourses = await Course.find({
       ...query,
       userId: new mongoose.Types.ObjectId(userObjectId),
-    }).sort({
+    })
+      // The official grades of finished courses aren't needed on the course list.
+      .select('-finalGrades')
+      .sort({
       createdAt: -1,
     });
 
