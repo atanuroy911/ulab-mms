@@ -11,6 +11,8 @@ import {
   closeMissedWeek,
   correctEntry,
   deleteEntry,
+  noteJournalChange,
+  retractResponse,
   flushStudentFeedbackEmails,
   journalMarksQuery,
   journalStatusFrom,
@@ -82,6 +84,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 //   { action: 'reviewMany', entryIds, feedback }                  - the same, for many entries
 //   { action: 'missed', studentAccountId, weekNumber, feedback? } - close a week never written
 //   { action: 'reopen', entryId }                                 - coordinator/admin only
+// Corrections, for mistakes (supervisor or coordinator; the student sees a portal note):
+//   { action: 'correct', entryId, workDone?, supervisorComment? } - edit in place, stamped correctedAt
+//   { action: 'retract', entryId }                                - take back a response
+//   { action: 'delete', entryId }                                 - delete the week's entry
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const actor = await getCapstoneActor();
@@ -91,8 +97,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json().catch(() => ({}));
     const action = body?.action;
     const feedback = typeof body?.feedback === 'string' ? body.feedback.trim() : '';
-    if (!['review', 'reviewMany', 'missed', 'reopen', 'notify', 'correct', 'delete'].includes(action)) {
-      return NextResponse.json({ error: 'action must be review, reviewMany, missed, reopen, notify, correct or delete' }, { status: 400 });
+    if (!['review', 'reviewMany', 'missed', 'reopen', 'notify', 'correct', 'retract', 'delete'].includes(action)) {
+      return NextResponse.json({ error: 'action must be review, reviewMany, missed, reopen, notify, correct, retract or delete' }, { status: 400 });
     }
     if (feedback.length > 5000) {
       return NextResponse.json({ error: 'Please keep feedback under 5,000 characters' }, { status: 400 });
@@ -109,8 +115,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
     const manager = canManageDepartment(actor, session.department);
-    const needsSupervisorOrManager = ['review', 'reviewMany', 'missed', 'correct', 'delete'];
-    if (action === 'reopen' ? !manager : needsSupervisorOrManager.includes(action) && !isGroupSupervisor(actor, group) && !manager) {
+    if (action === 'reopen' ? !manager : !isGroupSupervisor(actor, group) && !manager) {
       return NextResponse.json(
         { error: action === 'reopen' ? 'Only a coordinator can reopen a reviewed week' : 'Only the supervisor or a coordinator can do that' },
         { status: 403 }
@@ -185,6 +190,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (supervisorComment !== undefined && supervisorComment.length > 5000) return NextResponse.json({ error: 'Please keep the feedback under 5,000 characters' }, { status: 400 });
       const result = await correctEntry(group, entryId, actor.userId, { workDone, supervisorComment });
       if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      console.warn(`[journal] ${actorName} corrected ${workDone !== undefined ? 'the entry' : ''}${workDone !== undefined && supervisorComment !== undefined ? ' and ' : ''}${supervisorComment !== undefined ? 'the response' : ''} of entry ${entryId}`);
+      if (workDone !== undefined) after(() => noteJournalChange(String(result.value.studentAccountId), result.value.weekNumber, 'corrected', actorName));
       const status = await syncJournalCompletion(group._id, { schedule: after, session, group });
       return NextResponse.json({ entry: result.value, status });
     }
@@ -194,8 +201,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (!mongoose.Types.ObjectId.isValid(entryId)) return NextResponse.json({ error: 'entryId is required' }, { status: 400 });
       const result = await deleteEntry(group, entryId);
       if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      console.warn(`[journal] ${actorName} deleted week ${result.value.weekNumber} of student ${result.value.studentAccountId}`);
+      after(() => noteJournalChange(result.value.studentAccountId, result.value.weekNumber, 'deleted', actorName));
       const status = await syncJournalCompletion(group._id, { schedule: after, session, group });
       return NextResponse.json({ deleted: true, weekNumber: result.value.weekNumber, status });
+    }
+
+    if (action === 'retract') {
+      const entryId = typeof body?.entryId === 'string' ? body.entryId : '';
+      if (!mongoose.Types.ObjectId.isValid(entryId)) return NextResponse.json({ error: 'entryId is required' }, { status: 400 });
+      const result = await retractResponse(group, entryId, actor.userId);
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      console.warn(`[journal] ${actorName} removed the response on entry ${entryId}`);
+      if (result.value.submittedAt) after(() => noteJournalChange(String(result.value.studentAccountId), result.value.weekNumber, 'retracted', actorName));
+      const status = await syncJournalCompletion(group._id, { schedule: after, session, group });
+      return NextResponse.json({ retracted: true, status });
     }
 
     // reopen

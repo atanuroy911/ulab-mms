@@ -380,6 +380,13 @@ export default function CapstonePage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-semibold">{s.label}</h2>
                     {s.status && <SessionStatusPill status={s.status} />}
+                    {s.key !== 'none' && s.groups.some((g) => g.role === 'supervisor') && (
+                      <Button asChild size="sm" variant="outline" className="ml-auto h-8">
+                        <a href={`/api/capstone/sessions/${s.key}/journal-report?mine=1`} target="_blank" rel="noopener noreferrer" title="Every group you supervise in this session, as one PDF">
+                          <FileText className="mr-1.5 h-3.5 w-3.5" /> Journals PDF
+                        </a>
+                      </Button>
+                    )}
                   </div>
                   {period === 'past' ? (
                     <PastGroupList groups={s.groups} />

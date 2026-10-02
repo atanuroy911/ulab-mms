@@ -464,9 +464,9 @@ export async function reopenEntry(
 
 
 /**
- * Supervisor (or coordinator) corrects a closed entry: edits the student's text, the
- * supervisor response, or both. The entry stays reviewed/closed - this is not a reopen.
- * `correctedAt` / `correctedBy` are stamped so the PDF report can show the edit.
+ * Supervisor (or coordinator) fixes a mistake in place: the student's text of a written
+ * week, and/or the response on a closed week. Nothing is reopened or re-sent;
+ * `correctedAt` / `correctedBy` are stamped so the record (and the PDF) shows the edit.
  */
 export async function correctEntry(
   group: ICapstoneGroup,
@@ -475,54 +475,90 @@ export async function correctEntry(
   fields: { workDone?: string; supervisorComment?: string }
 ): Promise<JournalOpResult<IWeeklyJournalEntry>> {
   if (fields.workDone === undefined && fields.supervisorComment === undefined) {
-    return { ok: false, status: 400, error: 'Provide workDone or supervisorComment to correct' };
+    return { ok: false, status: 400, error: 'Nothing to correct' };
   }
   const memberIds = group.members.filter((m) => !m.removedAt).map((m) => String(m.studentAccountId));
+  const existing = await WeeklyJournalEntry.findOne({ _id: entryId, sessionId: group.sessionId, studentAccountId: { $in: memberIds } })
+    .select('submittedAt supervisorReviewedAt')
+    .lean();
+  if (!existing) return { ok: false, status: 404, error: 'Entry not found. Refresh to see the journal as it is now.' };
   const set: Record<string, unknown> = { correctedAt: new Date(), correctedBy: correctorId };
-  if (fields.workDone !== undefined) set.workDone = fields.workDone.trim();
-  if (fields.supervisorComment !== undefined) set.supervisorComment = fields.supervisorComment.trim();
-
-  const entry = await WeeklyJournalEntry.findOneAndUpdate(
-    {
-      _id: entryId,
-      sessionId: group.sessionId,
-      studentAccountId: { $in: memberIds },
-      supervisorReviewedAt: { $ne: null }, // must already be closed
-    },
-    { $set: set },
-    { new: true }
-  );
-  if (!entry) {
-    return { ok: false, status: 409, error: 'Entry not found, or it has not been reviewed yet. Only closed entries can be corrected.' };
+  if (fields.workDone !== undefined) {
+    if (!existing.submittedAt) return { ok: false, status: 409, error: 'The student never wrote this week, so there is no text to correct.' };
+    if (!fields.workDone.trim()) return { ok: false, status: 400, error: 'The entry cannot be empty. To remove it, delete the entry instead.' };
+    set.workDone = fields.workDone.trim();
   }
+  if (fields.supervisorComment !== undefined) {
+    if (!existing.supervisorReviewedAt) return { ok: false, status: 409, error: 'This week has no response yet - review it instead.' };
+    set.supervisorComment = fields.supervisorComment.trim();
+  }
+  const entry = await WeeklyJournalEntry.findOneAndUpdate({ _id: entryId }, { $set: set }, { new: true });
+  if (!entry) return { ok: false, status: 404, error: 'Entry not found. Refresh to see the journal as it is now.' };
   return { ok: true, value: entry };
 }
 
 /**
- * Supervisor (or coordinator) deletes a journal entry that was written by mistake.
- * Only works if the entry has NOT been reviewed yet (still in "submitted" state).
- * For correcting a reviewed entry, use correctEntry instead.
+ * Supervisor (or coordinator) takes back a response given by mistake. A reviewed week goes
+ * back to "waiting for review" (the student's text is kept, and they may edit it again); a
+ * week closed as not submitted goes back to "not written". No email is sent.
+ */
+export async function retractResponse(group: ICapstoneGroup, entryId: string, correctorId: string): Promise<JournalOpResult<IWeeklyJournalEntry>> {
+  const memberIds = group.members.filter((m) => !m.removedAt).map((m) => String(m.studentAccountId));
+  const existing = await WeeklyJournalEntry.findOne({
+    _id: entryId,
+    sessionId: group.sessionId,
+    studentAccountId: { $in: memberIds },
+    supervisorReviewedAt: { $ne: null },
+  });
+  if (!existing) return { ok: false, status: 409, error: 'This week has no response to remove. Refresh to see it as it is now.' };
+  if (!existing.submittedAt) {
+    await WeeklyJournalEntry.deleteOne({ _id: existing._id, submittedAt: null });
+  } else {
+    await WeeklyJournalEntry.updateOne(
+      { _id: existing._id, supervisorReviewedAt: { $ne: null } },
+      {
+        $set: { supervisorReviewedAt: null, supervisorComment: '', supervisorId: null, correctedAt: new Date(), correctedBy: correctorId },
+        $unset: { studentNotifiedAt: 1 },
+      }
+    );
+  }
+  return { ok: true, value: existing };
+}
+
+/**
+ * Supervisor (or coordinator) deletes a week written by mistake (wrong week, wrong text) -
+ * whatever its state; a response on it goes with it. The week is then "not written" again,
+ * so the student can write it afresh.
  */
 export async function deleteEntry(
   group: ICapstoneGroup,
   entryId: string
 ): Promise<JournalOpResult<{ weekNumber: number; studentAccountId: string }>> {
   const memberIds = group.members.filter((m) => !m.removedAt).map((m) => String(m.studentAccountId));
-  const existing = await WeeklyJournalEntry.findOne({
+  const existing = await WeeklyJournalEntry.findOneAndDelete({
     _id: entryId,
     sessionId: group.sessionId,
     studentAccountId: { $in: memberIds },
   }).lean();
-  if (!existing) return { ok: false, status: 404, error: 'Entry not found' };
-  if (existing.supervisorReviewedAt) {
-    return {
-      ok: false,
-      status: 409,
-      error: 'This entry has already been reviewed. Use "Correct entry" to edit it, or reopen it first.',
-    };
-  }
-  await WeeklyJournalEntry.deleteOne({ _id: entryId });
+  if (!existing) return { ok: false, status: 404, error: 'Entry not found. Refresh to see the journal as it is now.' };
   return { ok: true, value: { weekNumber: existing.weekNumber, studentAccountId: String(existing.studentAccountId) } };
+}
+
+/** A portal note (no email) when the supervisor changed a student's journal. */
+export async function noteJournalChange(studentAccountId: string, weekNumber: number, what: 'corrected' | 'deleted' | 'retracted', actorName: string) {
+  try {
+    const account = await StudentAccount.findById(studentAccountId).select('studentId').lean<{ studentId?: string }>();
+    if (!account?.studentId) return;
+    const body =
+      what === 'deleted'
+        ? `${actorName} deleted your Week ${weekNumber} journal entry. You can write that week again.`
+        : what === 'retracted'
+          ? `${actorName} took back the response on your Week ${weekNumber} journal entry. It is waiting for review again.`
+          : `${actorName} corrected your Week ${weekNumber} journal entry.`;
+    await recordStudentNotifications('capstone-journal', [{ studentId: account.studentId, title: `Week ${weekNumber} journal ${what}`, body, href: '/student/dashboard/capstone' }]);
+  } catch (err) {
+    console.error('noteJournalChange failed:', err);
+  }
 }
 
 // ── Student feedback emails, as one digest per student ──────────────────────────────────
