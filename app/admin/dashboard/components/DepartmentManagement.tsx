@@ -26,6 +26,8 @@ interface Department {
   isActive: boolean;
   headUserId: string | null;
   head: DepartmentHead | null;
+  /** The head's name as printed on forms (grade change form). */
+  headName?: string;
 }
 
 export default function DepartmentManagement() {
@@ -37,6 +39,7 @@ export default function DepartmentManagement() {
   const [name, setName] = useState('');
   const [shortCode, setShortCode] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [headName, setHeadName] = useState('');
 
   useEffect(() => {
     fetchDepartments();
@@ -62,6 +65,7 @@ export default function DepartmentManagement() {
     setName(department.name);
     setShortCode(department.shortCode);
     setIsActive(department.isActive);
+    setHeadName(department.headName || '');
     setShowDialog(true);
   };
 
@@ -71,13 +75,17 @@ export default function DepartmentManagement() {
       toast.error('Name and short code are required');
       return;
     }
+    if (editing.headName && !headName.trim()) {
+      toast.error('The head’s name can be changed but not removed');
+      return;
+    }
 
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/departments/${editing._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), shortCode: shortCode.trim(), isActive }),
+        body: JSON.stringify({ name: name.trim(), shortCode: shortCode.trim(), isActive, ...(headName.trim() ? { headName: headName.trim() } : {}) }),
       });
 
       if (!res.ok) {
@@ -135,7 +143,11 @@ export default function DepartmentManagement() {
                   </div>
                   <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
                     <UserCog className="h-3.5 w-3.5" />
-                    {dept.head ? `Head: ${dept.head.name} (${dept.head.email})` : 'No head assigned yet'}
+                    {dept.headName
+                      ? `Head (on forms): ${dept.headName}`
+                      : dept.head
+                        ? `Head: ${dept.head.name} (${dept.head.email})`
+                        : 'No head assigned yet'}
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => handleOpenDialog(dept)}>
@@ -166,6 +178,18 @@ export default function DepartmentManagement() {
             <div className="space-y-2">
               <Label htmlFor="dept-short">Short Code</Label>
               <Input id="dept-short" value={shortCode} onChange={(e) => setShortCode(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dept-head-name">Head of the department (name on forms)</Label>
+              <Input
+                id="dept-head-name"
+                value={headName}
+                placeholder={editing?.head?.name || 'e.g. Prof. Dr. Jane Doe'}
+                onChange={(e) => setHeadName(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Printed on every grade change form from this department. Coordinators can set it too. It can be changed but not removed.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="dept-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />

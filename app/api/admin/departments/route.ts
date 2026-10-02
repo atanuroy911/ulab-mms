@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         icon: d.icon,
         isActive: d.isActive,
         headUserId: d.headUserId ? String(d.headUserId) : null,
+        headName: d.headName || '',
         head: d.headUserId ? headById.get(String(d.headUserId)) || null : null,
       }))
     );

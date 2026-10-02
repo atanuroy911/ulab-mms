@@ -6,6 +6,8 @@ export interface IDepartment extends Document {
   shortCode: string;
   icon?: string;
   headUserId?: mongoose.Types.ObjectId | null;
+  /** The head's name as printed on forms (grade change form). Set by a coordinator or admin; never cleared. */
+  headName?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -38,6 +40,11 @@ const DepartmentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       default: null,
+    },
+    headName: {
+      type: String,
+      trim: true,
+      default: '',
     },
     isActive: {
       type: Boolean,

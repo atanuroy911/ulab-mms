@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await dbConnect();
 
     const body = await request.json();
-    const { name, shortCode, icon, headUserId, isActive } = body;
+    const { name, shortCode, icon, headUserId, headName, isActive } = body;
 
     const department = await Department.findById(id);
     if (!department) {
@@ -25,6 +25,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (icon !== undefined) department.icon = icon;
     if (headUserId !== undefined) department.headUserId = headUserId || null;
     if (isActive !== undefined) department.isActive = !!isActive;
+    // The head's name on forms: set or changed, never cleared.
+    if (typeof headName === 'string' && headName.trim()) department.headName = headName.trim().replace(/\s+/g, ' ').slice(0, 120);
 
     await department.save();
 
