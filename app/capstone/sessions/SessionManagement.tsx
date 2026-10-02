@@ -1066,6 +1066,30 @@ Marks they already submitted are kept.`)) return;
               onOpenGroup={(g) => setOpenGroup({ id: g._id, tab: 'manage' })}
               onSetSupervisor={(g) => setSupervisorPickerFor(groups.find((x) => x._id === g._id) || null)}
               onAddEvaluator={(g) => setEvaluatorPickerFor(groups.find((x) => x._id === g._id) || null)}
+              groupActions={{
+                onOpenStudent: (g, studentAccountId) => setOpenStudent({ groupId: g._id, studentAccountId }),
+                onAddStudents: (g) => {
+                  const row = groups.find((x) => x._id === g._id);
+                  if (!row) return;
+                  setMemberPickerFor(row);
+                  setNewMembers([]);
+                },
+                onRemoveStudent: (g, sid) => {
+                  const row = groups.find((x) => x._id === g._id);
+                  if (row) handleRemoveMember(row, sid);
+                },
+                onRemoveEvaluator: (g, evaluatorId) => {
+                  const row = groups.find((x) => x._id === g._id);
+                  if (row) handleRemoveEvaluator(row, evaluatorId);
+                },
+                onDeleteGroup: (g) => {
+                  const row = groups.find((x) => x._id === g._id);
+                  if (row) handleDeleteGroup(row);
+                },
+                onBulkReports: () => setShowBulkReports(true),
+              }}
+              onExportMarks={handleExportMarks}
+              exportingMarks={exportingMarks}
               onEmailGraders={handleRequestMarks}
               onSetupAction={handleSetupAction}
               onCourseFile={() => setShowCourseFile(true)}

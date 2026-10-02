@@ -244,7 +244,7 @@ export default function CapstonePage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : mode === 'simple' ? (
-        <SimpleMarksView groups={groups} />
+        <SimpleMarksView groups={groups} onAdvanced={() => changeMode('advanced')} />
       ) : (
         <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
           {/* At-a-glance totals (current semesters only) */}

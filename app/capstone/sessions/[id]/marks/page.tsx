@@ -186,7 +186,8 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
   }, [data, track, query, onlyMissing, columnsFor, missingIn]);
 
   // Simple mode shows one group at a time; Advanced shows every group that matches.
-  const shownGroups = mode === 'simple' ? (simpleStep === 'enter' ? visibleGroups.filter((g) => g.id === focusId) : []) : visibleGroups;
+  // The group being entered stays on screen whatever the filters say (it may just have been completed).
+  const shownGroups = mode === 'simple' ? (simpleStep === 'enter' ? (data?.groups || []).filter((g) => g.id === focusId) : []) : visibleGroups;
   const simpleList = useMemo(
     () => [...visibleGroups].sort((a, b) => Number(missingIn(b) > 0) - Number(missingIn(a) > 0) || a.groupNumber - b.groupNumber),
     [visibleGroups, missingIn]
@@ -357,9 +358,38 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
                   </Button>
                   <h2 className="text-2xl font-bold">{LABEL[component] || component}: choose a group</h2>
                 </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a group, student or grader" className="h-11 pl-9" />
+                <div className="flex flex-wrap items-center gap-2">
+                  {tracks.length > 1 && (
+                    <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="Track">
+                      {['all', ...tracks].map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          role="tab"
+                          aria-selected={track === t}
+                          onClick={() => setTrack(t)}
+                          className={cn('rounded-md px-3 py-2 text-sm font-medium', track === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                        >
+                          {t === 'all' ? 'All' : `Capstone ${t}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative min-w-48 flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a group, student or grader" className="h-11 pl-9" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOnlyMissing((v) => !v)}
+                    aria-pressed={onlyMissing}
+                    className={cn(
+                      'h-11 rounded-full border px-4 text-sm font-medium transition-colors',
+                      onlyMissing ? 'border-amber-500 bg-amber-500 text-white' : 'border-amber-500/50 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300'
+                    )}
+                  >
+                    Only missing marks
+                  </button>
                 </div>
                 <ul className="space-y-2">
                   {simpleList.map((g) => {
@@ -386,7 +416,11 @@ export default function SessionMarksEntryPage({ params }: { params: Promise<{ id
                       </li>
                     );
                   })}
-                  {simpleList.length === 0 && <li className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">No group matches.</li>}
+                  {simpleList.length === 0 && (
+                    <li className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">
+                      {onlyMissing && !query ? 'Every group has its marks in.' : 'No group matches.'}
+                    </li>
+                  )}
                 </ul>
               </section>
             )}

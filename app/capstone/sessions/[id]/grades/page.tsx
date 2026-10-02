@@ -249,7 +249,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
               </Link>
             </Button>
           )}
-          {data?.canSeeWholeSession && (
+          {data?.canSeeWholeSession && mode === 'advanced' && (
             <Button
               size="sm"
               variant={canMoveOn ? 'default' : 'outline'}
@@ -260,7 +260,7 @@ export default function SessionGradesPage({ params }: { params: Promise<{ id: st
               <span className="hidden sm:inline">Move to next session</span>
             </Button>
           )}
-          {data?.canSeeWholeSession && (
+          {data?.canSeeWholeSession && mode === 'advanced' && (
             <Button size="sm" variant="outline" onClick={exportXlsx} disabled={exporting} title="Download every group's grades, components and raw marks as an Excel workbook">
               {exporting ? (
                 <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
@@ -674,15 +674,18 @@ function SimpleGrades({
   onOpen: (member: Member, group: Group) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const tracks = [...new Set(groups.map((g) => g.track))].sort();
   const [track, setTrack] = useState(tracks[0] || 'A');
   const inTrack = groups.filter((g) => g.track === track);
   const rows = inTrack.flatMap((g) => g.members.map((m) => ({ g, m })));
-  const graded = rows.filter((r) => r.m.letter);
+  const graded = rows.filter((r) => r.m.letter && r.m.missingComponents.length === 0);
+  const withLetter = rows.filter((r) => r.m.letter);
   const missing = rows.filter((r) => r.m.missingComponents.length > 0);
-  const dist = GRADE_ORDER.map((l) => [l, graded.filter((r) => r.m.letter === l).length] as const).filter(([, n]) => n > 0);
+  const dist = GRADE_ORDER.map((l) => [l, withLetter.filter((r) => r.m.letter === l).length] as const).filter(([, n]) => n > 0);
   const q = query.trim().toLowerCase();
   const shown = rows
+    .filter((r) => !onlyMissing || !missing.length || r.m.missingComponents.length > 0)
     .filter((r) => !q || `${r.m.studentId} ${r.m.name || ''} ${r.g.projectTitle} group ${r.g.groupNumber}`.toLowerCase().includes(q))
     .sort((a, b) => a.g.groupNumber - b.g.groupNumber);
 
@@ -710,12 +713,25 @@ function SimpleGrades({
           <p className="text-3xl font-bold tabular-nums">
             {graded.length} <span className="text-lg font-normal text-muted-foreground">/ {rows.length}</span>
           </p>
-          <p className="text-sm text-muted-foreground">students graded</p>
+          <p className="text-sm text-muted-foreground">students with every mark in</p>
         </div>
-        <div className={cn('rounded-2xl border bg-card p-5', missing.length && 'border-amber-500/50')}>
+        {/* Tap to list only the students still missing a mark. */}
+        <button
+          type="button"
+          disabled={!missing.length}
+          aria-pressed={onlyMissing}
+          onClick={() => setOnlyMissing((v) => !v)}
+          className={cn(
+            'rounded-2xl border bg-card p-5 text-left transition-colors enabled:cursor-pointer enabled:hover:border-amber-500',
+            missing.length && 'border-amber-500/50',
+            onlyMissing && 'border-amber-500 ring-2 ring-amber-500/30'
+          )}
+        >
           <p className={cn('text-3xl font-bold tabular-nums', missing.length ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>{missing.length}</p>
-          <p className="text-sm text-muted-foreground">{missing.length ? 'still missing a mark' : 'nobody is missing a mark'}</p>
-        </div>
+          <p className="text-sm text-muted-foreground">
+            {missing.length ? (onlyMissing ? 'still missing a mark - showing only them' : 'still missing a mark - tap to list them') : 'nobody is missing a mark'}
+          </p>
+        </button>
         <div className="rounded-2xl border bg-card p-5">
           <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold tabular-nums">
             {dist.length ? dist.map(([l, n]) => <span key={l}>{l}: {n}</span>) : <span className="font-normal text-muted-foreground">No grades yet</span>}

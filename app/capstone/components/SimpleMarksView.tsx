@@ -60,10 +60,11 @@ const ROLE = {
 } as const;
 
 /**
- * The default marks screen: pick a role with one big button, then pick a group. Everything
- * else (journals, reminders, past semesters) lives in the Advanced view.
+ * The default screen: pick a role with one big button, then pick a group - its marks, and (for a
+ * supervisor) its weekly journals. Past semesters, reminders and the journals PDF live in the
+ * Advanced view, which the home screen points to.
  */
-export function SimpleMarksView({ groups }: { groups: SimpleGroup[] }) {
+export function SimpleMarksView({ groups, onAdvanced }: { groups: SimpleGroup[]; onAdvanced?: () => void }) {
   const running = useMemo(() => groups.filter((g) => isRunning(g.session?.status)), [groups]);
   const [role, setRole] = useState<Role | null>(null);
 
@@ -117,6 +118,8 @@ export function SimpleMarksView({ groups }: { groups: SimpleGroup[] }) {
         {(['supervisor', 'evaluator'] as const).map((r) => {
           const mine = running.filter((g) => g.role === r);
           const owed = mine.reduce((n, g) => n + left(g), 0);
+          // A supervisor's most frequent job: journal weeks waiting for review.
+          const journals = r === 'supervisor' ? mine.reduce((n, g) => n + g.journalUnreviewed, 0) : 0;
           const { icon: Icon, button } = ROLE[r];
           return (
             <button
@@ -145,6 +148,11 @@ export function SimpleMarksView({ groups }: { groups: SimpleGroup[] }) {
                     ) : (
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400">all marks in</span>
                     )}
+                    {journals > 0 && (
+                      <span className="mt-1 block font-semibold text-amber-600 dark:text-amber-400">
+                        {journals} journal {journals === 1 ? 'week' : 'weeks'} to review
+                      </span>
+                    )}
                   </>
                 )}
               </span>
@@ -152,6 +160,15 @@ export function SimpleMarksView({ groups }: { groups: SimpleGroup[] }) {
           );
         })}
       </div>
+      {onAdvanced && (
+        <p className="text-center text-sm text-muted-foreground">
+          Past semesters, journal reminders and the journals PDF are in{' '}
+          <button type="button" onClick={onAdvanced} className="font-medium text-primary hover:underline">
+            Advanced
+          </button>
+          .
+        </p>
+      )}
     </div>
   );
 }
@@ -196,10 +213,17 @@ function SimpleGroupCard({ group: g }: { group: SimpleGroup }) {
               {done ? 'View marks' : 'Enter marks'} <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
           </Button>
-          {g.role === 'supervisor' && g.journalUnreviewed > 0 && (
-            <Button asChild size="lg" variant="outline" className="h-12 text-base">
+          {/* The supervisor always has the journal one click away - highlighted while weeks wait. */}
+          {g.role === 'supervisor' && (
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className={cn('h-12 text-base', g.journalUnreviewed > 0 && 'border-amber-500/60 text-amber-800 dark:text-amber-300')}
+            >
               <Link href={`/capstone/groups/${g._id}`}>
-                <PenLine className="mr-2 h-4 w-4" /> Review {g.journalUnreviewed} journal {g.journalUnreviewed === 1 ? 'week' : 'weeks'}
+                <PenLine className="mr-2 h-4 w-4" />
+                {g.journalUnreviewed > 0 ? `Review ${g.journalUnreviewed} journal ${g.journalUnreviewed === 1 ? 'week' : 'weeks'}` : 'Weekly journal'}
               </Link>
             </Button>
           )}

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { isRunning, isPastSession } from '@/lib/capstoneStatus';
-import { SimpleGroupsView, type SimpleGroup } from './SimpleGroupsView';
+import { SimpleGroupsView, type SimpleGroup, type SimpleGroupActions } from './SimpleGroupsView';
 
 interface SetupStep {
   key: string;
@@ -52,6 +52,10 @@ export function SessionSimpleView(props: {
   onOpenGroup: (g: SimpleGroup) => void;
   onSetSupervisor: (g: SimpleGroup) => void;
   onAddEvaluator: (g: SimpleGroup) => void;
+  /** Students, evaluators, delete, report links - from the groups screen. */
+  groupActions: SimpleGroupActions;
+  onExportMarks: () => void;
+  exportingMarks: boolean;
   onEmailGraders: () => void;
   onSetupAction: (key: string) => void;
   onCourseFile: () => void;
@@ -110,6 +114,7 @@ export function SessionSimpleView(props: {
         onOpen={props.onOpenGroup}
         onSetSupervisor={props.onSetSupervisor}
         onAddEvaluator={props.onAddEvaluator}
+        actions={props.groupActions}
       />
     );
   }
@@ -192,12 +197,19 @@ export function SessionSimpleView(props: {
                 ['Weekly journal PDF', 'journal-report'],
               ] as const
             ).map(([label, path]) => (
-              <div key={path} className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-                <span className="min-w-40 flex-1 text-sm font-medium">{label}</span>
+              <div key={path} className="flex items-center gap-2 rounded-lg border p-3">
+                <span className="min-w-0 flex-1 text-sm font-medium">{label}</span>
+                <span className="hidden text-xs text-muted-foreground sm:inline">Capstone</span>
                 {tracks.map((t) => (
-                  <Button key={t} size="sm" variant="outline" asChild>
-                    <a href={`/api/capstone/sessions/${sessionId}/${path}${path.includes('?') ? '&' : '?'}track=${t}`} target="_blank" rel="noopener noreferrer">
-                      Capstone {t}
+                  <Button key={t} size="sm" variant="outline" className="w-10 px-0" asChild>
+                    <a
+                      href={`/api/capstone/sessions/${sessionId}/${path}${path.includes('?') ? '&' : '?'}track=${t}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`${label} - Capstone ${t}`}
+                      aria-label={`${label} - Capstone ${t}`}
+                    >
+                      {t}
                     </a>
                   </Button>
                 ))}
@@ -218,6 +230,9 @@ export function SessionSimpleView(props: {
                 <a href={`/api/capstone/sessions/${sessionId}/groups-export`} target="_blank" rel="noopener noreferrer">
                   <FileSpreadsheet className="mr-2 h-4 w-4" /> Group list (.xlsx)
                 </a>
+              </Button>
+              <Button variant="outline" className="h-11 sm:col-span-2" onClick={props.onExportMarks} disabled={props.exportingMarks}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> {props.exportingMarks ? 'Exporting marks…' : 'All marks (.xlsx)'}
               </Button>
             </div>
             <button
