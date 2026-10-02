@@ -34,7 +34,7 @@ export const REMINDER_COOLDOWN_MS = 10 * 60 * 1000;
 export async function sendGroupJournalEmails(
   groupId: string,
   kind: JournalEmailKind,
-  options: { studentAccountIds?: string[]; senderName?: string } = {}
+  options: { studentAccountIds?: string[]; senderName?: string; /** Pause between emails - for big batches, so the mail server doesn't refuse with 421. */ gapMs?: number } = {}
 ): Promise<JournalEmailResult> {
   const group = await CapstoneGroup.findById(groupId);
   if (!group) return { sent: 0, failed: 0, noEmail: [] };
@@ -81,6 +81,7 @@ export async function sendGroupJournalEmails(
       continue;
     }
     const submitted = submittedBy.get(String(student._id)) || 0;
+    if (options.gapMs && result.sent + result.failed > 0) await new Promise((r) => setTimeout(r, options.gapMs));
     const { subject, html } = buildEmail(kind, {
       studentName: student.name,
       projectTitle: group.projectTitle,

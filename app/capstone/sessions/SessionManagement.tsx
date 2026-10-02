@@ -20,10 +20,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive, FileSpreadsheet, MoreHorizontal } from 'lucide-react';
+import { Loader2, Plus, GraduationCap, ArrowLeft, Users, Trash2, UserCog, ShieldPlus, ShieldMinus, Printer, ChevronDown, MailPlus, FileText, ClipboardEdit, Send, Download, Link2, ExternalLink, Check, X, SlidersHorizontal, ChevronRight, Archive, FileSpreadsheet, MoreHorizontal, BellRing } from 'lucide-react';
 import { toast } from 'sonner';
 import { TrackSchemePanel } from './TrackSchemePanel';
 import { GroupsBrowser } from './GroupsBrowser';
+import { JournalRemindAllDialog } from './JournalRemindAllDialog';
 import { SessionStageBar } from './SessionStageBar';
 import type { SessionStatus } from '@/lib/capstoneStatus';
 import { SessionStatusPill } from '../components/SessionStatusPill';
@@ -219,6 +220,8 @@ export default function CapstoneSessionManagement() {
   const [addingMembers, setAddingMembers] = useState(false);
 
   const [evaluatorPickerFor, setEvaluatorPickerFor] = useState<GroupRow | null>(null);
+  // Remind every student (or one track's) to update their weekly journal.
+  const [showRemindAll, setShowRemindAll] = useState(false);
   const [supervisorPickerFor, setSupervisorPickerFor] = useState<GroupRow | null>(null);
   // The group open in the modal, and which tab it opened on.
   const [openGroup, setOpenGroup] = useState<{ id: string; tab: string } | null>(null);
@@ -1091,6 +1094,7 @@ Marks they already submitted are kept.`)) return;
               onExportMarks={handleExportMarks}
               exportingMarks={exportingMarks}
               onEmailGraders={handleRequestMarks}
+              onRemindStudents={() => setShowRemindAll(true)}
               onSetupAction={handleSetupAction}
               onCourseFile={() => setShowCourseFile(true)}
               onSchemes={() => setShowSchemes(true)}
@@ -1206,6 +1210,11 @@ Marks they already submitted are kept.`)) return;
                         >
                           <Send className="h-4 w-4 mr-2" />
                           <span className="flex-1">Email graders for marks</span>
+                          {!isRunning(status) && <span className="text-[11px] text-muted-foreground">when running</span>}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled={!isRunning(status) || groups.length === 0} onSelect={() => setShowRemindAll(true)}>
+                          <BellRing className="h-4 w-4 mr-2" />
+                          <span className="flex-1">Remind students: weekly journal</span>
                           {!isRunning(status) && <span className="text-[11px] text-muted-foreground">when running</span>}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setShowSchemes(true)}>
@@ -1440,6 +1449,18 @@ Marks they already submitted are kept.`)) return;
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Remind every student to update their weekly journal (Simple and Advanced) */}
+        <JournalRemindAllDialog
+          open={showRemindAll}
+          onOpenChange={setShowRemindAll}
+          sessionId={selectedSession._id}
+          tracks={selectedSession.tracks.map((t) => t.track)}
+          groups={groups}
+          onSent={(sentAt, track) =>
+            setGroups((prev) => prev.map((g) => (track === 'all' || g.track === track ? { ...g, lastJournalReminderAt: sentAt } : g)))
+          }
+        />
 
         {/* Add evaluator */}
         <EvaluatorPickerDialog

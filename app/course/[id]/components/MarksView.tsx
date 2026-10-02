@@ -566,9 +566,9 @@ export default function MarksView({
         </div>
       </Card>
 
-      {/* Floating Action Buttons - bottom-24 keeps them above the site-wide bug-report button (bottom-6 right-6, 48px tall). */}
+      {/* Floating Action Buttons - bottom-36 keeps them above the site-wide bug-report button (bottom-6 right-6, 48px) and the back-to-top button over it. */}
       {showFloatingButtons && (
-        <div className="fixed bottom-24 right-6 flex flex-col items-end gap-3 z-50">
+        <div className="fixed bottom-36 right-6 flex flex-col items-end gap-3 z-50">
           <Button
             onClick={() => onShowBulkMarkModal()}
             title="Enter marks for every student at once"

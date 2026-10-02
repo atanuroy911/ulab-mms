@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ClipboardEdit, FileSpreadsheet, FileStack, FileText, Printer, Send, SlidersHorizontal, Users, UserPlus } from 'lucide-react';
+import { ArrowRight, BellRing, ClipboardEdit, FileSpreadsheet, FileStack, FileText, Printer, Send, SlidersHorizontal, Users, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -57,6 +57,8 @@ export function SessionSimpleView(props: {
   onExportMarks: () => void;
   exportingMarks: boolean;
   onEmailGraders: () => void;
+  /** Opens the "remind every student about their journal" dialog. */
+  onRemindStudents: () => void;
   onSetupAction: (key: string) => void;
   onCourseFile: () => void;
   onSchemes: () => void;
@@ -64,6 +66,7 @@ export function SessionSimpleView(props: {
   const { sessionId, status, tracks, groups } = props;
   const [steps, setSteps] = useState<Steps | null>(() => cachedSteps(sessionId));
   const [exportsOpen, setExportsOpen] = useState(false);
+  const [remindOpen, setRemindOpen] = useState(false);
   // Simple mode's own screens: the overview, or the groups list.
   const [screen, setScreenState] = useState<'home' | 'groups'>('home');
   // A new screen starts at the top, wherever the page was scrolled.
@@ -173,13 +176,58 @@ export function SessionSimpleView(props: {
         />
         <Tile
           icon={Send}
-          title="Remind graders"
-          line={running ? 'Email every supervisor and evaluator to submit marks' : 'Available while the session is running'}
+          title="Send reminders"
+          line={running ? 'Graders to submit marks, students to update journals' : 'Available while the session is running'}
           disabled={!running ? 'Only while the session is running' : props.emailing ? 'Sending…' : null}
-          onClick={() => confirm('Email every supervisor and evaluator in this session asking them to submit their marks?') && props.onEmailGraders()}
+          onClick={() => setRemindOpen(true)}
         />
         <Tile icon={Printer} title="Print & export" line="Marking sheets, grade sheets, course file, group list" onClick={() => setExportsOpen(true)} />
       </div>
+
+      <Dialog open={remindOpen} onOpenChange={setRemindOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Who should be reminded?</DialogTitle>
+            <DialogDescription>Each gets an email; students also see it in their portal.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setRemindOpen(false);
+                props.onRemindStudents();
+              }}
+              className="flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-colors hover:border-primary"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <BellRing className="h-6 w-6" />
+              </span>
+              <span>
+                <span className="block text-lg font-semibold">Students</span>
+                <span className="block text-sm text-muted-foreground">Update your weekly journal - every group, or one track</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={props.emailing}
+              onClick={() => {
+                if (!confirm('Email every supervisor and evaluator in this session asking them to submit their marks?')) return;
+                setRemindOpen(false);
+                props.onEmailGraders();
+              }}
+              className="flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-colors hover:border-primary disabled:opacity-60"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Send className="h-6 w-6" />
+              </span>
+              <span>
+                <span className="block text-lg font-semibold">Supervisors and evaluators</span>
+                <span className="block text-sm text-muted-foreground">Submit your marks</span>
+              </span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={exportsOpen} onOpenChange={setExportsOpen}>
         <DialogContent className="sm:max-w-lg">
