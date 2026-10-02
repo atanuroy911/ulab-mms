@@ -36,8 +36,12 @@ export interface ICourse extends Document {
    */
   status?: 'running' | 'finished';
   finishedAt?: Date | null;
-  /** The official grades: taken when the course was finished, updated as grade change forms are sent. */
-  finalGrades?: Array<{ studentRecordId: mongoose.Types.ObjectId; studentId: string; grade: string; total: number }>;
+  /**
+   * Per student: the grade when the course was finished (originalGrade, never changed) and the
+   * official grade now (grade - moves with each grade change sent). The changes themselves are
+   * kept in GradeChange.
+   */
+  finalGrades?: Array<{ studentRecordId: mongoose.Types.ObjectId; studentId: string; grade: string; total: number; originalGrade?: string; originalTotal?: number }>;
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived
   aliasEnabled?: boolean; // Whether some students are grouped under an alternate course code
@@ -173,6 +177,8 @@ const CourseSchema: Schema = new Schema(
           studentId: { type: String, required: true },
           grade: { type: String, required: true },
           total: { type: Number, default: 0 },
+          originalGrade: { type: String },
+          originalTotal: { type: Number },
         },
       ],
       default: [],

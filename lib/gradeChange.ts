@@ -8,15 +8,22 @@ import User from '@/models/User';
 import { calculateLetterGrade } from '@/app/utils/grading';
 import { calculateFinalGradeTotal } from '@/lib/finalGrade';
 import { esc } from '@/lib/capstonePrint';
+import type { GradeChangeDetails } from '@/models/GradeChange';
 
 // Course status and grade changes.
 //
 // A teacher marks a course "finished" when its grades are final: every student's grade is
-// recorded as the official one (Course.finalGrades). Marks stay editable; when an edit moves a
-// student to a different grade, that student needs the Controller of Examinations' Grade Change
-// Form (EC002) - old grade = the official one, new grade = what the marks give now. Once the
-// signed form is sent, the teacher marks it sent: the change is kept on record (GradeChange)
-// and the new grade becomes the official one.
+// recorded (Course.finalGrades: the grade at finishing, and the official grade now). Marks stay
+// editable; when an edit moves a student to a different grade, that student needs the
+// Controller of Examinations' Grade Change Form (EC002).
+//
+//  - Automatic, once per student: old grade = the official one, new grade = what the marks
+//    give now. Marking the form sent records the change (GradeChange) and makes the new grade
+//    official.
+//  - Manual, any number of times: the full form, every field editable, for any students -
+//    for a second change, or anything the automatic one doesn't cover. Recorded the same way.
+//
+// Every change is its own GradeChange record and is never edited, so the history is complete.
 
 /** "B+", "A-", "F" - how the grade is written on the form. Withdrawn students are "W". */
 export function shortGrade(letter: string, modifier?: string) {
@@ -74,16 +81,97 @@ export interface PendingChange {
   newGrade: string;
   oldTotal: number;
   newTotal: number;
+  /** The student already had a grade change sent: this one goes on the manual form. */
+  repeat: boolean;
 }
 
-/** Students whose grade now differs from the official one. Students added after finishing have no official grade and are left out. */
-export function pendingChanges(course: Pick<ICourse, 'finalGrades'>, now: CurrentGrade[]): PendingChange[] {
+/**
+ * Students whose grade now differs from the official one. Students added after finishing have
+ * no official grade and are left out. `changedBefore`: students with a grade change already sent.
+ */
+export function pendingChanges(course: Pick<ICourse, 'finalGrades'>, now: CurrentGrade[], changedBefore: Set<string> = new Set()): PendingChange[] {
   const official = new Map((course.finalGrades || []).map((g) => [String(g.studentRecordId), g]));
   return now.flatMap((s) => {
     const was = official.get(s.studentRecordId);
     if (!was || was.grade === s.grade) return [];
-    return [{ studentRecordId: s.studentRecordId, studentId: s.studentId, name: s.name, oldGrade: was.grade, newGrade: s.grade, oldTotal: was.total, newTotal: s.total }];
+    return [
+      {
+        studentRecordId: s.studentRecordId,
+        studentId: s.studentId,
+        name: s.name,
+        oldGrade: was.grade,
+        newGrade: s.grade,
+        oldTotal: was.total,
+        newTotal: s.total,
+        repeat: changedBefore.has(s.studentRecordId),
+      },
+    ];
   });
+}
+
+/** What the form's header fields say unless the teacher changes them. */
+export async function formDefaults(course: Pick<ICourse, 'code' | 'name' | 'section' | 'semester' | 'year' | 'userId'>, department?: CourseDepartment | null): Promise<GradeChangeDetails> {
+  const [dept, owner] = await Promise.all([
+    department === undefined ? courseDepartment(course) : Promise.resolve(department),
+    User.findById(course.userId).select('name').lean<{ name?: string }>(),
+  ]);
+  return {
+    program: dept?.program || '',
+    headName: dept?.headName || '',
+    teacherName: owner?.name || '',
+    term: `${course.semester} ${course.year}`,
+    courseCode: course.code,
+    courseTitle: course.name,
+    section: course.section,
+  };
+}
+
+const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+
+/** Header fields from the browser: the defaults, with whatever the teacher typed. */
+export function cleanDetails(input: unknown, defaults: GradeChangeDetails): GradeChangeDetails {
+  const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const pick = (k: keyof GradeChangeDetails, max = 200) => clip(o[k], max) || defaults[k];
+  return {
+    program: pick('program'),
+    headName: pick('headName', 120),
+    teacherName: pick('teacherName', 120),
+    term: pick('term', 40),
+    courseCode: pick('courseCode', 40),
+    courseTitle: pick('courseTitle'),
+    section: pick('section', 20),
+  };
+}
+
+export interface ManualRow {
+  studentRecordId: string | null;
+  studentId: string;
+  studentName: string;
+  oldGrade: string;
+  newGrade: string;
+  reason: string;
+}
+
+/** Rows of the manual form from the browser; refuses what can't be printed. */
+export function cleanRows(input: unknown): { rows: ManualRow[] } | { error: string } {
+  if (!Array.isArray(input) || input.length === 0) return { error: 'Add at least one student' };
+  if (input.length > 200) return { error: 'At most 200 students on one print' };
+  const rows: ManualRow[] = [];
+  for (const raw of input) {
+    const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const row = {
+      studentRecordId: typeof o.studentRecordId === 'string' && mongoose.Types.ObjectId.isValid(o.studentRecordId) ? o.studentRecordId : null,
+      studentId: clip(o.studentId, 30),
+      studentName: clip(o.studentName, 120),
+      oldGrade: clip(o.oldGrade, 10),
+      newGrade: clip(o.newGrade, 10),
+      reason: typeof o.reason === 'string' ? o.reason.trim().slice(0, 1000) : '',
+    };
+    if (!row.studentId) return { error: 'Every row needs a student ID' };
+    if (!row.oldGrade || !row.newGrade) return { error: `Fill in the previous and new grade for ${row.studentId}` };
+    rows.push(row);
+  }
+  return { rows };
 }
 
 export interface CourseDepartment {
@@ -118,19 +206,12 @@ export async function ownCourse(courseId: string, userId: string) {
 
 // ── The form ────────────────────────────────────────────────────────────────────────────
 
-export interface GradeChangeFormData {
+export interface GradeChangeFormData extends GradeChangeDetails {
   studentId: string;
   studentName: string;
-  program: string;
-  term: string;
-  courseCode: string;
-  courseTitle: string;
-  section: string;
   oldGrade: string;
   newGrade: string;
   reason: string;
-  teacherName: string;
-  headName: string;
 }
 
 const multiline = (s: string) => esc(s.trim()).replace(/\n/g, '<br>');

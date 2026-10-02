@@ -7,9 +7,10 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil, Gauge, Sparkles } from 'lucide-react';
+import { Plus, Upload, Trash2, Tag, Search, MoreVertical, ChevronDown, UserX, UserCheck, Pencil, Gauge, Sparkles, FileText, FilePen } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import type { PendingGradeChange } from './useGradeStatus';
 import AggregateMarksModal from './AggregateMarksModal';
 
 interface Student {
@@ -100,6 +101,14 @@ interface StudentsViewProps {
   onAutoCategorizeAlias: () => void;
   onShowStatisticsModal?: () => void;
   onShowGraceHistory?: (studentId: string) => void;
+  /** Grade change forms (lib/gradeChange.ts): whether the course is finished... */
+  courseFinished?: boolean;
+  /** ...the automatic change waiting for a student, if any... */
+  gradeChangeFor?: (studentRecordId: string) => PendingGradeChange | undefined;
+  /** ...print it... */
+  onPrintGradeChange?: (studentRecordId: string) => void;
+  /** ...or open the manual form for the student. */
+  onManualGradeChange?: (studentRecordId: string) => void;
 }
 
 export default function StudentsView({
@@ -133,6 +142,10 @@ export default function StudentsView({
   onAutoCategorizeAlias,
   onShowStatisticsModal,
   onShowGraceHistory,
+  courseFinished = false,
+  gradeChangeFor,
+  onPrintGradeChange,
+  onManualGradeChange,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
@@ -279,6 +292,24 @@ export default function StudentsView({
     } finally {
       setDeletingAllStudents(false);
     }
+  };
+
+
+  // A finished course: the student's grade moved since - their grade change form, one click away.
+  const gradeChangeBadge = (studentRecordId: string) => {
+    const change = courseFinished ? gradeChangeFor?.(studentRecordId) : undefined;
+    if (!change) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => (change.repeat ? onManualGradeChange?.(studentRecordId) : onPrintGradeChange?.(studentRecordId))}
+        className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
+        title={change.repeat ? 'Changed again after a grade change - open the manual form' : 'The course is finished and this grade changed - print the grade change form'}
+      >
+        <FileText className="h-3 w-3" />
+        {change.oldGrade} → {change.newGrade} · form
+      </button>
+    );
   };
 
   return (
@@ -642,6 +673,7 @@ export default function StudentsView({
                       <span className="inline-flex items-center gap-1.5">
                         <span className="px-2 py-0.5 rounded font-bold text-xs bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30">W</span>
                         <span className="text-xs text-muted-foreground">Withdrawn</span>
+                        {gradeChangeBadge(student._id)}
                       </span>
                     ) : !letterGrade ? (
                       <span className="text-muted-foreground">—</span>
@@ -658,6 +690,7 @@ export default function StudentsView({
                         >
                           <Gauge className="w-3.5 h-3.5" />
                         </button>
+                        {gradeChangeBadge(student._id)}
                         {studentHasGrace && onShowGraceHistory && (
                           <button
                             type="button"
@@ -693,6 +726,35 @@ export default function StudentsView({
                           <Pencil className="w-4 h-4 mr-2" />
                           Edit Student
                         </DropdownMenuItem>
+                        {(onPrintGradeChange || onManualGradeChange) && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Grade change form</DropdownMenuLabel>
+                            {courseFinished && onPrintGradeChange && (() => {
+                              const change = gradeChangeFor?.(student._id);
+                              return (
+                                <DropdownMenuItem
+                                  disabled={!change || change.repeat}
+                                  onClick={() => change && !change.repeat && onPrintGradeChange(student._id)}
+                                >
+                                  <FileText className="w-4 h-4 mr-2" />
+                                  <span className="flex flex-col">
+                                    <span>Print (automatic)</span>
+                                    <span className="text-[11px] text-muted-foreground">
+                                      {!change ? 'No grade change' : change.repeat ? 'Changed again - use manual' : `${change.oldGrade} → ${change.newGrade}`}
+                                    </span>
+                                  </span>
+                                </DropdownMenuItem>
+                              );
+                            })()}
+                            {onManualGradeChange && (
+                              <DropdownMenuItem onClick={() => onManualGradeChange(student._id)}>
+                                <FilePen className="w-4 h-4 mr-2" />
+                                Manual form…
+                              </DropdownMenuItem>
+                            )}
+                          </>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => onDeleteStudent(student)}

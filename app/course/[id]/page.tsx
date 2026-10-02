@@ -12,6 +12,8 @@ import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
 import { CourseStatusCard } from './components/CourseStatusCard';
+import { GradeChangeEditor } from './components/GradeChangeEditor';
+import { useGradeStatus } from './components/useGradeStatus';
 import ExamsView from './components/ExamsView';
 import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
@@ -196,6 +198,23 @@ export default function CoursePage() {
       course?.projectWeightage,
     ].join('|');
   }, [marks, exams, students, course]);
+  // Running / finished and grade changes, shared by the status card, the Students tab and the manual form.
+  const gradeStatus = useGradeStatus(course?._id, gradeInputsKey, (status) => setCourse((c) => (c && c.status !== status ? { ...c, status } : c)));
+  // The manual grade change form, pre-filled with these students (null: closed).
+  const [gradeEditorFor, setGradeEditorFor] = useState<string[] | null>(null);
+  const printGradeChangeForm = (studentRecordId: string) => {
+    const q = new URLSearchParams({ students: studentRecordId });
+    const dept = gradeStatus.data?.department;
+    try {
+      const head = localStorage.getItem(`grade-form-head:${dept?.code || 'none'}`);
+      const program = localStorage.getItem('grade-form-program');
+      if (head && !dept?.headName) q.set('head', head);
+      if (program && !dept?.program) q.set('program', program);
+    } catch {
+      /* storage unavailable */
+    }
+    window.open(`/api/courses/${course?._id}/grade-change-form?${q}`, '_blank');
+  };
   const [loading, setLoading] = useState(true);
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionSummary[]>([]);
 
@@ -2395,11 +2414,20 @@ export default function CoursePage() {
               key={activeView === 'overview' ? 'full' : 'compact'}
               courseId={course._id}
               studentCount={students.length}
-              marksKey={gradeInputsKey}
-              compact={activeView !== 'overview'}
-              onStatus={(status) => setCourse((c) => (c && c.status !== status ? { ...c, status } : c))}
+              gs={gradeStatus}
+              view={activeView === 'overview' ? 'overview' : activeView === 'marks' ? 'marks' : activeView === 'students' ? 'students' : 'other'}
               onOpenOverview={() => setActiveView('overview')}
+              onOpenEditor={(ids) => setGradeEditorFor(ids)}
             />
+            {gradeEditorFor !== null && (
+              <GradeChangeEditor
+                open
+                onOpenChange={(o) => !o && setGradeEditorFor(null)}
+                courseId={course._id}
+                gs={gradeStatus}
+                initialStudentIds={gradeEditorFor}
+              />
+            )}
             {/* Overview View */}
             {activeView === 'overview' && (
               <OverviewView
@@ -2489,6 +2517,10 @@ export default function CoursePage() {
                 onAutoCategorizeAlias={() => checkAliasCandidates(false)}
                 onShowStatisticsModal={() => setShowMarksStatsModal(true)}
                 onShowGraceHistory={(studentId) => setGraceHistoryStudentId(studentId)}
+                courseFinished={gradeStatus.data?.status === 'finished'}
+                gradeChangeFor={gradeStatus.changeFor}
+                onPrintGradeChange={printGradeChangeForm}
+                onManualGradeChange={(studentRecordId) => setGradeEditorFor([studentRecordId])}
               />
             )}
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, FileText, History, Loader2, Lock, PlayCircle, Send } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronDown, FilePen, FileText, History, Info, Loader2, Lock, PlayCircle, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,39 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { openPrintTab, type GradeStatusApi, type PendingGradeChange } from './useGradeStatus';
 
 // Course status (running / finished) and grade change forms - see lib/gradeChange.ts.
-
-interface Change {
-  studentRecordId: string;
-  studentId: string;
-  name: string;
-  oldGrade: string;
-  newGrade: string;
-  oldTotal: number;
-  newTotal: number;
-  reason: string;
-}
-
-interface SentChange {
-  _id: string;
-  studentId: string;
-  name: string;
-  oldGrade: string;
-  newGrade: string;
-  reason: string;
-  sentAt: string;
-}
-
-export interface GradeStatus {
-  status: 'running' | 'finished';
-  finishedAt: string | null;
-  finalCount: number;
-  changes: Change[];
-  history: SentChange[];
-  department: { code: string; program: string; headName: string } | null;
-  canSetHead: boolean;
-}
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
@@ -66,59 +36,31 @@ const remember = (key: string, value: string) => {
 export function CourseStatusCard({
   courseId,
   studentCount,
-  marksKey,
-  compact = false,
-  onStatus,
+  gs,
+  view = 'overview',
   onOpenOverview,
+  onOpenEditor,
 }: {
   courseId: string;
   studentCount: number;
-  /** Changes whenever marks change, so grade changes are re-checked. */
-  marksKey: string;
-  /** A one-line reminder for the other tabs, shown only while grade changes wait for a form. */
-  compact?: boolean;
-  onStatus?: (status: 'running' | 'finished') => void;
+  gs: GradeStatusApi;
+  /** overview: the full card. marks / students: a one-line guide while the course is finished. other: only while forms are owed. */
+  view?: 'overview' | 'marks' | 'students' | 'other';
   onOpenOverview?: () => void;
+  /** The manual grade change form, pre-filled with these students. */
+  onOpenEditor: (studentRecordIds: string[]) => void;
 }) {
-  const [data, setData] = useState<GradeStatus | null>(null);
+  const data = gs.data;
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<'finish' | 'reopen' | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [showHistory, setShowHistory] = useState(false);
-  const [head, setHead] = useState('');
-  const [program, setProgram] = useState('');
-  const [editingHead, setEditingHead] = useState(false);
-  const onStatusRef = useRef(onStatus);
-  useEffect(() => {
-    onStatusRef.current = onStatus;
-  });
-
-  const apply = useCallback((d: GradeStatus) => {
-    setData(d);
-    setReasons(Object.fromEntries(d.changes.map((c) => [c.studentRecordId, c.reason])));
-    // What was typed last time for a missing head / program, until the department has them.
-    setHead((h) => h || remembered(`grade-form-head:${d.department?.code || 'none'}`));
-    setProgram((p) => p || remembered(PROGRAM_KEY));
-    onStatusRef.current?.(d.status);
-  }, []);
-
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/courses/${courseId}/grade-status`);
-      if (res.ok) apply(await res.json());
-    } catch {
-      /* the card simply stays as it was */
-    }
-  }, [apply, courseId]);
-
-  // Re-check after marks change (debounced: bulk entry changes them many times a second).
-  useEffect(() => {
-    const t = window.setTimeout(load, data ? 600 : 0);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, marksKey]);
-
   const headKey = `grade-form-head:${data?.department?.code || 'none'}`;
+  const [head, setHead] = useState(() => remembered(headKey));
+  const [program, setProgram] = useState(() => remembered(PROGRAM_KEY));
+  const [editingHead, setEditingHead] = useState(false);
+
+  const reasonOf = (c: PendingGradeChange) => reasons[c.studentRecordId] ?? c.reason;
 
   const post = async (body: object, label: string) => {
     setBusy(label);
@@ -143,33 +85,42 @@ export function CourseStatusCard({
     const json = await post({ action }, action);
     setConfirm(null);
     if (json) {
-      apply(json);
+      gs.apply(json);
       toast.success(action === 'finish' ? 'Course finished - grades recorded as final' : 'Course is running again');
     }
   };
 
-  const saveReason = async (c: Change) => {
-    const reason = (reasons[c.studentRecordId] ?? '').trim();
+  const saveReason = async (c: PendingGradeChange) => {
+    const reason = reasonOf(c).trim();
     if (reason === c.reason.trim()) return true;
     const ok = await post({ action: 'reason', studentRecordId: c.studentRecordId, reason }, `reason:${c.studentRecordId}`);
-    if (ok) setData((d) => (d ? { ...d, changes: d.changes.map((x) => (x.studentRecordId === c.studentRecordId ? { ...x, reason } : x)) } : d));
+    if (ok) gs.patch((d) => ({ ...d, changes: d.changes.map((x) => (x.studentRecordId === c.studentRecordId ? { ...x, reason } : x)) }));
     return !!ok;
   };
 
   const headMissing = !data?.department?.headName;
   const programMissing = !data?.department?.program;
+  const details = () => ({ ...(headMissing && head.trim() ? { headName: head.trim() } : {}), ...(programMissing && program.trim() ? { program: program.trim() } : {}) });
 
-  const openForms = async (changes: Change[]) => {
-    for (const c of changes) if (!(await saveReason(c))) return;
+  const openForms = async (changes: PendingGradeChange[]) => {
+    const tab = openPrintTab();
+    for (const c of changes) {
+      if (!(await saveReason(c))) {
+        tab?.close();
+        return;
+      }
+    }
     if (headMissing) remember(headKey, head);
     if (programMissing) remember(PROGRAM_KEY, program);
     const q = new URLSearchParams({ students: changes.map((c) => c.studentRecordId).join(',') });
     if (headMissing && head.trim()) q.set('head', head.trim());
     if (programMissing && program.trim()) q.set('program', program.trim());
-    window.open(`/api/courses/${courseId}/grade-change-form?${q}`, '_blank', 'noopener');
+    const url = `/api/courses/${courseId}/grade-change-form?${q}`;
+    if (tab) tab.location.href = url;
+    else window.open(url, '_blank');
   };
 
-  const markSent = async (changes: Change[]) => {
+  const markSent = async (changes: PendingGradeChange[]) => {
     if (
       !window.confirm(
         changes.length === 1
@@ -180,9 +131,9 @@ export function CourseStatusCard({
       return;
     }
     for (const c of changes) if (!(await saveReason(c))) return;
-    const json = await post({ action: 'sent', studentRecordIds: changes.map((c) => c.studentRecordId) }, 'sent');
+    const json = await post({ action: 'sent', studentRecordIds: changes.map((c) => c.studentRecordId), details: details() }, 'sent');
     if (json) {
-      apply(json);
+      gs.apply(json);
       toast.success(changes.length === 1 ? 'Form marked as sent' : `${changes.length} forms marked as sent`);
     }
   };
@@ -198,7 +149,7 @@ export function CourseStatusCard({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
-      setData((d) => (d && d.department ? { ...d, department: { ...d.department, headName: json.headName } } : d));
+      gs.patch((d) => (d.department ? { ...d, department: { ...d.department, headName: json.headName }, form: { ...d.form, headName: json.headName } } : d));
       setEditingHead(false);
       toast.success(`Department head saved for every ${data.department.code} form`);
     } catch (err) {
@@ -208,19 +159,49 @@ export function CourseStatusCard({
     }
   };
 
-  if (compact) {
-    if (!data || data.status !== 'finished' || data.changes.length === 0) return null;
+  const finished = data?.status === 'finished';
+  const firstChanges = data?.changes.filter((c) => !c.repeat) || [];
+  const repeatChanges = data?.changes.filter((c) => c.repeat) || [];
+
+  // ── The one-line guide on the other tabs ──
+  if (view !== 'overview') {
+    if (!data || !finished) return null;
+    const owed = data.changes.length;
+    if (owed === 0 && view === 'other') return null;
     return (
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-        <span className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-          This course is finished. {data.changes.length === 1 ? '1 student’s grade has' : `${data.changes.length} students’ grades have`} changed since - each needs a grade change form.
-        </span>
-        {onOpenOverview && (
-          <Button size="sm" variant="outline" onClick={onOpenOverview}>
-            <FileText className="mr-1.5 h-4 w-4" /> Grade change forms
-          </Button>
+      <div
+        className={cn(
+          'mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+          owed ? 'border-amber-500/40 bg-amber-500/10' : 'border-emerald-500/30 bg-emerald-500/5'
         )}
+      >
+        <span className="flex items-start gap-2">
+          {owed ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" /> : <Info className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />}
+          <span>
+            {owed ? (
+              <>
+                This course is finished. {owed === 1 ? '1 student’s grade has' : `${owed} students’ grades have`} changed since - each needs a grade change form.
+              </>
+            ) : (
+              <>
+                <strong>This course is finished - grades are final.</strong> You can still edit marks. If an edit moves a student to a different grade, a grade change form is prepared for them
+                {view === 'students' ? ' (also in each student’s ⋮ menu)' : ''}.
+              </>
+            )}
+          </span>
+        </span>
+        <span className="flex gap-2">
+          {owed > 0 && onOpenOverview && (
+            <Button size="sm" variant="outline" onClick={onOpenOverview}>
+              <FileText className="mr-1.5 h-4 w-4" /> Grade change forms
+            </Button>
+          )}
+          {owed === 0 && (
+            <Button size="sm" variant="ghost" onClick={() => onOpenEditor([])}>
+              <FilePen className="mr-1.5 h-4 w-4" /> Manual form
+            </Button>
+          )}
+        </span>
       </div>
     );
   }
@@ -234,8 +215,6 @@ export function CourseStatusCard({
       </Card>
     );
   }
-
-  const finished = data.status === 'finished';
 
   return (
     <Card className={cn('mb-6', finished && data.changes.length > 0 && 'border-amber-500/50')}>
@@ -260,14 +239,17 @@ export function CourseStatusCard({
                 : 'When the grades are final, mark the course finished. Marks stay editable afterwards; any grade that changes then gets a Grade Change Form.'}
             </p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenEditor([])} title="Every field editable, any students - for a second change or anything else">
+              <FilePen className="mr-1.5 h-4 w-4" /> Manual form
+            </Button>
             {finished ? (
               <Button variant="outline" size="sm" onClick={() => setConfirm('reopen')} disabled={!!busy}>
                 Mark as running
               </Button>
             ) : (
-              <Button onClick={() => setConfirm('finish')} disabled={!!busy || studentCount === 0}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as finished
+              <Button size="sm" onClick={() => setConfirm('finish')} disabled={!!busy || studentCount === 0}>
+                <CheckCircle2 className="mr-1.5 h-4 w-4" /> Mark as finished
               </Button>
             )}
           </div>
@@ -275,29 +257,12 @@ export function CourseStatusCard({
 
         {finished && data.changes.length === 0 && (
           <p className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> No grade changes. Every student still has the grade recorded when the course was finished.
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> No grade changes waiting. Every student has their official grade.
           </p>
         )}
 
         {finished && data.changes.length > 0 && (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="h-4 w-4" />
-                {data.changes.length === 1 ? '1 grade change needs a form' : `${data.changes.length} grade changes need a form`}
-              </p>
-              {data.changes.length > 1 && (
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => openForms(data.changes)} disabled={!!busy}>
-                    <FileText className="mr-1.5 h-4 w-4" /> All forms (PDF)
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => markSent(data.changes)} disabled={!!busy}>
-                    <Send className="mr-1.5 h-4 w-4" /> All sent
-                  </Button>
-                </div>
-              )}
-            </div>
-
             {/* Who signs: the department's head, set by a coordinator or admin */}
             <div className={cn('rounded-lg border px-3 py-2.5 text-sm', headMissing || programMissing ? 'border-amber-500/40 bg-amber-500/5' : 'bg-muted/30')}>
               {!headMissing && !editingHead ? (
@@ -305,7 +270,15 @@ export function CourseStatusCard({
                   <span className="text-muted-foreground">Head of the department on the form:</span>
                   <span className="font-medium">{data.department!.headName}</span>
                   {data.canSetHead && (
-                    <Button variant="link" size="sm" className="h-auto p-0" onClick={() => { setHead(data.department!.headName); setEditingHead(true); }}>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0"
+                      onClick={() => {
+                        setHead(data.department!.headName);
+                        setEditingHead(true);
+                      }}
+                    >
                       Change
                     </Button>
                   )}
@@ -344,51 +317,100 @@ export function CourseStatusCard({
               )}
             </div>
 
-            <ul className="divide-y rounded-lg border">
-              {data.changes.map((c) => (
-                <li key={c.studentRecordId} className="space-y-2 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        <span className="font-mono text-sm text-muted-foreground">{c.studentId}</span> {c.name}
-                      </p>
-                      <p className="text-sm">
-                        <span className="font-semibold">{c.oldGrade}</span>
-                        <span className="text-muted-foreground"> ({c.oldTotal.toFixed(2)}) → </span>
-                        <span className="font-semibold text-amber-700 dark:text-amber-400">{c.newGrade}</span>
-                        <span className="text-muted-foreground"> ({c.newTotal.toFixed(2)})</span>
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => openForms([c])} disabled={!!busy}>
-                        <FileText className="mr-1.5 h-4 w-4" /> Form
+            {firstChanges.length > 0 && (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="h-4 w-4" />
+                    {firstChanges.length === 1 ? '1 grade change needs a form' : `${firstChanges.length} grade changes need a form`}
+                  </p>
+                  {firstChanges.length > 1 && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => openForms(firstChanges)} disabled={!!busy}>
+                        <FileText className="mr-1.5 h-4 w-4" /> All forms (PDF)
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => markSent([c])} disabled={!!busy}>
-                        <Send className="mr-1.5 h-4 w-4" /> Sent
+                      <Button size="sm" variant="outline" onClick={() => markSent(firstChanges)} disabled={!!busy}>
+                        <Send className="mr-1.5 h-4 w-4" /> All sent
                       </Button>
                     </div>
-                  </div>
-                  <Textarea
-                    rows={2}
-                    maxLength={1000}
-                    placeholder="Reason(s) for change - printed on the form, e.g. Final exam script re-checked; marks of Q3 were not added."
-                    value={reasons[c.studentRecordId] ?? ''}
-                    onChange={(e) => setReasons((r) => ({ ...r, [c.studentRecordId]: e.target.value }))}
-                    onBlur={() => saveReason(c)}
-                  />
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">
-              Print the form, sign it and have the department head sign it, then mark it <strong>Sent</strong>: the new grade becomes the official one and the change is kept below.
-            </p>
+                  )}
+                </div>
+                <ul className="divide-y rounded-lg border">
+                  {firstChanges.map((c) => (
+                    <li key={c.studentRecordId} className="space-y-2 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            <span className="font-mono text-sm text-muted-foreground">{c.studentId}</span> {c.name}
+                          </p>
+                          <p className="text-sm">
+                            <span className="font-semibold">{c.oldGrade}</span>
+                            <span className="text-muted-foreground"> ({c.oldTotal.toFixed(2)}) → </span>
+                            <span className="font-semibold text-amber-700 dark:text-amber-400">{c.newGrade}</span>
+                            <span className="text-muted-foreground"> ({c.newTotal.toFixed(2)})</span>
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => openForms([c])} disabled={!!busy}>
+                            <FileText className="mr-1.5 h-4 w-4" /> Form
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => markSent([c])} disabled={!!busy}>
+                            <Send className="mr-1.5 h-4 w-4" /> Sent
+                          </Button>
+                        </div>
+                      </div>
+                      <Textarea
+                        rows={2}
+                        maxLength={1000}
+                        placeholder="Reason(s) for change - printed on the form, e.g. Final exam script re-checked; marks of Q3 were not added."
+                        value={reasonOf(c)}
+                        onChange={(e) => setReasons((r) => ({ ...r, [c.studentRecordId]: e.target.value }))}
+                        onBlur={() => saveReason(c)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  Print the form, sign it and have the department head sign it, then mark it <strong>Sent</strong>: the new grade becomes the official one and the change is kept on record.
+                </p>
+              </>
+            )}
+
+            {repeatChanges.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-amber-500/40 p-3">
+                <p className="text-sm font-semibold">Changed again after a grade change</p>
+                <p className="text-xs text-muted-foreground">
+                  These students already had a grade change sent. A further change goes on the manual form, where you check every field before printing.
+                </p>
+                <ul className="divide-y">
+                  {repeatChanges.map((c) => (
+                    <li key={c.studentRecordId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <span className="min-w-0 text-sm">
+                        <span className="font-mono text-muted-foreground">{c.studentId}</span> {c.name} ·{' '}
+                        <strong>
+                          {c.oldGrade} → {c.newGrade}
+                        </strong>
+                      </span>
+                      <Button size="sm" variant="outline" onClick={() => onOpenEditor([c.studentRecordId])}>
+                        <FilePen className="mr-1.5 h-4 w-4" /> Manual form
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                {repeatChanges.length > 1 && (
+                  <Button size="sm" variant="ghost" onClick={() => onOpenEditor(repeatChanges.map((c) => c.studentRecordId))}>
+                    All {repeatChanges.length} on one manual form
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {data.history.length > 0 && (
           <div>
             <button type="button" className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setShowHistory((v) => !v)}>
-              <History className="h-4 w-4" /> Sent grade changes ({data.history.length})
+              <History className="h-4 w-4" /> Grade change history ({data.history.length})
               <ChevronDown className={cn('h-4 w-4 transition-transform', showHistory && 'rotate-180')} />
             </button>
             {showHistory && (
@@ -400,19 +422,13 @@ export function CourseStatusCard({
                       <strong>
                         {h.oldGrade} → {h.newGrade}
                       </strong>
-                      <span className="text-muted-foreground"> · sent {fmt(h.sentAt)}</span>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {h.kind === 'manual' ? 'manual form' : 'form'} sent {fmt(h.sentAt)}
+                      </span>
                       {h.reason && <span className="block truncate text-xs text-muted-foreground">{h.reason}</span>}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        const q = new URLSearchParams({ changes: h._id });
-                        if (headMissing && head.trim()) q.set('head', head.trim());
-                        if (programMissing && program.trim()) q.set('program', program.trim());
-                        window.open(`/api/courses/${courseId}/grade-change-form?${q}`, '_blank', 'noopener');
-                      }}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => window.open(`/api/courses/${courseId}/grade-change-form?changes=${h._id}`, '_blank')}>
                       <FileText className="mr-1.5 h-4 w-4" /> Form
                     </Button>
                   </li>
@@ -436,7 +452,10 @@ export function CourseStatusCard({
               ) : (
                 <div className="space-y-2 text-sm">
                   <p>Grade changes stop being tracked while the course is running.</p>
-                  <p>When you finish it again, the grades at that moment become the final ones{data.changes.length ? ` - including the ${data.changes.length} change${data.changes.length === 1 ? '' : 's'} not yet sent` : ''}. Sent changes stay on record.</p>
+                  <p>
+                    When you finish it again, the grades at that moment become the final ones
+                    {data.changes.length ? ` - including the ${data.changes.length} change${data.changes.length === 1 ? '' : 's'} not yet sent` : ''}. The grade change history is kept.
+                  </p>
                 </div>
               )}
             </DialogDescription>
