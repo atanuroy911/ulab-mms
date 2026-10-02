@@ -87,6 +87,9 @@ interface OverviewViewProps {
   coPoStatus?: 'no-mapping' | 'no-max-marks' | 'ok';
   onGoToCoPo?: () => void;
   onShowStatisticsModal?: () => void;
+  /** Grade change forms (course status pill has the same); `gradeChangesOwed` waiting for a form. */
+  onGradeChanges?: () => void;
+  gradeChangesOwed?: number;
 }
 export default function OverviewView({
   course,
@@ -108,6 +111,8 @@ export default function OverviewView({
   exportingCourseFileAlpha,
   onExportCourseFileAlphaGroup,
   exportingCourseFileAlphaGroup,
+  onGradeChanges,
+  gradeChangesOwed = 0,
   coPoStatus = 'ok',
   onGoToCoPo,
   onShowStatisticsModal,
@@ -334,6 +339,13 @@ export default function OverviewView({
             </Button>
             <NotifyGradesButton courseId={course._id} />
             <SyncEmailsButton courseId={course._id} studentIds={students.map((s) => s.studentId)} />
+            {onGradeChanges && (
+              <Button onClick={onGradeChanges} variant="outline" className={gradeChangesOwed ? 'gap-2 border-amber-500/60 text-amber-800 dark:text-amber-300' : 'gap-2'}>
+                <FileText className="w-4 h-4" />
+                Grade changes
+                {gradeChangesOwed > 0 && <span className="rounded-full bg-amber-500 px-1.5 text-[11px] font-bold leading-5 text-white">{gradeChangesOwed}</span>}
+              </Button>
+            )}
 
             <div className="mx-1 hidden h-6 w-px bg-border sm:block" />
 

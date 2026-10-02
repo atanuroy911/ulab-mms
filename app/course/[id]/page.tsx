@@ -11,7 +11,7 @@ import { AppHeader } from '@/app/components/AppHeader';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
-import { CourseStatusCard } from './components/CourseStatusCard';
+import { CourseStatusPill, GradeChangesDialog, MarksGradeChangeHint } from './components/CourseStatus';
 import { GradeChangeEditor } from './components/GradeChangeEditor';
 import { useGradeStatus } from './components/useGradeStatus';
 import ExamsView from './components/ExamsView';
@@ -202,6 +202,7 @@ export default function CoursePage() {
   const gradeStatus = useGradeStatus(course?._id, gradeInputsKey, (status) => setCourse((c) => (c && c.status !== status ? { ...c, status } : c)));
   // The manual grade change form, pre-filled with these students (null: closed).
   const [gradeEditorFor, setGradeEditorFor] = useState<string[] | null>(null);
+  const [showGradeChanges, setShowGradeChanges] = useState(false);
   const printGradeChangeForm = (studentRecordId: string) => {
     const q = new URLSearchParams({ students: studentRecordId });
     const dept = gradeStatus.data?.department;
@@ -2119,11 +2120,13 @@ export default function CoursePage() {
             <Badge variant="secondary" className="ml-1">
               {course.courseType}
             </Badge>
-            {course.status === 'finished' && (
-              <Badge className="ml-1 bg-emerald-600 text-white hover:bg-emerald-600" title="Grades are final; later changes need a grade change form">
-                Finished
-              </Badge>
-            )}
+            <CourseStatusPill
+              courseId={course._id}
+              studentCount={students.length}
+              gs={gradeStatus}
+              onOpenChanges={() => setShowGradeChanges(true)}
+              onOpenEditor={(ids) => setGradeEditorFor(ids)}
+            />
           </>
         }
         actions={[
@@ -2409,16 +2412,15 @@ export default function CoursePage() {
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto p-6">
-            {/* Running / finished, and grade change forms once finished */}
-            <CourseStatusCard
-              key={activeView === 'overview' ? 'full' : 'compact'}
-              courseId={course._id}
-              studentCount={students.length}
-              gs={gradeStatus}
-              view={activeView === 'overview' ? 'overview' : activeView === 'marks' ? 'marks' : activeView === 'students' ? 'students' : 'other'}
-              onOpenOverview={() => setActiveView('overview')}
-              onOpenEditor={(ids) => setGradeEditorFor(ids)}
-            />
+            {showGradeChanges && (
+              <GradeChangesDialog
+                open
+                onOpenChange={setShowGradeChanges}
+                courseId={course._id}
+                gs={gradeStatus}
+                onOpenEditor={(ids) => setGradeEditorFor(ids)}
+              />
+            )}
             {gradeEditorFor !== null && (
               <GradeChangeEditor
                 open
@@ -2453,6 +2455,8 @@ export default function CoursePage() {
                 coPoStatus={getCoPoStatus()}
                 onGoToCoPo={() => setActiveView('copo')}
                 onShowStatisticsModal={() => setShowMarksStatsModal(true)}
+                onGradeChanges={() => setShowGradeChanges(true)}
+                gradeChangesOwed={gradeStatus.data?.status === 'finished' ? gradeStatus.data.changes.length : 0}
               />
             )}
 
@@ -2525,6 +2529,7 @@ export default function CoursePage() {
             )}
 
             {/* Marks View */}
+            {activeView === 'marks' && <MarksGradeChangeHint gs={gradeStatus} onOpenChanges={() => setShowGradeChanges(true)} />}
             {activeView === 'marks' && (
               <MarksView
                 students={students}
