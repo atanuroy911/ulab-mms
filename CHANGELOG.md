@@ -1,3 +1,18 @@
+# [1.30.0](https://github.com/atanuroy911/ulab-mms/compare/v1.29.0...v1.30.0) (2026-10-02)
+
+
+### Bug Fixes
+
+* **capstone:** journal corrections - restore the supervisor check on 'notify', supervisors can delete any week and take back a response, fixes hidden while the session is locked, touch-friendly tile actions, portal note to the student, 'Journals PDF' of all my groups on the capstone home ([368111a](https://github.com/atanuroy911/ulab-mms/commit/368111a80867c530bd8ebbb03583bb78994cb66c))
+* **courses:** grade-status refuses an unknown action before anything else ([4332da3](https://github.com/atanuroy911/ulab-mms/commit/4332da3637cd21c76207bb892278f6fc94ba94be))
+
+
+### Features
+
+* **courses:** grade change history and the manual grade change form - one automatic change per student, further changes on a fully editable form for any students; every change kept as its own record with the form as printed; Students tab menu (print / manual) and grade badges; guidance on the Marks and Students tabs once a course is finished ([c0e280c](https://github.com/atanuroy911/ulab-mms/commit/c0e280c3118db0b97aac5147d50ae07c2739e845))
+* **courses:** running/finished course status and the Grade Change Form (EC002) - finishing records the final grades; a grade that changes afterwards gets a printable form per student with reason, teacher and department head; marking it sent keeps it on record ([39354eb](https://github.com/atanuroy911/ulab-mms/commit/39354ebec88218673326f6f7f6d631d87df56c74))
+* **departments:** head of department name for forms - set by the department's coordinators or an admin, can be changed but never cleared ([7b3b4dc](https://github.com/atanuroy911/ulab-mms/commit/7b3b4dc7c3da5bcf428f3c8943ce440f168d3e55))
+
 # [1.29.0](https://github.com/atanuroy911/ulab-mms/compare/v1.28.0...v1.29.0) (2026-10-01)
 
 
