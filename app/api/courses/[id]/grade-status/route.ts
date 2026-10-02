@@ -100,6 +100,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     const body = await request.json().catch(() => ({}));
     const action = body?.action;
+    if (!['finish', 'reopen', 'reason', 'sent', 'record'].includes(action)) {
+      return NextResponse.json({ error: 'action must be finish, reopen, reason, sent or record' }, { status: 400 });
+    }
     const finished = course.status === 'finished';
 
     if (action === 'finish') {
