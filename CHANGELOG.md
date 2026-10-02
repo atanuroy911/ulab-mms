@@ -1,3 +1,11 @@
+## [1.31.1](https://github.com/atanuroy911/ulab-mms/compare/v1.31.0...v1.31.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **capstone:** session groups - Simple mode keeps Change supervisor and Add evaluator on every group (highlighted only while missing), actions in one row; Advanced list rows show column heads, member names, supervisor with initials (click to change, or Set supervisor), evaluator names with + to add (or Add evaluator), and a muted 'Untitled project'; imported '(ID)' suffixes hidden from names ([8da33fe](https://github.com/atanuroy911/ulab-mms/commit/8da33fe6e5dc1a022047a9b62ece00499737c7d0))
+* **capstone:** Simple mode parity - session groups manage students (click a name for marks/journal, x to remove, Add students), unassign evaluators, delete a group and paste report links; All marks (.xlsx) in Print & export with compact A/B/C buttons; My Groups shows journal weeks to review and always offers the journal, and points to Advanced for past semesters, reminders and the journals PDF; Enter marks gets track tabs and Only missing; Grades counts students with every mark in, filters to the missing ones, and no longer repeats its buttons in the header ([128690a](https://github.com/atanuroy911/ulab-mms/commit/128690abc55b09b69bd29dd3d99eb17733cc695b))
+
 # [1.31.0](https://github.com/atanuroy911/ulab-mms/compare/v1.30.0...v1.31.0) (2026-10-02)
 
 
