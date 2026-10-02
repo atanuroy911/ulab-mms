@@ -1235,6 +1235,7 @@ Marks they already submitted are kept.`)) return;
                 tracks={selectedSession.tracks.map((t) => t.track)}
                 renderDetails={renderGroupDetails}
                 onChangeSupervisor={isPastSession(selectedSession.status) ? undefined : setSupervisorPickerFor}
+                onAddEvaluator={isPastSession(selectedSession.status) ? undefined : setEvaluatorPickerFor}
               />
             )}
           </CardContent>

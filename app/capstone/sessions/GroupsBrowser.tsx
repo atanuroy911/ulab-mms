@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Check, ChevronRight, FileText, LayoutGrid, List, Search, ShieldCheck, UserCog, Users, X } from 'lucide-react';
+import { Check, ChevronRight, FileText, LayoutGrid, List, Pencil, Plus, Search, UserCheck, UserPlus, Users, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,18 @@ const VIEW_KEY = 'capstone-groups-view';
 
 const nameOf = (p: Person | null) => (typeof p === 'object' && p ? p.name || '' : '');
 const emailOf = (p: Person | null) => (typeof p === 'object' && p ? p.email || '' : '');
+/** Imported names sometimes carry the ID: "Sanaullah (231014035)" - the ID is shown elsewhere. */
+const cleanName = (n: string) => n.replace(/\s*\(\d{6,}\)\s*$/, '');
+const memberName = (m: BrowserGroup['members'][number]) => cleanName(typeof m.studentAccountId === 'object' ? m.studentAccountId.name || m.studentIdText : m.studentIdText);
+/** "Wahida Ferdose Urmi" -> "WU". */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((_, i, all) => i === 0 || i === all.length - 1)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+const untitled = (title: string) => !title.trim() || /^untitled( project)?$/i.test(title.trim());
 
 /** Everything a coordinator might search a group by, lower-cased. */
 function haystack(g: BrowserGroup) {
@@ -47,12 +59,15 @@ export function GroupsBrowser<G extends BrowserGroup>({
   tracks,
   renderDetails,
   onChangeSupervisor,
+  onAddEvaluator,
 }: {
   groups: G[];
   tracks: string[];
   renderDetails: (group: G, bare?: boolean) => ReactNode;
   /** Clicking a row's supervisor opens this; omitted when groups can't be edited. */
   onChangeSupervisor?: (group: G) => void;
+  /** Adds an evaluator to the row's group; omitted when groups can't be edited. */
+  onAddEvaluator?: (group: G) => void;
 }) {
   const [query, setQuery] = useState('');
   const [trackFilter, setTrackFilter] = useState<string>('all');
@@ -208,68 +223,127 @@ export function GroupsBrowser<G extends BrowserGroup>({
               {view === 'cards' ? (
                 <div className="grid gap-3 xl:grid-cols-2">{items.map((g) => renderDetails(g))}</div>
               ) : (
-                <ul className="divide-y overflow-hidden rounded-lg border">
-                  {items.map((g) => {
-                    const open = expanded.has(g._id);
-                    const members = g.members.filter((m) => !m.removedAt).length;
-                    const evaluators = g.evaluators.filter((e) => !e.unassignedAt).length;
-                    return (
-                      <li key={g._id} className={cn(open && 'bg-muted/20')}>
-                        {/* The whole row expands; the supervisor has its own button to change them. */}
-                        <div
-                          onClick={() => toggle(g._id)}
-                          className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggle(g._id);
-                            }}
-                            aria-expanded={open}
-                            className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-                          >
-                            <ChevronRight className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
-                            <span className="w-9 shrink-0 font-mono text-xs text-muted-foreground">#{g.groupNumber}</span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{g.projectTitle}</span>
-                              <span className="block truncate text-xs text-muted-foreground md:hidden">{nameOf(g.supervisorId)}</span>
-                            </span>
-                          </button>
-                          {onChangeSupervisor ? (
+                <div className="overflow-hidden rounded-lg border">
+                  {/* Column heads, wide screens only */}
+                  <div className="hidden items-center gap-3 border-b bg-muted/40 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:flex">
+                    <span className="w-14 shrink-0 pl-7">#</span>
+                    <span className="min-w-0 flex-1">Project and students</span>
+                    <span className="w-56 shrink-0">Supervisor</span>
+                    <span className="w-48 shrink-0">Evaluators</span>
+                    <span className="w-16 shrink-0 text-right">Status</span>
+                  </div>
+                  <ul className="divide-y">
+                    {items.map((g) => {
+                      const open = expanded.has(g._id);
+                      const students = g.members.filter((m) => !m.removedAt);
+                      const evaluators = g.evaluators.filter((e) => !e.unassignedAt).map((e) => nameOf(e.evaluatorId) || 'Evaluator');
+                      const supervisor = nameOf(g.supervisorId);
+                      const stop = (fn: () => void) => (e: { stopPropagation: () => void }) => {
+                        e.stopPropagation();
+                        fn();
+                      };
+                      return (
+                        <li key={g._id} className={cn(open && 'bg-muted/20')}>
+                          <div onClick={() => toggle(g._id)} className="flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 md:flex-nowrap">
+                            {/* Group and project */}
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onChangeSupervisor(g);
-                              }}
-                              title="Change supervisor"
-                              className="group/sup hidden w-44 shrink-0 items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-xs text-muted-foreground hover:bg-background hover:text-foreground md:flex"
+                              onClick={stop(() => toggle(g._id))}
+                              aria-expanded={open}
+                              className="flex min-w-0 flex-1 basis-full items-start gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:basis-auto"
                             >
-                              <span className="min-w-0 flex-1 truncate">{nameOf(g.supervisorId)}</span>
-                              <UserCog className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/sup:opacity-100" />
+                              <ChevronRight className={cn('mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
+                              <span className="w-8 shrink-0 pt-px font-mono text-xs text-muted-foreground">#{g.groupNumber}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className={cn('block truncate text-sm', untitled(g.projectTitle) ? 'italic text-muted-foreground' : 'font-medium')}>
+                                  {untitled(g.projectTitle) ? 'Untitled project' : g.projectTitle}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground" title={students.map(memberName).join(', ')}>
+                                  {students.length ? students.map(memberName).join(' · ') : 'No students'}
+                                </span>
+                              </span>
                             </button>
-                          ) : (
-                            <span className="hidden w-44 shrink-0 truncate text-xs text-muted-foreground md:block">{nameOf(g.supervisorId)}</span>
-                          )}
-                          <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1" title={`${members} students`}>
-                              <Users className="h-3.5 w-3.5" /> {members}
-                            </span>
-                            <span className={cn('flex items-center gap-1', evaluators === 0 && 'text-amber-600')} title={`${evaluators} evaluators`}>
-                              <ShieldCheck className="h-3.5 w-3.5" /> {evaluators}
-                            </span>
-                            <span className="hidden w-8 items-center gap-1.5 sm:flex">
+
+                            {/* Supervisor */}
+                            <div className="flex w-full items-center pl-14 md:w-56 md:shrink-0 md:pl-0">
+                              {supervisor ? (
+                                onChangeSupervisor ? (
+                                  <button
+                                    type="button"
+                                    onClick={stop(() => onChangeSupervisor(g))}
+                                    title="Change supervisor"
+                                    className="group/sup flex min-w-0 max-w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm hover:bg-background"
+                                  >
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{initials(supervisor)}</span>
+                                    <span className="min-w-0 truncate">{supervisor}</span>
+                                    <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/sup:opacity-100" />
+                                  </button>
+                                ) : (
+                                  <span className="flex min-w-0 items-center gap-2 text-sm">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{initials(supervisor)}</span>
+                                    <span className="truncate">{supervisor}</span>
+                                  </span>
+                                )
+                              ) : onChangeSupervisor ? (
+                                <button
+                                  type="button"
+                                  onClick={stop(() => onChangeSupervisor(g))}
+                                  className="flex items-center gap-1 rounded-full border border-amber-500/50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+                                >
+                                  <UserCheck className="h-3.5 w-3.5" /> Set supervisor
+                                </button>
+                              ) : (
+                                <span className="text-xs text-amber-700 dark:text-amber-400">No supervisor</span>
+                              )}
+                            </div>
+
+                            {/* Evaluators */}
+                            <div className="flex w-full min-w-0 items-center gap-1.5 pl-14 md:w-48 md:shrink-0 md:pl-0">
+                              {evaluators.length ? (
+                                <>
+                                  <span className="min-w-0 truncate text-xs text-muted-foreground" title={evaluators.join(', ')}>
+                                    {evaluators.join(', ')}
+                                  </span>
+                                  {onAddEvaluator && (
+                                    <button
+                                      type="button"
+                                      onClick={stop(() => onAddEvaluator(g))}
+                                      title="Add an evaluator"
+                                      aria-label="Add an evaluator"
+                                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-muted-foreground hover:bg-background hover:text-foreground"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </>
+                              ) : onAddEvaluator ? (
+                                <button
+                                  type="button"
+                                  onClick={stop(() => onAddEvaluator(g))}
+                                  className="flex items-center gap-1 rounded-full border border-amber-500/50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+                                >
+                                  <UserPlus className="h-3.5 w-3.5" /> Add evaluator
+                                </button>
+                              ) : (
+                                <span className="text-xs text-amber-700 dark:text-amber-400">No evaluators</span>
+                              )}
+                            </div>
+
+                            {/* Status */}
+                            <span className="hidden w-16 shrink-0 items-center justify-end gap-2 text-xs text-muted-foreground md:flex">
+                              <span className="flex items-center gap-0.5" title={`${students.length} students`}>
+                                <Users className="h-3.5 w-3.5" /> {students.length}
+                              </span>
                               {g.reportUrl && <FileText className="h-3.5 w-3.5" aria-label="Report linked" />}
                               {g.journalCompletedAt && <Check className="h-3.5 w-3.5 text-emerald-500" aria-label="Journal done" />}
                             </span>
-                          </span>
-                        </div>
-                        {open && <div className="border-t px-4 py-4 sm:pl-12">{renderDetails(g, true)}</div>}
-                      </li>
-                    );
-                  })}
-                </ul>
+                          </div>
+                          {open && <div className="border-t px-4 py-4 sm:pl-12">{renderDetails(g, true)}</div>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
             </section>
           ))}

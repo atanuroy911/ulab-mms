@@ -20,6 +20,8 @@ export interface SimpleGroup {
 }
 
 const nameOf = (p: Person) => (p && typeof p === 'object' ? p.name : null);
+/** Imported names sometimes carry the ID: "Sanaullah (231014035)". */
+const cleanName = (n: string) => n.replace(/\s*\(\d{6,}\)\s*$/, '');
 
 /**
  * The session's groups, Simple mode: one big row each, with the one fix it needs (a
@@ -127,12 +129,12 @@ export function SimpleGroupsView({
           const evaluators = g.evaluators.filter((e) => !e.unassignedAt).map((e) => nameOf(e.evaluatorId) || 'Evaluator');
           return (
             <li key={g._id} className={cn('rounded-2xl border-2 bg-card p-4 sm:p-5', (n.supervisor || n.evaluators) && !readOnly ? 'border-amber-500/40' : 'border-border')}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <div className="flex flex-col gap-3">
                 <button type="button" onClick={() => onOpen(g)} className="min-w-0 flex-1 text-left">
                   <p className="text-sm font-medium text-muted-foreground">Group {g.groupNumber}</p>
                   <p className="text-lg font-semibold leading-snug">{g.projectTitle}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {students.length} students: {students.map((m) => (typeof m.studentAccountId === 'object' ? m.studentAccountId.name : m.studentIdText)).join(', ')}
+                    {students.length} students: {students.map((m) => cleanName((typeof m.studentAccountId === 'object' ? m.studentAccountId.name : null) || m.studentIdText)).join(', ')}
                   </p>
                   <p className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                     <span className={n.supervisor ? 'font-medium text-amber-700 dark:text-amber-400' : ''}>
@@ -144,18 +146,19 @@ export function SimpleGroupsView({
                     </span>
                   </p>
                 </button>
-                <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
-                  {!readOnly && n.supervisor && (
-                    <Button className="h-11" onClick={() => onSetSupervisor(g)}>
-                      <UserCheck className="mr-2 h-4 w-4" /> Set supervisor
+                <div className="flex flex-wrap gap-2">
+                  {/* Always there: highlighted while missing, plain once set (to change or add more). */}
+                  {!readOnly && (
+                    <Button className="h-11" variant={n.supervisor ? 'default' : 'outline'} onClick={() => onSetSupervisor(g)}>
+                      <UserCheck className="mr-2 h-4 w-4" /> {n.supervisor ? 'Set supervisor' : 'Change supervisor'}
                     </Button>
                   )}
-                  {!readOnly && !n.supervisor && n.evaluators && (
-                    <Button className="h-11" onClick={() => onAddEvaluator(g)}>
+                  {!readOnly && (
+                    <Button className="h-11" variant={n.evaluators && !n.supervisor ? 'default' : 'outline'} onClick={() => onAddEvaluator(g)}>
                       <UserPlus className="mr-2 h-4 w-4" /> Add evaluator
                     </Button>
                   )}
-                  <Button variant="outline" className="h-11" onClick={() => onOpen(g)}>
+                  <Button variant="outline" className="h-11 sm:ml-auto" onClick={() => onOpen(g)}>
                     Open <ChevronRight className="ml-1 h-4 w-4" />
                   </Button>
                 </div>
