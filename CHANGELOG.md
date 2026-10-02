@@ -1,3 +1,10 @@
+# [1.32.0](https://github.com/atanuroy911/ulab-mms/compare/v1.31.1...v1.32.0) (2026-10-02)
+
+
+### Features
+
+* back-to-top button above the bug-report button on every page (follows whichever area scrolls); coordinators remind every student - or one track - to update their weekly journal, from Simple (Send reminders) and Advanced (More actions), paced and sent in the background, each group claimed once ([168c050](https://github.com/atanuroy911/ulab-mms/commit/168c0500ef1b6db41013cfcf4329ece44272d9e9))
+
 ## [1.31.1](https://github.com/atanuroy911/ulab-mms/compare/v1.31.0...v1.31.1) (2026-10-02)
 
 
