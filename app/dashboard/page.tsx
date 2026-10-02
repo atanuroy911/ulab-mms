@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward, Users, ClipboardList, LayoutGrid, List as ListIcon, Clock, MapPin, Wrench } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack, AlertTriangle, FileText, Check, X, SkipForward, Users, ClipboardList, LayoutGrid, List as ListIcon, Clock, MapPin, ShieldCheck } from 'lucide-react';
 import { formatClassRoomDisplay } from '@/app/utils/classInfo';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
@@ -760,20 +760,15 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <ThemeToggle />
+              {/* Capstone and Developer Settings are in the sidebar; admins also reach the admin portal from here. */}
               {((session?.user as { roles?: string[] } | undefined)?.roles || []).includes('admin') && (
-                <Button variant="outline" size="sm" asChild title="Developer Settings">
-                  <Link href="/dashboard/developer">
-                    <Wrench className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Developer</span>
+                <Button variant="outline" size="sm" asChild title="Admin Portal">
+                  <Link href="/admin/dashboard" aria-label="Admin Portal">
+                    <ShieldCheck className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Admin Portal</span>
                   </Link>
                 </Button>
               )}
-              <Button variant="default" size="sm" asChild>
-                <Link href="/capstone" title="Capstone groups you supervise or evaluate" aria-label="Capstone">
-                  <FlaskConical className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Capstone</span>
-                </Link>
-              </Button>
               <Button
                 variant="destructive"
                 size="sm"

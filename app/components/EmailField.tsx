@@ -92,7 +92,7 @@ export function EmailField({ id, value, onChange, anyDomain, disabled, required,
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder="yourname"
+          placeholder="Enter your username"
           // Shows only the username; a pasted or autofilled full address keeps its username.
           value={localPart(value)}
           onChange={(e) => {
