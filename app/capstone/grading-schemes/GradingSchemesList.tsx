@@ -24,8 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Workflow, ArrowRight } from 'lucide-react';
+import { Loader2, Plus, Workflow, ArrowRight, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface SchemeRow {
   _id: string;
@@ -39,6 +40,10 @@ interface SchemeRow {
   isArchived: boolean;
   updatedAt: string;
 }
+
+// Cards or list: a per-person preference remembered on this device.
+const VIEW_KEY = 'grading-schemes-view';
+type View = 'cards' | 'list';
 
 interface Props {
   /** Admins and coordinators may create schemes; everyone else only browses. */
@@ -63,6 +68,22 @@ export function GradingSchemesList({ canCreate, defaultDepartment = '' }: Props)
   const [name, setName] = useState('');
   const [department, setDepartment] = useState(defaultDepartment);
   const [track, setTrack] = useState<string>('A');
+  // Only read once the list has loaded (the server render shows the spinner), so no mismatch.
+  const [view, setView] = useState<View>(() => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'cards';
+    } catch {
+      return 'cards';
+    }
+  });
+  const changeView = (v: View) => {
+    setView(v);
+    try {
+      window.localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* not remembered */
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +143,33 @@ export function GradingSchemesList({ canCreate, defaultDepartment = '' }: Props)
           version to a capstone track to grade under it.
         </p>
 
+        <div className="flex items-center gap-2">
+        {schemes.length > 0 && (
+          <div className="flex rounded-lg border p-0.5" role="tablist" aria-label="View">
+            {(
+              [
+                ['cards', LayoutGrid, 'Cards'],
+                ['list', List, 'List'],
+              ] as const
+            ).map(([v, Icon, label]) => (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => changeView(v)}
+                title={`${label} view`}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-sm',
+                  view === v ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {canCreate && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -188,6 +236,7 @@ export function GradingSchemesList({ canCreate, defaultDepartment = '' }: Props)
             </DialogContent>
           </Dialog>
         )}
+        </div>
       </div>
 
       {schemes.length === 0 ? (
@@ -204,6 +253,38 @@ export function GradingSchemesList({ canCreate, defaultDepartment = '' }: Props)
             </CardDescription>
           </CardContent>
         </Card>
+      ) : view === 'list' ? (
+        <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+          {schemes.map((scheme) => (
+            <li key={scheme._id}>
+              <Link
+                href={`/capstone/grading-schemes/${scheme._id}`}
+                className="group flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:gap-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{scheme.name}</p>
+                  {scheme.breakdown ? (
+                    <p className="truncate text-xs tabular-nums text-muted-foreground">{scheme.breakdown}</p>
+                  ) : (
+                    scheme.description && <p className="truncate text-xs text-muted-foreground">{scheme.description}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <Badge variant="outline">{scheme.department}</Badge>
+                  {scheme.track && <Badge variant="outline">Capstone {scheme.track}</Badge>}
+                  <Badge variant={scheme.currentVersion > 0 ? 'secondary' : 'outline'}>
+                    {scheme.currentVersion > 0 ? `v${scheme.currentVersion}` : 'draft'}
+                  </Badge>
+                  {scheme.isArchived && <Badge variant="destructive">archived</Badge>}
+                  <span className="hidden w-24 text-right text-xs text-muted-foreground md:inline" title="Last updated">
+                    {new Date(scheme.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <ArrowRight className="hidden h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:block" />
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {schemes.map((scheme) => (
